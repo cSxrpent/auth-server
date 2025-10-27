@@ -6,7 +6,7 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)  # 🔥 autorise les requêtes venant du navigateur (chrome-extension://)
 
-ADMIN_PASSWORD = "ElamdaElammm"  # ⚠️ change-le évidemment !
+ADMIN_PASSWORD = "motdepassefort"  # ⚠️ change-le évidemment !
 
 def load_users():
     with open("users.json", "r") as f:
@@ -67,4 +67,17 @@ def add_user():
 
     return redirect(url_for("admin", password=password))
 
-@app.r
+@app.route('/admin/delete/<username>', methods=['GET'])
+def delete_user(username):
+    password = request.args.get("password")
+    if password != ADMIN_PASSWORD:
+        return "Unauthorized", 403
+
+    users = load_users()
+    users = [u for u in users if u["username"].lower() != username.lower()]
+    save_users(users)
+
+    return redirect(url_for("admin", password=password))
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=10000)
