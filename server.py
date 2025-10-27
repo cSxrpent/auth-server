@@ -1,83 +1,89 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
-from datetime import datetime
+import datetime
 
 app = Flask(__name__)
-CORS(app)  # 🔥 autorise les requêtes venant du navigateur (chrome-extension://)
+CORS(app)
 
-ADMIN_PASSWORD = "motdepassefort"  # ⚠️ change-le évidemment !
+DATA_FILE = "data.json"
 
-def load_users():
-    with open("users.json", "r") as f:
-        return json.load(f)
+# === Fonctions utilitaires ===
+def load_data():
+    try:
+        with open(DATA_FILE, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
 
-def save_users(users):
-    with open("users.json", "w") as f:
-        json.dump(users, f, indent=2)
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-@app.route('/')
-def home():
-    return "✅ Auth server with admin panel is running."
+def calc_expiry(duration):
+    now = datetime.datetime.now()
+    if duration == "1w":
+        return (now + datetime.timedelta(weeks=1)).isoformat()
+    elif duration == "2w":
+        return (now + datetime.timedelta(weeks=2)).isoformat()
+    elif duration == "1m":
+        return (now + datetime.timedelta(days=30)).isoformat()
+    elif duration == "3m":
+        return (now + datetime.timedelta(days=90)).isoformat()
+    elif duration == "6m":
+        return (now + datetime.timedelta(days=180)).isoformat()
+    elif duration == "1y":
+        return (now + datetime.timedelta(days=365)).isoformat()
+    else:
+        return None  # Illimité
 
-# ==============================
-# 🔑 API utilisée par l’extension
-# ==============================
-@app.route('/auth', methods=['GET'])
-def auth():
-    username = request.args.get('username')
+
+# === Routes ===
+@app.route("/set", methods=["POST"])
+def set_user():
+    data = load_data()
+    body = request.json
+    username = body.get("username")
+    duration = body.get("duration")
+
     if not username:
-        return jsonify({"message": "username parameter is missing"}), 400
+        return jsonify({"error": "Missing username"}), 400
 
-    users = load_users()
-    for user in users:
-        if user["username"].lower() == username.lower():
-            expiry = datetime.strptime(user["expires"], "%Y-%m-%d")
-            if expiry >= datetime.now():
-                return jsonify({"message": "authorized", "expires": user["expires"]}), 200
-            else:
-                return jsonify({"message": "expired", "expires": user["expires"]}), 403
+    expiry = calc_expiry(duration)
+    data[username] = {"expiry": expiry}
+    save_data(data)
 
-    return jsonify({"message": "unauthorized"}), 403
+    return jsonify({"message": f"{username} ajouté avec durée {duration or 'illimitée'}."})
 
-# ==============================
-# 🧑‍💻 ADMIN PANEL
-# ==============================
-@app.route('/admin', methods=['GET', 'POST'])
-def admin():
-    password = request.args.get("password")
-    if password != ADMIN_PASSWORD:
-        return "Unauthorized", 403
 
-    users = load_users()
-    return render_template("admin.html", users=users, password=password)
+@app.route("/get", methods=["GET"])
+def get_users():
+    data = load_data()
+    now = datetime.datetime.now()
 
-@app.route('/admin/add', methods=['POST'])
-def add_user():
-    password = request.args.get("password")
-    if password != ADMIN_PASSWORD:
-        return "Unauthorized", 403
+    for user, info in list(data.items()):
+        expiry = info.get("expiry")
+        if expiry:
+            expiry_date = datetime.datetime.fromisoformat(expiry)
+            if expiry_date < now:
+                del data[user]
 
-    username = request.form["username"]
-    expires = request.form["expires"]
+    save_data(data)
+    return jsonify(data)
 
-    users = load_users()
-    users.append({"username": username, "expires": expires})
-    save_users(users)
 
-    return redirect(url_for("admin", password=password))
+@app.route("/remove", methods=["POST"])
+def remove_user():
+    data = load_data()
+    username = request.json.get("username")
 
-@app.route('/admin/delete/<username>', methods=['GET'])
-def delete_user(username):
-    password = request.args.get("password")
-    if password != ADMIN_PASSWORD:
-        return "Unauthorized", 403
+    if username in data:
+        del data[username]
+        save_data(data)
+        return jsonify({"message": f"{username} supprimé."})
+    else:
+        return jsonify({"error": "Utilisateur introuvable."}), 404
 
-    users = load_users()
-    users = [u for u in users if u["username"].lower() != username.lower()]
-    save_users(users)
 
-    return redirect(url_for("admin", password=password))
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
