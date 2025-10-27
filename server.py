@@ -1,10 +1,12 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask_cors import CORS
 import json
 from datetime import datetime
 
 app = Flask(__name__)
+CORS(app)  # 🔥 autorise les requêtes venant du navigateur (chrome-extension://)
 
-ADMIN_PASSWORD = "motdepassefort"  # 🔒 change ça évidemment !
+ADMIN_PASSWORD = "ElamdaElammm"  # ⚠️ change-le évidemment !
 
 def load_users():
     with open("users.json", "r") as f:
@@ -16,28 +18,30 @@ def save_users(users):
 
 @app.route('/')
 def home():
-    return "Auth server with admin panel is running."
+    return "✅ Auth server with admin panel is running."
 
+# ==============================
+# 🔑 API utilisée par l’extension
+# ==============================
 @app.route('/auth', methods=['GET'])
 def auth():
     username = request.args.get('username')
     if not username:
-        return jsonify({"error": "username parameter is missing"}), 400
+        return jsonify({"message": "username parameter is missing"}), 400
 
     users = load_users()
     for user in users:
         if user["username"].lower() == username.lower():
             expiry = datetime.strptime(user["expires"], "%Y-%m-%d")
             if expiry >= datetime.now():
-                return jsonify({"status": "authorized", "expires": user["expires"]})
+                return jsonify({"message": "authorized", "expires": user["expires"]}), 200
             else:
-                return jsonify({"status": "expired", "expires": user["expires"]}), 403
+                return jsonify({"message": "expired", "expires": user["expires"]}), 403
 
-    return jsonify({"status": "unauthorized"}), 403
-
+    return jsonify({"message": "unauthorized"}), 403
 
 # ==============================
-# 🔐 ADMIN PANEL
+# 🧑‍💻 ADMIN PANEL
 # ==============================
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
@@ -63,17 +67,4 @@ def add_user():
 
     return redirect(url_for("admin", password=password))
 
-@app.route('/admin/delete/<username>', methods=['GET'])
-def delete_user(username):
-    password = request.args.get("password")
-    if password != ADMIN_PASSWORD:
-        return "Unauthorized", 403
-
-    users = load_users()
-    users = [u for u in users if u["username"].lower() != username.lower()]
-    save_users(users)
-
-    return redirect(url_for("admin", password=password))
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
+@app.r
