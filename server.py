@@ -1,16 +1,22 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, redirect, url_for
 import json
 from datetime import datetime
 
 app = Flask(__name__)
 
+ADMIN_PASSWORD = "motdepassefort"  # 🔒 change ça évidemment !
+
 def load_users():
     with open("users.json", "r") as f:
         return json.load(f)
 
+def save_users(users):
+    with open("users.json", "w") as f:
+        json.dump(users, f, indent=2)
+
 @app.route('/')
 def home():
-    return "Auth server with subscriptions is running."
+    return "Auth server with admin panel is running."
 
 @app.route('/auth', methods=['GET'])
 def auth():
@@ -28,6 +34,46 @@ def auth():
                 return jsonify({"status": "expired", "expires": user["expires"]}), 403
 
     return jsonify({"status": "unauthorized"}), 403
+
+
+# ==============================
+# 🔐 ADMIN PANEL
+# ==============================
+@app.route('/admin', methods=['GET', 'POST'])
+def admin():
+    password = request.args.get("password")
+    if password != ADMIN_PASSWORD:
+        return "Unauthorized", 403
+
+    users = load_users()
+    return render_template("admin.html", users=users, password=password)
+
+@app.route('/admin/add', methods=['POST'])
+def add_user():
+    password = request.args.get("password")
+    if password != ADMIN_PASSWORD:
+        return "Unauthorized", 403
+
+    username = request.form["username"]
+    expires = request.form["expires"]
+
+    users = load_users()
+    users.append({"username": username, "expires": expires})
+    save_users(users)
+
+    return redirect(url_for("admin", password=password))
+
+@app.route('/admin/delete/<username>', methods=['GET'])
+def delete_user(username):
+    password = request.args.get("password")
+    if password != ADMIN_PASSWORD:
+        return "Unauthorized", 403
+
+    users = load_users()
+    users = [u for u in users if u["username"].lower() != username.lower()]
+    save_users(users)
+
+    return redirect(url_for("admin", password=password))
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
