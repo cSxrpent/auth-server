@@ -1,13 +1,16 @@
 from flask import Flask, request, jsonify
+import json
+from datetime import datetime
 
 app = Flask(__name__)
 
-# Liste d'utilisateurs autorisés
-authorized_users = ["Tarik", "Ahmet", "Selim"]
+def load_users():
+    with open("users.json", "r") as f:
+        return json.load(f)
 
 @app.route('/')
 def home():
-    return "Auth server is running."
+    return "Auth server with subscriptions is running."
 
 @app.route('/auth', methods=['GET'])
 def auth():
@@ -15,10 +18,16 @@ def auth():
     if not username:
         return jsonify({"error": "username parameter is missing"}), 400
 
-    if username in authorized_users:
-        return jsonify({"status": "authorized"})
-    else:
-        return jsonify({"status": "unauthorized"}), 403
+    users = load_users()
+    for user in users:
+        if user["username"].lower() == username.lower():
+            expiry = datetime.strptime(user["expires"], "%Y-%m-%d")
+            if expiry >= datetime.now():
+                return jsonify({"status": "authorized", "expires": user["expires"]})
+            else:
+                return jsonify({"status": "expired", "expires": user["expires"]}), 403
+
+    return jsonify({"status": "unauthorized"}), 403
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
