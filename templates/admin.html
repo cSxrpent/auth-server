@@ -1,95 +1,195 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Panel Admin - Zoro Auth</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panneau Admin – Auth Server</title>
   <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-light: #6366f1;
+      --danger: #ef4444;
+      --bg: #f9fafb;
+      --card-bg: #ffffff;
+      --text: #111827;
+      --shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      --radius: 12px;
+      font-family: "Inter", system-ui, sans-serif;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      background-color: #0f0f10;
-      color: #f0f0f0;
       margin: 0;
-      padding: 20px;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 40px;
     }
-    h1 { color: #00c853; }
-    table {
+
+    h1 {
+      margin-bottom: 20px;
+      color: var(--primary);
+      font-size: 2rem;
+      font-weight: 700;
+      text-align: center;
+      animation: fadeDown 0.6s ease;
+    }
+
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      background: var(--card-bg);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      padding: 24px;
       width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 30px;
+      max-width: 600px;
+      animation: fadeIn 0.6s ease;
     }
-    th, td {
-      padding: 10px;
-      border-bottom: 1px solid #333;
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
     }
-    th { background-color: #1a1a1d; }
-    tr:hover { background-color: #1e1e22; }
+
     form {
       display: flex;
+      flex-direction: column;
       gap: 10px;
-      align-items: center;
       margin-bottom: 20px;
     }
-    input, select, button {
-      padding: 8px;
-      border: none;
-      border-radius: 6px;
+
+    input, select {
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      border: 1px solid #d1d5db;
+      font-size: 15px;
+      transition: border 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary-light);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
       outline: none;
     }
-    input, select {
-      background: #2a2a2d;
-      color: white;
-    }
+
     button {
-      background: #00c853;
+      background-color: var(--primary);
       color: white;
+      padding: 10px;
+      border: none;
+      border-radius: var(--radius);
+      font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.3s, transform 0.1s;
     }
-    button:hover { background: #00e676; }
+
+    button:hover {
+      background-color: var(--primary-light);
+      transform: translateY(-1px);
+    }
+
+    .user-list {
+      margin-top: 20px;
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .user-list th, .user-list td {
+      padding: 10px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+    }
+
+    .user-list th {
+      background: #f3f4f6;
+    }
+
     .delete-btn {
-      background: #ff1744;
-      padding: 6px 10px;
+      background-color: var(--danger);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.3s;
     }
+
     .delete-btn:hover {
-      background: #ff5252;
+      background-color: #dc2626;
+    }
+
+    footer {
+      margin-top: 40px;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .fade-in {
+      animation: fadeIn 0.5s ease forwards;
     }
   </style>
 </head>
 <body>
-  <h1>🧠 Zoro Auth Panel</h1>
+  <h1>🔐 Panneau d’administration</h1>
 
-  <h2>Utilisateurs enregistrés</h2>
-  <table>
-    <tr>
-      <th>Nom d’utilisateur</th>
-      <th>Expiration</th>
-      <th>Actions</th>
-    </tr>
-    {% for user in users %}
-    <tr>
-      <td>{{ user.username }}</td>
-      <td>{{ user.expires }}</td>
-      <td>
-        <a href="/admin/delete/{{ user.username }}?password={{ password }}">
-          <button class="delete-btn">Supprimer</button>
-        </a>
-      </td>
-    </tr>
-    {% endfor %}
-  </table>
+  <div class="card fade-in">
+    <form action="/admin/add?password={{ password }}" method="POST">
+      <input type="text" name="username" placeholder="Nom d'utilisateur" required />
+      
+      <label for="duration">Durée d’accès :</label>
+      <select id="duration" name="duration" required onchange="setDateFromDuration(this.value)">
+        <option value="">-- Choisir une durée --</option>
+        <option value="7">1 semaine</option>
+        <option value="30">1 mois</option>
+        <option value="90">3 mois</option>
+        <option value="365">1 an</option>
+      </select>
 
-  <h2>Ajouter un utilisateur</h2>
-  <form action="/admin/add?password={{ password }}" method="POST">
-    <input type="text" name="username" placeholder="Nom d’utilisateur" required>
-    <select name="duration" required>
-      <option value="7">1 semaine</option>
-      <option value="14">2 semaines</option>
-      <option value="30">1 mois</option>
-      <option value="90">3 mois</option>
-      <option value="180">6 mois</option>
-      <option value="365">1 an</option>
-    </select>
-    <button type="submit">➕ Ajouter</button>
-  </form>
+      <input type="date" id="expires" name="expires" required />
+
+      <button type="submit">Ajouter l’utilisateur</button>
+    </form>
+
+    <table class="user-list fade-in">
+      <thead>
+        <tr>
+          <th>Utilisateur</th>
+          <th>Expiration</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr>
+          <td>{{ user.username }}</td>
+          <td>{{ user.expires }}</td>
+          <td>
+            <a href="/admin/delete/{{ user.username }}?password={{ password }}">
+              <button class="delete-btn">Supprimer</button>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <footer>© {{ datetime.now().year }} Auth Server — Interface admin</footer>
+
+  <script>
+    function setDateFromDuration(days) {
+      if (!days) return;
+      const expiresInput = document.getElementById('expires');
+      const date = new Date();
+      date.setDate(date.getDate() + parseInt(days));
+      expiresInput.value = date.toISOString().split('T')[0];
+    }
+  </script>
 </body>
 </html>

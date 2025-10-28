@@ -2,11 +2,13 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_cors import CORS
 import json
 from datetime import datetime, timedelta
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-ADMIN_PASSWORD = "motdepassefort"  # 🔒 à changer évidemment !
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "motdepassefort_local")
+
 
 def load_users():
     with open("users.json", "r") as f:
