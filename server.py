@@ -1,10 +1,11 @@
 import os
 import json
+import jwt
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import (
     Flask, request, jsonify, render_template,
-    redirect, url_for, session, send_from_directory
+    redirect, url_for, session, send_from_directory, Response
 )
 from flask_cors import CORS
 
@@ -18,7 +19,12 @@ CORS(app)
 app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key_replace_in_prod")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change_me_locally")
 
+# JWT config (use env vars in production)
+JWT_SECRET = os.getenv("JWT_SECRET", "dev_jwt_secret_replace")
+JWT_ALGO = os.getenv("JWT_ALGO", "HS256")
+
 USERS_FILE = "users.json"  # list of {"username": "...", "expires": "YYYY-MM-DD"}
+SCRIPT_PATH = os.path.join("protected", "notpayload.js")  # protected file path
 
 # -----------------------
 # Utilitaires
@@ -62,7 +68,10 @@ def login_required(f):
 def auth():
     """
     GET /auth?username=XXX
-    Returns: 200 + {"message":"authorized","expires":"YYYY-MM-DD"} or 403 + {"message":"unauthorized"/"expired"}
+    Returns:
+      - 200 + {"message":"authorized","expires":"YYYY-MM-DD","token":"..."}  (token = short-lived JWT)
+      - 403 + {"message":"unauthorized"/"expired"}
+      - 400 + {"message":"username parameter is missing"}
     """
     username = request.args.get("username")
     if not username:
@@ -80,9 +89,66 @@ def auth():
         return jsonify({"message": "unauthorized"}), 403
 
     if expiry >= datetime.now():
-        return jsonify({"message": "authorized", "expires": user["expires"]}), 200
+        # create short-lived JWT (10 minutes)
+        payload = {
+            "sub": username,
+            "script_access": True,
+            "exp": datetime.utcnow() + timedelta(minutes=10)
+        }
+        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
+        # PyJWT >=2 returns str, safe to send
+        return jsonify({"message": "authorized", "expires": user["expires"], "token": token}), 200
     else:
         return jsonify({"message": "expired", "expires": user["expires"]}), 403
+
+# -----------------------
+# Protected script endpoint
+# -----------------------
+@app.route("/script/notpayload.js", methods=["GET"])
+def serve_notpayload():
+    """
+    Protected endpoint that serves the JS file only if caller provides a valid JWT.
+    Expect Authorization: Bearer <token>
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "missing token"}), 401
+    token = auth_header.split(" ", 1)[1]
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "token expired"}), 401
+    except Exception:
+        return jsonify({"error": "invalid token"}), 401
+
+    # optional extra checks: user still exists and not expired
+    username = payload.get("sub")
+    if not username:
+        return jsonify({"error": "invalid token payload"}), 401
+
+    users = load_users()
+    user = find_user(users, username)
+    if not user:
+        return jsonify({"error": "user not found"}), 403
+
+    try:
+        expiry = parse_date(user["expires"])
+    except Exception:
+        return jsonify({"error": "user expiry malformed"}), 403
+
+    if expiry < datetime.now():
+        return jsonify({"error": "subscription expired"}), 403
+
+    # Serve the JS file content (no caching)
+    try:
+        with open(SCRIPT_PATH, "r", encoding="utf-8") as f:
+            js = f.read()
+        resp = Response(js, mimetype="application/javascript")
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return resp
+    except FileNotFoundError:
+        return jsonify({"error": "script not found"}), 404
 
 # ------------------------------------
 # Admin web UI (login + dashboard)
@@ -109,17 +175,12 @@ def logout():
 @login_required
 def admin():
     users = load_users()
-    # Clean expired (but keep them until explicit delete if you prefer)
-    # We show all users (expired or not).
     return render_template("admin.html", users=users)
 
 # Classic form routes (kept for compatibility)
 @app.route("/admin/add", methods=["POST"])
 @login_required
 def admin_add():
-    # This route expects either:
-    # - form field 'expires' as YYYY-MM-DD
-    # - or form field 'duration' as number of days
     username = request.form.get("username", "").strip()
     expires = request.form.get("expires", "").strip()
     duration = request.form.get("duration", "").strip()
@@ -135,11 +196,9 @@ def admin_add():
             expires = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
 
     if not expires:
-        # default 7 days
         expires = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
 
     users = load_users()
-    # replace if exists
     existing = find_user(users, username)
     if existing:
         existing["expires"] = expires
@@ -170,7 +229,6 @@ def api_get_users():
 def api_add():
     body = request.get_json() or {}
     username = (body.get("username") or "").strip()
-    # duration in days OR expires in YYYY-MM-DD
     duration = body.get("duration")  # integer days
     expires = body.get("expires")    # date string
 
