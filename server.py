@@ -35,23 +35,32 @@ USERS_FILE = "users.json"  # local fallback file
 # GitHub helpers
 # -----------------------
 def load_users_from_github():
-    """Fetch users.json from GitHub raw URL. Returns list of users or None on failure."""
+    """Fetch users.json from GitHub API (no cache). Returns list of users or None on failure."""
     try:
-        headers = {}
+        # Use GitHub API instead of raw URL to avoid cache
+        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_PATH}"
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        
         if GITHUB_TOKEN:
             headers["Authorization"] = f"token {GITHUB_TOKEN}"
         
-        response = requests.get(GITHUB_RAW_URL, headers=headers, timeout=10)
+        # Add cache-busting parameter
+        params = {"ref": GITHUB_BRANCH, "t": int(time.time())}
+        
+        response = requests.get(url, headers=headers, params=params, timeout=10)
         
         if response.status_code == 200:
-            users = response.json()
-            print(f"✓ Loaded {len(users)} users from GitHub")
+            data = response.json()
+            content_b64 = data.get("content", "")
+            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
+            users = json.loads(decoded)
+            print(f"✓ Loaded {len(users)} users from GitHub API")
             return users
         else:
-            print(f"✗ GitHub fetch failed: {response.status_code}")
+            print(f"✗ GitHub API fetch failed: {response.status_code}")
             return None
     except Exception as e:
-        print(f"✗ Error fetching from GitHub: {e}")
+        print(f"✗ Error fetching from GitHub API: {e}")
         return None
 
 def _github_get_file():
