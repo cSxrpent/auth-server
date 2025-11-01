@@ -1,13 +1,12 @@
 import os
 import json
 import base64
-import jwt
 import requests
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from functools import wraps
 from flask import (
     Flask, request, jsonify, render_template,
-    redirect, url_for, session, send_from_directory, Response
+    redirect, url_for, session, send_from_directory
 )
 from flask_cors import CORS
 
@@ -15,174 +14,141 @@ from flask_cors import CORS
 # Configuration
 # -----------------------
 app = Flask(__name__, static_folder="static", template_folder="templates")
-CORS(app)
+CORS(app)  # allow cross-origin for simple API access
 
+# Secrets & GitHub config from env (safer)
 app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key_replace_in_prod")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change_me_locally")
-JWT_SECRET = os.getenv("JWT_SECRET", "dev_jwt_secret_replace")
-JWT_ALGO = os.getenv("JWT_ALGO", "HS256")
 
-SCRIPT_PATH = os.path.join("protected", "notpayload.js")
-
-# GitHub sync config
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # MUST be set to allow push
-GITHUB_REPO = os.getenv("GITHUB_REPO", "cSxrpent/auth-users")  # owner/repo
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")          # leave empty to disable GitHub push/read
+GITHUB_OWNER = os.getenv("GITHUB_OWNER", "cSxrpent")
+GITHUB_REPO = os.getenv("GITHUB_REPO", "auth-users")
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
-GITHUB_PATH = os.getenv("GITHUB_PATH", "users.json")  # path in repo, typically users.json
+GITHUB_PATH = os.getenv("GITHUB_PATH", "users.json")
 
-# GitHub API base
-GITHUB_API_BASE = "https://api.github.com"
-
+USERS_FILE = "users.json"  # local fallback file
 
 # -----------------------
-# Utilitaires
+# GitHub helpers
 # -----------------------
-def github_api_headers():
-    headers = {"Accept": "application/vnd.github.v3+json"}
-    if GITHUB_TOKEN:
-        headers["Authorization"] = f"token {GITHUB_TOKEN}"
-    return headers
-
-def load_users_from_github():
-    """Récupère users.json depuis GitHub via API (préf) ou raw URL."""
+def _github_get_file():
+    """Return (ok, info). If ok True: info={'content': <python obj list>, 'sha': <sha>}"""
+    if not GITHUB_TOKEN:
+        return False, {"error": "no_github_token"}
+    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    params = {"ref": GITHUB_BRANCH}
     try:
-        if GITHUB_TOKEN:
-            url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/contents/{GITHUB_PATH}"
-            params = {"ref": GITHUB_BRANCH}
-            r = requests.get(url, headers=github_api_headers(), params=params, timeout=6)
-            if r.status_code == 200:
-                data = r.json()
-                content_b64 = data.get("content", "")
-                decoded = base64.b64decode(content_b64).decode("utf-8")
-                return json.loads(decoded)
-            else:
-                print(f"⚠️ GitHub API returned {r.status_code} when loading users.json: {r.text}")
-                return []
-        else:
-            # fallback: raw.githubusercontent URL (public required)
-            raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_PATH}"
-            r = requests.get(raw_url, timeout=6)
-            if r.status_code == 200:
-                return r.json()
-            else:
-                print(f"⚠️ Raw fetch returned {r.status_code} when loading users.json")
-                return []
-    except Exception as e:
-        print("❌ Error loading users from GitHub:", e)
-        return []
-
-
-def get_github_file_sha():
-    """Get current file SHA on GitHub (needed for updates). Returns None if not found."""
-    try:
-        url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/contents/{GITHUB_PATH}"
-        params = {"ref": GITHUB_BRANCH}
-        r = requests.get(url, headers=github_api_headers(), params=params, timeout=6)
+        r = requests.get(url, headers=headers, params=params, timeout=10)
         if r.status_code == 200:
-            return r.json().get("sha")
-        return None
+            j = r.json()
+            content_b64 = j.get("content", "")
+            sha = j.get("sha")
+            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
+            try:
+                data = json.loads(decoded)
+            except Exception as e:
+                return False, {"error": f"invalid_json_in_github:{e}"}
+            return True, {"content": data, "sha": sha}
+        else:
+            return False, {"error": f"gh_get_status_{r.status_code}", "detail": r.text}
     except Exception as e:
-        print("❌ Error getting file sha:", e)
-        return None
+        return False, {"error": f"gh_get_exception:{e}"}
 
-
-def push_users_to_github(users):
-    """
-    Push the users list (JSON) to the GitHub repo path.
-    Returns True on success, False otherwise.
-    """
-    payload_json = json.dumps(users, indent=2, ensure_ascii=False)
-    content_b64 = base64.b64encode(payload_json.encode("utf-8")).decode("utf-8")
-
-    url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/contents/{GITHUB_PATH}"
-    sha = get_github_file_sha()
-
-    body = {
-        "message": f"Update users.json via admin panel ({datetime.utcnow().isoformat()})",
+def _github_put_file(new_users, sha=None):
+    """Create/Update users.json on GitHub. Return (ok, detail)."""
+    if not GITHUB_TOKEN:
+        return False, {"error": "no_github_token"}
+    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    content_b64 = base64.b64encode(json.dumps(new_users, ensure_ascii=False, indent=2).encode("utf-8")).decode("utf-8")
+    payload = {
+        "message": f"Update users.json via server at {datetime.utcnow().isoformat()}Z",
         "content": content_b64,
         "branch": GITHUB_BRANCH
     }
     if sha:
-        body["sha"] = sha
-
+        payload["sha"] = sha
     try:
-        if not GITHUB_TOKEN:
-            print("⚠️ No GITHUB_TOKEN set — fallback to local save (no remote push).")
-            return False
-
-        r = requests.put(url, headers=github_api_headers(), json=body, timeout=8)
+        r = requests.put(url, headers=headers, json=payload, timeout=15)
         if r.status_code in (200, 201):
-            print("✅ users.json successfully pushed to GitHub.")
-            return True
+            return True, r.json()
         else:
-            print(f"❌ GitHub push failed: {r.status_code} {r.text}")
-            return False
+            return False, {"error": f"gh_put_status_{r.status_code}", "detail": r.text}
     except Exception as e:
-        print("❌ Exception while pushing to GitHub:", e)
-        return False
+        return False, {"error": f"gh_put_exception:{e}"}
 
-
+# -----------------------
+# User storage helpers (github first, local fallback)
+# -----------------------
 def load_users():
-    """Source de vérité : retourne la liste d'utilisateurs (list of dicts).
-       On charge depuis GitHub à chaque appel (pour instantané)."""
-    users = load_users_from_github()
-    # Normalize: accept either dict-form {"TARIK": "2025-..."} or list-of-objects
-    if isinstance(users, dict):
-        # convert to list of {"username": ..., "expires": ...}
-        arr = []
-        for k, v in users.items():
-            # if value is dict, try to get 'expires'
-            if isinstance(v, dict) and "expires" in v:
-                arr.append({"username": k, "expires": v["expires"]})
-            else:
-                # assume v is expiry string
-                arr.append({"username": k, "expires": v})
-        return arr
-    if isinstance(users, list):
-        # assume already list of {"username","expires"}
-        return users
-    return []
-
-
-def save_users_local(users):
-    """Fallback local save (only used if no GITHUB_TOKEN)."""
+    """Try GitHub first (if token), else fallback to local users.json."""
+    ok, res = _github_get_file()
+    if ok:
+        try:
+            return res["content"]
+        except Exception:
+            pass
+    # fallback local
     try:
-        with open(GITHUB_PATH, "w", encoding="utf-8") as f:
+        with open(USERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+
+def save_users(users):
+    """
+    Write local file then try to push to GitHub if token is present.
+    Returns dict describing results.
+    """
+    result = {"saved_local": False, "github": None}
+    # write local
+    try:
+        with open(USERS_FILE, "w", encoding="utf-8") as f:
             json.dump(users, f, indent=2, ensure_ascii=False)
-        return True
+        result["saved_local"] = True
     except Exception as e:
-        print("❌ Local save failed:", e)
-        return False
+        result["saved_local"] = False
+        result["local_error"] = str(e)
+    # try pushing to GitHub
+    if GITHUB_TOKEN:
+        ok, info = _github_get_file()
+        sha = info.get("sha") if ok else None
+        ok2, put_res = _github_put_file(users, sha=sha)
+        result["github"] = {"ok": ok2, "detail": put_res}
+    else:
+        result["github"] = {"ok": False, "detail": "no_github_token"}
+    return result
 
-
+# -----------------------
+# Utilities
+# -----------------------
 def find_user(users, username):
     for u in users:
-        if u.get("username", "").lower() == username.lower():
-            return u
+        try:
+            if u["username"].lower() == username.lower():
+                return u
+        except Exception:
+            continue
     return None
-
 
 def parse_date(s):
     return datetime.strptime(s, "%Y-%m-%d")
 
-
 # -----------------------
-# Decorator pour routes admin
-# -----------------------
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get("logged_in"):
-            return redirect(url_for("login"))
-        return f(*args, **kwargs)
-    return decorated
-
-
-# -----------------------
-# AUTH ENDPOINT
+# Auth API used by extension
 # -----------------------
 @app.route("/auth", methods=["GET"])
 def auth():
+    """
+    GET /auth?username=XXX
+    Returns:
+      - 200 + {"message":"authorized","expires":"YYYY-MM-DD"}
+      - 403 + {"message":"unauthorized"/"expired"}
+      - 400 + {"message":"username parameter is missing"}
+    """
     username = request.args.get("username")
     if not username:
         return jsonify({"message": "username parameter is missing"}), 400
@@ -198,68 +164,21 @@ def auth():
         return jsonify({"message": "unauthorized"}), 403
 
     if expiry >= datetime.now():
-        payload = {
-            "sub": username,
-            "script_access": True,
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=10)
-        }
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
-        return jsonify({
-            "message": "authorized",
-            "expires": user["expires"],
-            "token": token
-        }), 200
+        return jsonify({"message": "authorized", "expires": user["expires"]}), 200
     else:
         return jsonify({"message": "expired", "expires": user["expires"]}), 403
 
+# ------------------------------------
+# Admin web UI (login + dashboard)
+# ------------------------------------
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
 
-# -----------------------
-# Protected script
-# -----------------------
-@app.route("/script/notpayload.js", methods=["GET"])
-def serve_notpayload():
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        return jsonify({"error": "missing token"}), 401
-    token = auth_header.split(" ", 1)[1]
-
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
-    except jwt.ExpiredSignatureError:
-        return jsonify({"error": "token expired"}), 401
-    except Exception:
-        return jsonify({"error": "invalid token"}), 401
-
-    username = payload.get("sub")
-    if not username:
-        return jsonify({"error": "invalid token payload"}), 401
-
-    users = load_users()
-    user = find_user(users, username)
-    if not user:
-        return jsonify({"error": "user not found"}), 403
-
-    try:
-        expiry = parse_date(user["expires"])
-    except Exception:
-        return jsonify({"error": "user expiry malformed"}), 403
-
-    if expiry < datetime.now():
-        return jsonify({"error": "subscription expired"}), 403
-
-    try:
-        with open(SCRIPT_PATH, "r", encoding="utf-8") as f:
-            js = f.read()
-        resp = Response(js, mimetype="application/javascript")
-        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        return resp
-    except FileNotFoundError:
-        return jsonify({"error": "script not found"}), 404
-
-
-# -----------------------
-# Admin pages
-# -----------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
@@ -267,19 +186,15 @@ def login():
         password = request.form.get("password", "")
         if password == ADMIN_PASSWORD:
             session["logged_in"] = True
-            # Ne pas rediriger : afficher directement l'admin sous la même URL (POST /login)
-            users = load_users()
-            return render_template("admin.html", users=users)
+            return redirect(url_for("admin"))
         else:
             error = "Mot de passe incorrect."
     return render_template("login.html", error=error)
-
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
-
 
 @app.route("/admin")
 @login_required
@@ -287,15 +202,52 @@ def admin():
     users = load_users()
     return render_template("admin.html", users=users)
 
+@app.route("/admin/add", methods=["POST"])
+@login_required
+def admin_add():
+    username = request.form.get("username", "").strip()
+    expires = request.form.get("expires", "").strip()
+    duration = request.form.get("duration", "").strip()
+
+    if not username:
+        return redirect(url_for("admin"))
+
+    if not expires and duration:
+        try:
+            days = int(duration)
+            expires = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+        except:
+            expires = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+
+    if not expires:
+        expires = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+
+    users = load_users()
+    existing = find_user(users, username)
+    if existing:
+        existing["expires"] = expires
+    else:
+        users.append({"username": username, "expires": expires})
+    save_res = save_users(users)
+    # optionally you can check save_res and surface result
+    return redirect(url_for("admin"))
+
+@app.route("/admin/delete/<username>", methods=["GET"])
+@login_required
+def admin_delete(username):
+    users = load_users()
+    users = [u for u in users if u["username"].lower() != username.lower()]
+    save_res = save_users(users)
+    return redirect(url_for("admin"))
 
 # -----------------------
-# Admin API (edits push to GitHub)
+# Modern AJAX endpoints for admin page
 # -----------------------
 @app.route("/api/users", methods=["GET"])
 @login_required
 def api_get_users():
-    return jsonify(load_users())
-
+    users = load_users()
+    return jsonify(users)
 
 @app.route("/api/add", methods=["POST"])
 @login_required
@@ -322,19 +274,8 @@ def api_add():
         existing["expires"] = expires
     else:
         users.append({"username": username, "expires": expires})
-
-    # Try to push to GitHub
-    success = False
-    if GITHUB_TOKEN:
-        success = push_users_to_github(users)
-    else:
-        success = save_users_local(users)
-
-    if not success:
-        return jsonify({"error": "Failed to save users remotely. Check GITHUB_TOKEN or logs."}), 500
-
-    return jsonify({"message": "ok", "username": username, "expires": expires}), 200
-
+    save_res = save_users(users)
+    return jsonify({"message": "ok", "username": username, "expires": expires, "save_result": save_res}), 200
 
 @app.route("/api/delete", methods=["POST"])
 @login_required
@@ -343,30 +284,20 @@ def api_delete():
     username = (body.get("username") or "").strip()
     if not username:
         return jsonify({"error": "username missing"}), 400
-
     users = [u for u in load_users() if u["username"].lower() != username.lower()]
-
-    # push deletion to GitHub (or save locally)
-    success = False
-    if GITHUB_TOKEN:
-        success = push_users_to_github(users)
-    else:
-        success = save_users_local(users)
-
-    if not success:
-        return jsonify({"error": "Failed to save users remotely. Check GITHUB_TOKEN or logs."}), 500
-
-    return jsonify({"message": "deleted", "username": username}), 200
-
+    save_res = save_users(users)
+    return jsonify({"message": "deleted", "username": username, "save_result": save_res}), 200
 
 # -----------------------
-# Static + run
+# Serve admin static (if needed)
 # -----------------------
 @app.route("/static/<path:path>")
 def static_files(path):
     return send_from_directory("static", path)
 
-
+# -----------------------
+# Run
+# -----------------------
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
