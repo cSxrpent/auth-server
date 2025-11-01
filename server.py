@@ -209,6 +209,7 @@ def auth():
 # ------------------------------------
 # Admin web UI (login + dashboard)
 # ------------------------------------
+#laisse moi tester
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
