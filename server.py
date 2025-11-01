@@ -20,17 +20,40 @@ CORS(app)  # allow cross-origin for simple API access
 app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key_replace_in_prod")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change_me_locally")
 
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")          # leave empty to disable GitHub push/read
-GITHUB_OWNER = os.getenv("GITHUB_OWNER", "cSxrpent")
-GITHUB_REPO = os.getenv("GITHUB_REPO", "auth-users")
-GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
-GITHUB_PATH = os.getenv("GITHUB_PATH", "users.json")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+GITHUB_OWNER = "cSxrpent"
+GITHUB_REPO = "auth-users"
+GITHUB_BRANCH = "main"
+GITHUB_PATH = "users.json"
+
+# GitHub raw URL (public access, no token needed if repo is public)
+GITHUB_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_PATH}"
 
 USERS_FILE = "users.json"  # local fallback file
 
 # -----------------------
 # GitHub helpers
 # -----------------------
+def load_users_from_github():
+    """Fetch users.json from GitHub raw URL. Returns list of users or None on failure."""
+    try:
+        headers = {}
+        if GITHUB_TOKEN:
+            headers["Authorization"] = f"token {GITHUB_TOKEN}"
+        
+        response = requests.get(GITHUB_RAW_URL, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            users = response.json()
+            print(f"✓ Loaded {len(users)} users from GitHub")
+            return users
+        else:
+            print(f"✗ GitHub fetch failed: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"✗ Error fetching from GitHub: {e}")
+        return None
+
 def _github_get_file():
     """Return (ok, info). If ok True: info={'content': <python obj list>, 'sha': <sha>}"""
     if not GITHUB_TOKEN:
@@ -79,23 +102,24 @@ def _github_put_file(new_users, sha=None):
         return False, {"error": f"gh_put_exception:{e}"}
 
 # -----------------------
-# User storage helpers (github first, local fallback)
+# User storage helpers
 # -----------------------
 def load_users():
-    """Try GitHub first (if token), else fallback to local users.json."""
-    ok, res = _github_get_file()
-    if ok:
-        try:
-            return res["content"]
-        except Exception:
-            pass
-    # fallback local
+    """Try GitHub first, then fallback to local users.json."""
+    # Try GitHub raw URL first (fastest)
+    users = load_users_from_github()
+    if users is not None:
+        return users
+    
+    # Fallback to local file
     try:
         with open(USERS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
+        print("⚠ Local users.json not found")
         return []
-    except Exception:
+    except Exception as e:
+        print(f"⚠ Error loading local users.json: {e}")
         return []
 
 def save_users(users):
@@ -155,17 +179,22 @@ def auth():
 
     users = load_users()
     user = find_user(users, username)
+    
     if not user:
+        print(f"❌ Auth failed: username '{username}' not found")
         return jsonify({"message": "unauthorized"}), 403
 
     try:
         expiry = parse_date(user["expires"])
     except Exception:
+        print(f"❌ Auth failed: invalid expiry date for '{username}'")
         return jsonify({"message": "unauthorized"}), 403
 
     if expiry >= datetime.now():
+        print(f"✅ Auth success: '{username}' valid until {user['expires']}")
         return jsonify({"message": "authorized", "expires": user["expires"]}), 200
     else:
+        print(f"⏰ Auth failed: '{username}' expired on {user['expires']}")
         return jsonify({"message": "expired", "expires": user["expires"]}), 403
 
 # ------------------------------------
@@ -229,7 +258,6 @@ def admin_add():
     else:
         users.append({"username": username, "expires": expires})
     save_res = save_users(users)
-    # optionally you can check save_res and surface result
     return redirect(url_for("admin"))
 
 @app.route("/admin/delete/<username>", methods=["GET"])
@@ -300,4 +328,7 @@ def static_files(path):
 # -----------------------
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
+    print(f"🚀 Starting server on port {port}")
+    print(f"📁 GitHub repo: {GITHUB_OWNER}/{GITHUB_REPO}")
+    print(f"📄 GitHub file: {GITHUB_PATH}")
     app.run(host="0.0.0.0", port=port)
