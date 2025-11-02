@@ -2,6 +2,7 @@ import os
 import json
 import base64
 import requests
+import time
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import (
@@ -115,15 +116,21 @@ def _github_put_file(new_users, sha=None):
 # -----------------------
 def load_users():
     """Try GitHub first, then fallback to local users.json."""
-    # Try GitHub raw URL first (fastest)
+    print("🔍 Loading users...")
+    
+    # Try GitHub API first
     users = load_users_from_github()
     if users is not None:
+        print(f"✅ Loaded from GitHub: {len(users)} users")
         return users
     
     # Fallback to local file
+    print("⚠️ GitHub failed, falling back to local file")
     try:
         with open(USERS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            local_users = json.load(f)
+            print(f"✅ Loaded from local: {len(local_users)} users")
+            return local_users
     except FileNotFoundError:
         print("⚠ Local users.json not found")
         return []
