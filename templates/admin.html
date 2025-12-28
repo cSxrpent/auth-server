@@ -238,12 +238,6 @@
     fetchUsers();
     fetchPingStatus();
     fetchLogs();
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.style.display = 'block';
-      clearTimeout(window._toastTimeout);
-      window._toastTimeout = setTimeout(()=> el.style.display='none', t);
-    }
 
     async function fetchUsers(){
       const res = await fetch(api.list, {credentials:'same-origin'});
