@@ -63,6 +63,10 @@
             <div style="font-weight:700">Utilisateurs</div>
             <div class="pill" id="count">0</div>
           </div>
+          <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
+            <input id="search" placeholder="Rechercher..." style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit" />
+            <button class="primary" id="exportBtn" style="padding:8px 10px;margin-left:6px">Exporter CSV</button>
+          </div>
 
           <table id="usersTable">
             <thead>
@@ -110,6 +114,38 @@
         <button onclick="extendUser(365)">+1 an</button>
       </div>
     </div>
+
+    <div class="card fade">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:700">🔔 Ping & Logs</div>
+        <div class="small muted">Contrôles du ping, logs récents</div>
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <div>
+          <div class="small muted">URL</div>
+          <div class="pill" id="pingUrl">—</div>
+        </div>
+        <div>
+          <div class="small muted">Statut</div>
+          <div id="pingStatus" class="pill">—</div>
+        </div>
+        <div>
+          <div class="small muted">Dernier</div>
+          <div id="pingLast" class="small">—</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="primary" id="manualPing">Ping maintenant</button>
+          <button class="primary" id="togglePing">Activer / Désactiver</button>
+          <button class="primary" id="refreshLogs">Rafraîchir logs</button>
+        </div>
+      </div>
+
+      <div style="max-height:200px;overflow:auto;background:rgba(255,255,255,0.01);padding:8px;border-radius:8px">
+        <pre id="logs" style="white-space:pre-wrap;margin:0;font-size:13px;color:var(--muted)"></pre>
+      </div>
+    </div>
+
   </div>
 
   <div id="toast" style="display:none" class="toast">Message</div>
@@ -119,10 +155,89 @@
       list: '/api/users',
       add: '/api/add',
       del: '/api/delete',
-      extend: '/api/extend'
+      extend: '/api/extend',
+      ping: '/api/ping',
+      pingStatus: '/api/ping/status',
+      logs: '/api/logs',
+      export: '/api/export'
     };
 
     function toast(msg, t=2500){
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(window._toastTimeout);
+      window._toastTimeout = setTimeout(()=> el.style.display='none', t);
+    }
+
+    async function fetchPingStatus(){
+      try{
+        const res = await fetch(api.pingStatus, {credentials:'same-origin'});
+        if(!res.ok) return;
+        const s = await res.json();
+        document.getElementById('pingUrl').textContent = s.url || '—';
+        document.getElementById('pingStatus').textContent = s.enabled ? 'Activé' : 'Désactivé';
+        document.getElementById('pingLast').textContent = s.last_time ? `${s.last_time} ${s.last_code?('→ '+s.last_code):''}` : '—';
+      }catch(e){ console.warn(e) }
+    }
+
+    async function manualPing(){
+      try{
+        const res = await fetch(api.ping, {method:'POST', credentials:'same-origin'});
+        const j = await res.json().catch(()=>({}));
+        if(res.ok){ toast(`Ping ok ${j.status}`); } else { toast('Ping failed: '+(j.error||res.status)); }
+        await fetchPingStatus();
+        fetchLogs();
+      }catch(e){ toast('Ping error'); }
+    }
+
+    async function togglePingHandler(){
+      try{
+        const sres = await fetch(api.pingStatus, {credentials:'same-origin'});
+        const s = await sres.json();
+        const enable = !s.enabled;
+        const res = await fetch('/api/ping/toggle', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',
+          body: JSON.stringify({enabled: enable})
+        });
+        const j = await res.json().catch(()=>({}));
+        if(res.ok){ toast('OK'); } else { toast('Erreur: '+(j.error||res.status)); }
+        await fetchPingStatus();
+        fetchLogs();
+      }catch(e){ toast('Erreur'); }
+    }
+
+    async function fetchLogs(){
+      try{
+        const res = await fetch(api.logs, {credentials:'same-origin'});
+        if(!res.ok) return;
+        const list = await res.json();
+        document.getElementById('logs').textContent = list.join('\n');
+      }catch(e){ console.warn(e) }
+    }
+
+    // export button
+    document.getElementById('exportBtn').onclick = ()=> { window.location = api.export };
+
+    document.getElementById('manualPing').onclick = manualPing;
+    document.getElementById('togglePing').onclick = togglePingHandler;
+    document.getElementById('refreshLogs').onclick = fetchLogs;
+
+    // simple search/filter
+    document.getElementById('search').oninput = function(){
+      const q = this.value.toLowerCase().trim();
+      document.querySelectorAll('#usersTable tbody tr').forEach(tr => {
+        const uname = tr.querySelector('td strong')?.textContent?.toLowerCase() || '';
+        tr.style.display = uname.includes(q) ? '' : 'none';
+      });
+    }
+
+    // initial load
+    fetchUsers();
+    fetchPingStatus();
+    fetchLogs();
       const el = document.getElementById('toast');
       el.textContent = msg;
       el.style.display = 'block';

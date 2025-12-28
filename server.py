@@ -3,11 +3,13 @@ import json
 import base64
 import requests
 import time
+import threading
 from datetime import datetime, timedelta
+from collections import deque
 from functools import wraps
 from flask import (
     Flask, request, jsonify, render_template,
-    redirect, url_for, session, send_from_directory
+    redirect, url_for, session, send_from_directory, make_response
 )
 from flask_cors import CORS
 
@@ -275,6 +277,7 @@ def admin_add():
     else:
         users.append({"username": username, "expires": expires})
     save_res = save_users(users)
+    log_event(f"web add: {username} expires {expires}")
     return redirect(url_for("admin"))
 
 @app.route("/admin/delete/<username>", methods=["GET"])
@@ -283,6 +286,7 @@ def admin_delete(username):
     users = load_users()
     users = [u for u in users if u["username"].lower() != username.lower()]
     save_res = save_users(users)
+    log_event(f"web delete: {username}")
     return redirect(url_for("admin"))
 
 # -----------------------
@@ -320,6 +324,7 @@ def api_add():
     else:
         users.append({"username": username, "expires": expires})
     save_res = save_users(users)
+    log_event(f"api_add: {username} expires {expires}")
     return jsonify({"message": "ok", "username": username, "expires": expires, "save_result": save_res}), 200
 
 @app.route("/api/delete", methods=["POST"])
@@ -331,6 +336,7 @@ def api_delete():
         return jsonify({"error": "username missing"}), 400
     users = [u for u in load_users() if u["username"].lower() != username.lower()]
     save_res = save_users(users)
+    log_event(f"api_delete: {username}")
     return jsonify({"message": "deleted", "username": username, "save_result": save_res}), 200
 
 @app.route("/api/extend", methods=["POST"])
@@ -379,6 +385,7 @@ def api_extend():
         save_res = save_users(users)
         
         print(f"✅ Extended '{username}' by {days} days. New expiry: {new_expiry_str}")
+        log_event(f"extended: {username} +{days} days -> {new_expiry_str}")
         
         return jsonify({
             "message": "extended",
@@ -398,6 +405,149 @@ def api_extend():
 @app.route("/static/<path:path>")
 def static_files(path):
     return send_from_directory("static", path)
+
+# -----------------------
+# Background ping to admin (enhanced)
+# -----------------------
+# Configurable via environment variables:
+# - PING_ADMIN_URL (default: http://auth-server-aj8k.onrender.com/admin)
+# - PING_ADMIN_INTERVAL (seconds, default: 300)
+# - PING_ADMIN_ENABLED (1/true to enable, default: 1)
+PING_ADMIN_URL = os.getenv("PING_ADMIN_URL", "http://auth-server-aj8k.onrender.com/admin")
+try:
+    PING_ADMIN_INTERVAL = int(os.getenv("PING_ADMIN_INTERVAL", "300"))
+except Exception:
+    PING_ADMIN_INTERVAL = 300
+PING_ADMIN_ENABLED = os.getenv("PING_ADMIN_ENABLED", "1").lower() in ("1", "true", "yes", "on")
+
+# In-memory logs and ping state (kept for admin panel)
+LOGS = deque(maxlen=500)
+def log_event(msg):
+    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+    entry = f"[{ts}] {msg}"
+    LOGS.appendleft(entry)
+    print(entry)
+
+PING_STATE = {
+    "enabled": PING_ADMIN_ENABLED,
+    "url": PING_ADMIN_URL,
+    "interval": PING_ADMIN_INTERVAL,
+    "last_time": None,
+    "last_code": None,
+    "last_error": None
+}
+
+_ping_stop_event = threading.Event()
+_ping_thread = None
+_ping_lock = threading.Lock()
+
+def _ping_admin_loop(url, interval, stop_event):
+    session = requests.Session()
+    while not stop_event.is_set():
+        try:
+            start = time.time()
+            r = session.get(url, timeout=10)
+            elapsed = time.time() - start
+            PING_STATE["last_time"] = datetime.utcnow().isoformat() + "Z"
+            PING_STATE["last_code"] = r.status_code
+            PING_STATE["last_error"] = None
+            log_event(f"ping -> {url} {r.status_code} ({elapsed:.2f}s)")
+        except Exception as e:
+            PING_STATE["last_time"] = datetime.utcnow().isoformat() + "Z"
+            PING_STATE["last_code"] = None
+            PING_STATE["last_error"] = str(e)
+            log_event(f"ping error -> {e}")
+        # wait but allow early exit
+        stop_event.wait(interval)
+
+def start_ping_thread():
+    global _ping_thread, _ping_stop_event
+    with _ping_lock:
+        if _ping_thread and _ping_thread.is_alive():
+            return False
+        _ping_stop_event = threading.Event()
+        _ping_thread = threading.Thread(target=_ping_admin_loop, args=(PING_ADMIN_URL, PING_ADMIN_INTERVAL, _ping_stop_event), daemon=True)
+        _ping_thread.start()
+        PING_STATE["enabled"] = True
+        log_event(f"Started ping thread: {PING_ADMIN_URL} every {PING_ADMIN_INTERVAL}s")
+        return True
+
+def stop_ping_thread():
+    global _ping_thread, _ping_stop_event
+    with _ping_lock:
+        if _ping_thread and _ping_thread.is_alive():
+            _ping_stop_event.set()
+            _ping_thread.join(timeout=2)
+            _ping_thread = None
+            PING_STATE["enabled"] = False
+            log_event("Stopped ping thread")
+            return True
+        return False
+
+# expose API endpoints for admin
+@app.route("/api/ping", methods=["POST"])
+@login_required
+def api_ping():
+    """Trigger a manual ping to the admin URL"""
+    try:
+        session_req = requests.Session()
+        start = time.time()
+        r = session_req.get(PING_ADMIN_URL, timeout=10)
+        elapsed = time.time() - start
+        PING_STATE["last_time"] = datetime.utcnow().isoformat() + "Z"
+        PING_STATE["last_code"] = r.status_code
+        PING_STATE["last_error"] = None
+        log_event(f"manual ping -> {PING_ADMIN_URL} {r.status_code} ({elapsed:.2f}s)")
+        return jsonify({"ok": True, "status": r.status_code, "elapsed": elapsed}), 200
+    except Exception as e:
+        PING_STATE["last_time"] = datetime.utcnow().isoformat() + "Z"
+        PING_STATE["last_code"] = None
+        PING_STATE["last_error"] = str(e)
+        log_event(f"manual ping error -> {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/ping/status", methods=["GET"])
+@login_required
+def api_ping_status():
+    return jsonify(PING_STATE)
+
+@app.route("/api/ping/toggle", methods=["POST"])
+@login_required
+def api_ping_toggle():
+    body = request.get_json() or {}
+    enabled = body.get("enabled")
+    if enabled is None:
+        return jsonify({"error":"missing 'enabled' parameter"}), 400
+    if enabled:
+        started = start_ping_thread()
+        return jsonify({"ok": started, "enabled": True}), 200
+    else:
+        stopped = stop_ping_thread()
+        return jsonify({"ok": stopped, "enabled": False}), 200
+
+@app.route("/api/logs", methods=["GET"])
+@login_required
+def api_logs():
+    return jsonify(list(LOGS))
+
+@app.route("/api/export", methods=["GET"])
+@login_required
+def api_export():
+    users = load_users()
+    lines = ["username,expires"]
+    for u in users:
+        lines.append(f'{u.get("username","")},{u.get("expires","")}')
+    csv_text = "\n".join(lines)
+    resp = make_response(csv_text)
+    resp.headers["Content-Type"] = "text/csv; charset=utf-8"
+    resp.headers["Content-Disposition"] = f'attachment; filename=users-export-{datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")}.csv'
+    return resp
+
+# start background ping if configured
+if PING_ADMIN_ENABLED:
+    start_ping_thread()
+else:
+    print("ℹ️ ping_admin is disabled (PING_ADMIN_ENABLED not set)")
 
 # -----------------------
 # Run
