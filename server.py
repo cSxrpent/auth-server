@@ -34,6 +34,8 @@ GITHUB_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO
 
 USERS_FILE = "users.json"  # local fallback file
 
+STATS_FILE = "stats.json"  # track user connection counts
+
 CET_OFFSET = timedelta(hours=1)  # CET = UTC+1 in winter
 
 # -----------------------
@@ -119,13 +121,41 @@ def _github_put_file(new_users, sha=None):
 # User storage helpers
 # -----------------------
 def load_users():
-    """Try GitHub first, then fallback to local users.json."""
+    """Try GitHub first, then fallback to local users.json. Overwrite local if different from GitHub."""
     print("🔍 Loading users...")
     
     # Try GitHub API first
     users = load_users_from_github()
     if users is not None:
         print(f"✅ Loaded from GitHub: {len(users)} users")
+        
+        # Check if local file exists and differs
+        try:
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                local_users = json.load(f)
+            
+            # Normalize for comparison (sort by username)
+            def normalize(u_list):
+                return sorted(u_list, key=lambda x: x.get('username', '').lower())
+            
+            github_normalized = normalize(users)
+            local_normalized = normalize(local_users)
+            
+            if github_normalized != local_normalized:
+                print("🔄 Local file differs from GitHub, overwriting local with GitHub data")
+                with open(USERS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(users, f, indent=2, ensure_ascii=False)
+                log_event("Overwrote local users.json with GitHub data")
+            else:
+                print("✅ Local file matches GitHub")
+        
+        except FileNotFoundError:
+            print("📝 Local users.json not found, creating it with GitHub data")
+            with open(USERS_FILE, "w", encoding="utf-8") as f:
+                json.dump(users, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"⚠️ Error checking/comparing local file: {e}")
+        
         return users
     
     # Fallback to local file
@@ -180,6 +210,25 @@ def find_user(users, username):
 
 def parse_date(s):
     return datetime.strptime(s, "%Y-%m-%d")
+
+def load_stats():
+    """Load stats from local file."""
+    try:
+        with open(STATS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        print(f"⚠ Error loading stats: {e}")
+        return {}
+
+def save_stats(stats):
+    """Save stats to local file."""
+    try:
+        with open(STATS_FILE, "w", encoding="utf-8") as f:
+            json.dump(stats, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"⚠ Error saving stats: {e}")
 
 # -----------------------
 # Auth API used by extension
@@ -451,6 +500,12 @@ def record_connection(username, ip, status):
     # Log a short message for visibility
     lvl = "info" if status == "authorized" else "warn"
     log_event(f"conn {status}: {username} @{ip}", level=lvl)
+    
+    # Update stats if authorized
+    if status == "authorized":
+        stats = load_stats()
+        stats[username] = stats.get(username, 0) + 1
+        save_stats(stats)
 
 PING_STATE = {
     "enabled": PING_ADMIN_ENABLED,
@@ -567,18 +622,14 @@ def api_recent():
     """Recent connection attempts to the bot (most recent first)."""
     return jsonify(list(RECENT_CONN))
 
-@app.route("/api/export", methods=["GET"])
+@app.route("/api/stats", methods=["GET"])
 @login_required
-def api_export():
-    users = load_users()
-    lines = ["username,expires"]
-    for u in users:
-        lines.append(f'{u.get("username","")},{u.get("expires","")}')
-    csv_text = "\n".join(lines)
-    resp = make_response(csv_text)
-    resp.headers["Content-Type"] = "text/csv; charset=utf-8"
-    resp.headers["Content-Disposition"] = f'attachment; filename=users-export-{(datetime.utcnow() + CET_OFFSET).strftime("%Y%m%dT%H%M%SZ")}.csv'
-    return resp
+def api_stats():
+    """Return user connection stats."""
+    stats = load_stats()
+    # Sort by count descending
+    sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
+    return jsonify(sorted_stats)
 
 # start background ping if configured
 if PING_ADMIN_ENABLED:
