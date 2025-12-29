@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Connexion admin</title>
+  <title>Admin Login</title>
   <style>
     :root { --bg: #0f1724; --card:#0b1220; --accent:#5dd0ff; --text:#e6f0ff; }
     html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;}
@@ -19,11 +19,11 @@
 </head>
 <body>
   <div class="card">
-    <h2>Connexion admin</h2>
-    <div class="small muted" style="margin-bottom:12px">Panneau futuriste — logs et connexions récentes inclus</div>
+    <h2>Admin Login</h2>
+    <div class="small muted" style="margin-bottom:12px">Admin Panel — logs and recent connections included</div>
     <form method="POST" autocomplete="off">
-      <input type="password" name="password" placeholder="Mot de passe admin" required />
-      <button type="submit">Se connecter</button>
+      <input type="password" name="password" placeholder="Admin Password" required />
+      <button type="submit">Login</button>
     </form>
     {% if error %}
       <div class="error">{{ error }}</div>

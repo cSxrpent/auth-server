@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin • Auth Server</title>
+  <title>Admin Panel</title>
   <style>
     :root{
       --bg:#0a0e1a; --card:#0f1724; --muted:#9aa4b2; --accent:#00d4ff; --danger:#ff4757; --glass: rgba(255,255,255,0.02); --success:#2ed573;
@@ -80,50 +80,50 @@
   <div class="wrap">
     <header>
       <div>
-        <h1>🔐 Panneau Admin Futuriste</h1>
-        <div class="small muted">Gestion avancée des utilisateurs et statistiques</div>
+        <h1>Admin Panel</h1>
+        <div class="small muted">Manage users and subscriptions</div>
       </div>
       <div>
-        <a class="btn-logout" href="/logout">Déconnexion</a>
+        <a class="btn-logout" href="/logout">Logout</a>
       </div>
     </header>
 
     <nav class="nav">
       <button class="nav-btn active" data-section="main">🏠 Main</button>
-      <button class="nav-btn" data-section="users">👥 Utilisateurs</button>
-      <button class="nav-btn" data-section="connectivity">🌐 Connectivité</button>
-      <button class="nav-btn" data-section="stats">📊 Statistiques</button>
+      <button class="nav-btn" data-section="users">👥 Users</button>
+      <button class="nav-btn" data-section="connectivity">🌐 Connectivity</button>
+      <button class="nav-btn" data-section="stats">📊 Stats</button>
     </nav>
 
     <!-- Main Section -->
     <div id="main" class="section active">
       <div class="card">
-        <h2 style="margin-top:0;color:var(--accent)">Récapitulatif</h2>
+        <h2 style="margin-top:0;color:var(--accent)">Summary</h2>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px">
           <div class="pill" style="text-align:center;padding:20px">
             <div style="font-size:2rem;font-weight:700" id="totalUsers">—</div>
-            <div class="small">Utilisateurs totaux</div>
+            <div class="small">Total Users</div>
           </div>
           <div class="pill" style="text-align:center;padding:20px">
             <div style="font-size:2rem;font-weight:700;color:var(--success)" id="activeUsers">—</div>
-            <div class="small">Actifs</div>
+            <div class="small">Active</div>
           </div>
           <div class="pill" style="text-align:center;padding:20px">
             <div style="font-size:2rem;font-weight:700;color:var(--danger)" id="expiredUsers">—</div>
-            <div class="small">Expirés</div>
+            <div class="small">Expired</div>
           </div>
           <div class="pill" style="text-align:center;padding:20px">
             <div style="font-size:2rem;font-weight:700" id="totalConnections">—</div>
-            <div class="small">Connexions totales</div>
+            <div class="small">Total Connections</div>
           </div>
         </div>
       </div>
       <div class="card">
-        <h3>Actions Rapides</h3>
+        <h3>Quick Actions</h3>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="primary" onclick="switchSection('users')">Gérer Utilisateurs</button>
-          <button class="primary" onclick="switchSection('connectivity')">Vérifier Connectivité</button>
-          <button class="primary" onclick="switchSection('stats')">Voir Stats</button>
+          <button class="primary" onclick="switchSection('users')">Manage Users</button>
+          <button class="primary" onclick="switchSection('connectivity')">Check Connectivity</button>
+          <button class="primary" onclick="switchSection('stats')">View Stats</button>
         </div>
       </div>
     </div>
@@ -134,55 +134,55 @@
         <div class="grid">
           <div class="list">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-              <div style="font-weight:700;font-size:1.2rem">Utilisateurs</div>
+              <div style="font-weight:700;font-size:1.2rem">Users</div>
               <div style="display:flex;gap:8px;align-items:center">
                 <div class="pill" id="count">0</div>
-                <div class="pill" id="activeCount">— actifs</div>
-                <div class="pill" id="expiredCount">— expirés</div>
+                <div class="pill" id="activeCount">— active</div>
+                <div class="pill" id="expiredCount">— expired</div>
               </div>
             </div>
             <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
-              <input id="search" placeholder="Rechercher..." style="flex:1" />
+              <input id="search" placeholder="Search..." style="flex:1" />
               <select id="filter" style="padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:linear-gradient(90deg,var(--glass),rgba(255,255,255,0.01));color:inherit">
-                <option value="all">Tous</option>
-                <option value="active">Actifs</option>
-                <option value="expired">Expirés</option>
-                <option value="recent">Dernière connexion (7j)</option>
+                <option value="all">All</option>
+                <option value="active">Active</option>
+                <option value="expired">Expired</option>
+                <option value="recent">Last connected (7d)</option>
               </select>
-              <button class="primary" id="exportBtn">Exporter CSV</button>
+              <button class="primary" id="exportBtn">Export CSV</button>
             </div>
             <table id="usersTable">
               <thead>
-                <tr><th>Utilisateur</th><th>Dernière Connexion</th><th>Expire</th><th>Actions</th></tr>
+                <tr><th>User</th><th>Last Connected</th><th>Expires</th><th>Actions</th></tr>
               </thead>
               <tbody></tbody>
             </table>
           </div>
           <aside style="padding:16px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent)">
-            <div style="font-weight:700;margin-bottom:12px;font-size:1.1rem">Ajouter un utilisateur</div>
-            <div class="small muted" style="margin-bottom:16px">Pseudo et durée</div>
+            <div style="font-weight:700;margin-bottom:12px;font-size:1.1rem">Add User</div>
+            <div class="small muted" style="margin-bottom:16px">Username and duration</div>
             <div style="display:flex;flex-direction:column;gap:10px">
-              <input id="username" placeholder="Pseudo" />
+              <input id="username" placeholder="Username" />
               <select id="duration">
-                <option value="7">1 semaine</option>
-                <option value="30" selected>1 mois</option>
-                <option value="90">3 mois</option>
-                <option value="365">1 an</option>
-                <option value="0">Illimité</option>
+                <option value="7">1 week</option>
+                <option value="30" selected>1 month</option>
+                <option value="90">3 months</option>
+                <option value="365">1 year</option>
+                <option value="0">Unlimited</option>
               </select>
-              <button class="primary" id="addBtn">Ajouter</button>
+              <button class="primary" id="addBtn">Add</button>
             </div>
           </aside>
         </div>
       </div>
       <div class="card extend-section">
-        <div style="font-weight:700;margin-bottom:12px;font-size:1.1rem">📅 Prolonger l'accès</div>
-        <input id="extendUsername" placeholder="Pseudo à prolonger" style="width:100%;margin-bottom:10px" />
+        <div style="font-weight:700;margin-bottom:12px;font-size:1.1rem">📅 Extend Access</div>
+        <input id="extendUsername" placeholder="Username to extend" style="width:100%;margin-bottom:10px" />
         <div class="duration-btns">
-          <button onclick="extendUser(7)">+1 semaine</button>
-          <button onclick="extendUser(30)">+1 mois</button>
-          <button onclick="extendUser(90)">+3 mois</button>
-          <button onclick="extendUser(365)">+1 an</button>
+          <button onclick="extendUser(7)">+1 week</button>
+          <button onclick="extendUser(30)">+1 month</button>
+          <button onclick="extendUser(90)">+3 months</button>
+          <button onclick="extendUser(365)">+1 year</button>
         </div>
       </div>
     </div>
@@ -192,27 +192,27 @@
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
           <div style="font-weight:700;font-size:1.2rem">🔔 Ping & Logs</div>
-          <div class="small muted">Contrôles et monitoring</div>
+          <div class="small muted">Controls and monitoring</div>
         </div>
         <div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
           <div><div class="small muted">URL</div><div class="pill" id="pingUrl">—</div></div>
-          <div><div class="small muted">Statut</div><div id="pingStatus" class="pill">—</div></div>
-          <div><div class="small muted">Dernier</div><div id="pingLast" class="small">—</div></div>
+          <div><div class="small muted">Status</div><div id="pingStatus" class="pill">—</div></div>
+          <div><div class="small muted">Last</div><div id="pingLast" class="small">—</div></div>
           <div style="margin-left:auto;display:flex;gap:8px">
-            <button class="primary" id="manualPing">Ping manuel</button>
-            <button class="primary" id="togglePing">Activer / Désactiver</button>
-            <button class="primary" id="refreshLogs">Rafraîchir</button>
+            <button class="primary" id="manualPing">Manual Ping</button>
+            <button class="primary" id="togglePing">Enable / Disable</button>
+            <button class="primary" id="refreshLogs">Refresh</button>
           </div>
         </div>
         <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
           <div style="flex:1;min-width:300px;max-height:300px;overflow:auto;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);padding:12px;border-radius:12px">
-            <div style="font-weight:700;margin-bottom:12px">Logs récents</div>
+            <div style="font-weight:700;margin-bottom:12px">Recent Logs</div>
             <div id="logsList"></div>
           </div>
           <div style="width:350px;min-width:300px;max-height:300px;overflow:auto;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);padding:12px;border-radius:12px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-              <div style="font-weight:700">Connexions récentes</div>
-              <div class="small muted">Accès au bot</div>
+              <div style="font-weight:700">Recent Connections</div>
+              <div class="small muted">Bot access</div>
             </div>
             <div id="recentList"></div>
           </div>
@@ -223,9 +223,9 @@
     <!-- Stats Section -->
     <div id="stats" class="section">
       <div class="card">
-        <h2 style="margin-top:0;color:var(--accent)">📊 Statistiques d'Utilisation</h2>
+        <h2 style="margin-top:0;color:var(--accent)">📊 Usage Statistics</h2>
         <div class="chart-container">
-          <div style="font-weight:700;margin-bottom:12px">Connexions par utilisateur</div>
+          <div style="font-weight:700;margin-bottom:12px">Connections per user</div>
           <div id="statsChart"></div>
         </div>
       </div>
@@ -287,7 +287,7 @@
         if(!res.ok) return;
         const s = await res.json();
         document.getElementById('pingUrl').textContent = s.url || '—';
-        document.getElementById('pingStatus').textContent = s.enabled ? 'Activé' : 'Désactivé';
+        document.getElementById('pingStatus').textContent = s.enabled ? 'Enabled' : 'Disabled';
         document.getElementById('pingLast').textContent = s.last_time ? `${s.last_time} ${s.last_code?('→ '+s.last_code):''}` : '—';
       }catch(e){ console.warn(e) }
     }
@@ -382,7 +382,7 @@
       const container = document.getElementById('statsChart');
       container.innerHTML = '';
       if(stats.length === 0){
-        container.innerHTML = '<div class="small muted">Aucune donnée</div>';
+        container.innerHTML = '<div class="small muted">No data</div>';
         return;
       }
       const max = Math.max(...stats.map(s => s[1]));
@@ -464,7 +464,7 @@
         const expiryClass = isExpired ? 'expired' : 'active';
         if(isExpired) expired++; else active++;
         
-        const lastConnDisplay = u.last_connected ? u.last_connected.substring(0,10) : 'Jamais';
+        const lastConnDisplay = u.last_connected ? u.last_connected.substring(0,10) : 'Never';
         
         tr.innerHTML = `
           <td><strong>${escapeHtml(u.username)}</strong></td>
@@ -473,21 +473,21 @@
           <td class="actions">
             <button class="extend-btn" onclick="quickExtend('${escapeHtml(u.username)}', 7)">+7j</button>
             <button class="extend-btn" onclick="quickExtend('${escapeHtml(u.username)}', 30)">+1m</button>
-            <button class="del" data-username="${u.username}">Supprimer</button>
+            <button class="del" data-username="${u.username}">Delete</button>
           </td>
         `;
         tbody.appendChild(tr);
       });
       
       document.getElementById('count').textContent = count;
-      document.getElementById('activeCount').textContent = active + ' actifs';
-      document.getElementById('expiredCount').textContent = expired + ' expirés';
+      document.getElementById('activeCount').textContent = active + ' active';
+      document.getElementById('expiredCount').textContent = expired + ' expired';
       
       // attach delete handlers
       document.querySelectorAll('.del').forEach(btn=>{
         btn.onclick = async ()=> {
           const username = btn.dataset.username;
-          if(!confirm(`Supprimer ${username} ?`)) return;
+          if(!confirm(`Delete ${username}?`)) return;
           const res = await fetch(api.del, {
             method:'POST',
             headers:{'Content-Type':'application/json'},
@@ -495,13 +495,13 @@
             credentials:'same-origin'
           });
           if(res.ok){
-            toast('Supprimé');
+            toast('Deleted');
             btn.closest('tr').style.transition='opacity .4s';
             btn.closest('tr').style.opacity='0';
             setTimeout(fetchUsers, 420);
           } else {
             const j = await res.json().catch(()=>({}));
-            toast('Erreur: ' + (j.error || res.status));
+            toast('Error: ' + (j.error || res.status));
           }
         }
       })
@@ -509,7 +509,7 @@
 
     async function extendUser(days){
       const username = document.getElementById('extendUsername').value.trim();
-      if(!username){ toast('Pseudo requis'); return; }
+      if(!username){ toast('Username required'); return; }
       
       const res = await fetch(api.extend, {
         method:'POST',
@@ -520,17 +520,17 @@
       
       if(res.ok){
         const result = await res.json();
-        toast(`✅ +${days}j pour ${username}\nNouvelle date: ${result.newExpires}`);
+        toast(`✅ +${days}j for ${username}\nNew date: ${result.newExpires}`);
         document.getElementById('extendUsername').value = '';
         setTimeout(fetchUsers, 220);
       } else {
         const j = await res.json().catch(()=>({}));
-        toast('❌ ' + (j.error || 'Erreur'));
+        toast('❌ ' + (j.error || 'Error'));
       }
     }
 
     async function quickExtend(username, days){
-      if(!confirm(`Prolonger ${username} de ${days} jours ?`)) return;
+      if(!confirm(`Extend ${username} by ${days} days?`)) return;
       
       const res = await fetch(api.extend, {
         method:'POST',
@@ -541,11 +541,11 @@
       
       if(res.ok){
         const result = await res.json();
-        toast(`✅ Prolongé jusqu'au ${result.newExpires}`);
+        toast(`✅ Extended until ${result.newExpires}`);
         setTimeout(fetchUsers, 220);
       } else {
         const j = await res.json().catch(()=>({}));
-        toast('❌ ' + (j.error || 'Erreur'));
+        toast('❌ ' + (j.error || 'Error'));
       }
     }
 
@@ -558,7 +558,7 @@
     document.getElementById('addBtn').onclick = async ()=>{
       const username = document.getElementById('username').value.trim();
       const duration = document.getElementById('duration').value;
-      if(!username){ toast('Pseudo requis'); return; }
+      if(!username){ toast('Username required'); return; }
       const body = { username, duration: parseInt(duration) || 0 };
       const res = await fetch(api.add, {
         method:'POST',
@@ -567,12 +567,12 @@
         body: JSON.stringify(body)
       });
       if(res.ok){
-        toast('Utilisateur ajouté');
+        toast('User added');
         document.getElementById('username').value = '';
         setTimeout(fetchUsers, 220);
       } else {
         const j = await res.json().catch(()=>({}));
-        toast('Erreur: ' + (j.error || res.status));
+        toast('Error: ' + (j.error || res.status));
       }
     }
 

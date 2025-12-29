@@ -297,7 +297,6 @@ def auth():
 # ------------------------------------
 # Admin web UI (login + dashboard)
 # ------------------------------------
-#laisse moi tester
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -315,7 +314,7 @@ def login():
             session["logged_in"] = True
             return redirect(url_for("admin"))
         else:
-            error = "Mot de passe incorrect."
+            error = "Incorrect password."
     return render_template("login.html", error=error)
 
 @app.route("/logout")
@@ -424,7 +423,7 @@ def api_delete():
 @app.route("/api/extend", methods=["POST"])
 @login_required
 def api_extend():
-    """Prolonge l'accès d'un utilisateur existant de X jours"""
+    """Extend an existing user's access by X days"""
     body = request.get_json() or {}
     username = (body.get("username") or "").strip()
     days = body.get("days")
@@ -436,19 +435,19 @@ def api_extend():
     if not days or not isinstance(days, int) or days <= 0:
         return jsonify({"error": "invalid days value"}), 400
     
-    # Charger les utilisateurs
+    # Load users
     users = load_users()
     user = find_user(users, username)
     
-    # Vérifier que l'utilisateur existe
+    # Check if user exists
     if not user:
         return jsonify({"error": f"User '{username}' not found"}), 404
     
     try:
-        # Parser la date d'expiration actuelle
+        # Parse current expiry date
         current_expiry = parse_date(user["expires"])
         
-        # Si la date est déjà passée, partir d'aujourd'hui
+        # If date has already passed, start from today
         if current_expiry < datetime.now():
             base_date = datetime.now()
             print(f"⏰ User '{username}' was expired, extending from today")
@@ -456,14 +455,14 @@ def api_extend():
             base_date = current_expiry
             print(f"📅 User '{username}' is active, extending from {user['expires']}")
         
-        # Ajouter les jours
+        # Add the days
         new_expiry = base_date + timedelta(days=days)
         new_expiry_str = new_expiry.strftime("%Y-%m-%d")
         
-        # Mettre à jour l'utilisateur
+        # Update the user
         user["expires"] = new_expiry_str
         
-        # Sauvegarder sur GitHub
+        # Save to GitHub
         save_res = save_users(users)
         
         print(f"✅ Extended '{username}' by {days} days. New expiry: {new_expiry_str}")
