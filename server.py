@@ -322,11 +322,9 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-@app.route("/admin")
-@login_required
-def admin():
-    users = load_users()
-    return render_template("admin.html", users=users)
+@app.route("/")
+def index():
+    return render_template("index.html")
 
 @app.route("/admin/add", methods=["POST"])
 @login_required
