@@ -36,6 +36,8 @@ USERS_FILE = "users.json"  # local fallback file
 
 STATS_FILE = "stats.json"  # track user connection counts
 
+LAST_CONNECTED_FILE = "last_connected.json"  # track last connection per user
+
 CET_OFFSET = timedelta(hours=1)  # CET = UTC+1 in winter
 
 # -----------------------
@@ -230,6 +232,25 @@ def save_stats(stats):
     except Exception as e:
         print(f"⚠ Error saving stats: {e}")
 
+def load_last_connected():
+    """Load last connected times from local file."""
+    try:
+        with open(LAST_CONNECTED_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        print(f"⚠ Error loading last_connected: {e}")
+        return {}
+
+def save_last_connected(last_conn):
+    """Save last connected to local file."""
+    try:
+        with open(LAST_CONNECTED_FILE, "w", encoding="utf-8") as f:
+            json.dump(last_conn, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"⚠ Error saving last_connected: {e}")
+
 # -----------------------
 # Auth API used by extension
 # -----------------------
@@ -354,6 +375,9 @@ def admin_delete(username):
 @login_required
 def api_get_users():
     users = load_users()
+    last_conn = load_last_connected()
+    for u in users:
+        u["last_connected"] = last_conn.get(u["username"])
     return jsonify(users)
 
 @app.route("/api/add", methods=["POST"])
@@ -506,6 +530,11 @@ def record_connection(username, ip, status):
         stats = load_stats()
         stats[username] = stats.get(username, 0) + 1
         save_stats(stats)
+        
+        # Update last connected
+        last_conn = load_last_connected()
+        last_conn[username] = ts
+        save_last_connected(last_conn)
 
 PING_STATE = {
     "enabled": PING_ADMIN_ENABLED,

@@ -143,11 +143,17 @@
             </div>
             <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
               <input id="search" placeholder="Rechercher..." style="flex:1" />
+              <select id="filter" style="padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:linear-gradient(90deg,var(--glass),rgba(255,255,255,0.01));color:inherit">
+                <option value="all">Tous</option>
+                <option value="active">Actifs</option>
+                <option value="expired">Expirés</option>
+                <option value="recent">Dernière connexion (7j)</option>
+              </select>
               <button class="primary" id="exportBtn">Exporter CSV</button>
             </div>
             <table id="usersTable">
               <thead>
-                <tr><th>Utilisateur</th><th>Expire</th><th>Actions</th></tr>
+                <tr><th>Utilisateur</th><th>Dernière Connexion</th><th>Expire</th><th>Actions</th></tr>
               </thead>
               <tbody></tbody>
             </table>
@@ -402,6 +408,8 @@
       });
     }
 
+    document.getElementById('filter').onchange = fetchUsers;
+
     async function fetchUsers(){
       const res = await fetch(api.list, {credentials:'same-origin'});
       if(!res.ok){ toast('Erreur: '+res.status); return; }
@@ -431,18 +439,36 @@
       let active = 0;
       let expired = 0;
       
+      const filter = document.getElementById('filter').value;
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
       users.forEach(u=>{
-        count++;
-        const tr = document.createElement('tr');
         const expires = u.expires || '—';
         const expiryDate = new Date(expires);
-        const today = new Date();
-        const isExpired = expiryDate < today;
+        const isExpired = expiryDate < now;
+        const lastConn = u.last_connected ? new Date(u.last_connected.substring(0,10)) : null;
+        const isRecent = lastConn && lastConn > sevenDaysAgo;
+        
+        // Apply filter
+        let show = true;
+        if(filter === 'active' && isExpired) show = false;
+        else if(filter === 'expired' && !isExpired) show = false;
+        else if(filter === 'recent' && !isRecent) show = false;
+        
+        if(!show) return;
+        
+        count++;
+        const tr = document.createElement('tr');
+        
         const expiryClass = isExpired ? 'expired' : 'active';
         if(isExpired) expired++; else active++;
         
+        const lastConnDisplay = u.last_connected ? u.last_connected.substring(0,10) : 'Jamais';
+        
         tr.innerHTML = `
           <td><strong>${escapeHtml(u.username)}</strong></td>
+          <td class="small muted">${lastConnDisplay}</td>
           <td class="${expiryClass}">${expires}</td>
           <td class="actions">
             <button class="extend-btn" onclick="quickExtend('${escapeHtml(u.username)}', 7)">+7j</button>
@@ -457,6 +483,7 @@
       document.getElementById('activeCount').textContent = active + ' actifs';
       document.getElementById('expiredCount').textContent = expired + ' expirés';
       
+      // attach delete handlers
       document.querySelectorAll('.del').forEach(btn=>{
         btn.onclick = async ()=> {
           const username = btn.dataset.username;
