@@ -34,6 +34,8 @@ GITHUB_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO
 
 USERS_FILE = "users.json"  # local fallback file
 
+CET_OFFSET = timedelta(hours=1)  # CET = UTC+1 in winter
+
 # -----------------------
 # GitHub helpers
 # -----------------------
@@ -98,7 +100,7 @@ def _github_put_file(new_users, sha=None):
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     content_b64 = base64.b64encode(json.dumps(new_users, ensure_ascii=False, indent=2).encode("utf-8")).decode("utf-8")
     payload = {
-        "message": f"Update users.json via server at {datetime.utcnow().isoformat()}Z",
+        "message": f"Update users.json via server at {(datetime.utcnow() + CET_OFFSET).isoformat()}Z",
         "content": content_b64,
         "branch": GITHUB_BRANCH
     }
@@ -434,7 +436,7 @@ RECENT_CONN = deque(maxlen=300)
 
 def log_event(msg, level="info"):
     """Store a structured log and still print a compact line for console."""
-    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+    ts = (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d %H:%M:%SZ")
     entry = {"ts": ts, "msg": str(msg), "level": level}
     LOGS.appendleft(entry)
     # keep console-friendly output
@@ -443,7 +445,7 @@ def log_event(msg, level="info"):
 
 def record_connection(username, ip, status):
     """Record a recent connection attempt (used by /auth endpoint)."""
-    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+    ts = (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d %H:%M:%SZ")
     entry = {"ts": ts, "username": username, "ip": ip, "status": status}
     RECENT_CONN.appendleft(entry)
     # Log a short message for visibility
@@ -466,10 +468,10 @@ _ping_lock = threading.Lock()
 def _ping_admin_loop(url, interval, stop_event):
     session = requests.Session()
     while not stop_event.is_set():
-        now = datetime.utcnow()
+        now = datetime.utcnow() + CET_OFFSET
         if now.hour >= 3:
-            # Stop pinging after 3 AM
-            log_event("Stopping ping loop as it's past 3 AM")
+            # Stop pinging after 3 AM CET
+            log_event("Stopping ping loop as it's past 3 AM CET")
             break
         try:
             start = time.time()
@@ -575,7 +577,7 @@ def api_export():
     csv_text = "\n".join(lines)
     resp = make_response(csv_text)
     resp.headers["Content-Type"] = "text/csv; charset=utf-8"
-    resp.headers["Content-Disposition"] = f'attachment; filename=users-export-{datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")}.csv'
+    resp.headers["Content-Disposition"] = f'attachment; filename=users-export-{(datetime.utcnow() + CET_OFFSET).strftime("%Y%m%dT%H%M%SZ")}.csv'
     return resp
 
 # start background ping if configured
@@ -584,17 +586,17 @@ if PING_ADMIN_ENABLED:
 else:
     print("ℹ️ ping_admin is disabled (PING_ADMIN_ENABLED not set)")
 
-# Schedule shutdown at 3 AM UTC every day
+# Schedule shutdown at 3 AM CET every day
 def shutdown_at_3am():
     while True:
-        now = datetime.utcnow()
-        # Calculate next 3 AM
+        now = datetime.utcnow() + CET_OFFSET
+        # Calculate next 3 AM CET
         next_3am = now.replace(hour=3, minute=0, second=0, microsecond=0)
         if now >= next_3am:
             next_3am += timedelta(days=1)
         sleep_time = (next_3am - now).total_seconds()
         time.sleep(sleep_time)
-        log_event("Shutting down server at 3 AM UTC")
+        log_event("Shutting down server at 3 AM CET")
         stop_ping_thread()
         os._exit(0)
 
