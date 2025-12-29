@@ -61,7 +61,11 @@
         <div class="list">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
             <div style="font-weight:700">Utilisateurs</div>
-            <div class="pill" id="count">0</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="pill" id="count">0</div>
+              <div class="pill" id="activeCount">— actifs</div>
+              <div class="pill" id="expiredCount">— expirés</div>
+            </div>
           </div>
           <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
             <input id="search" placeholder="Rechercher..." style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit" />
@@ -141,11 +145,37 @@
         </div>
       </div>
 
-      <div style="max-height:200px;overflow:auto;background:rgba(255,255,255,0.01);padding:8px;border-radius:8px">
-        <pre id="logs" style="white-space:pre-wrap;margin:0;font-size:13px;color:var(--muted)"></pre>
+      <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+        <div style="flex:1;min-width:280px;max-height:260px;overflow:auto;background:rgba(255,255,255,0.01);padding:8px;border-radius:8px">
+          <div style="font-weight:700;margin-bottom:8px">Logs récents</div>
+          <div id="logsList" class="log-list"></div>
+        </div>
+
+        <div style="width:320px;min-width:280px;max-height:260px;overflow:auto;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);padding:8px;border-radius:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-weight:700">Connexions récentes</div>
+            <div class="small muted">Derniers accès au bot</div>
+          </div>
+          <div id="recentList"></div>
+        </div>
       </div>
     </div>
 
+    <style>
+      /* Logs & recent styles */
+      .log-list{display:flex;flex-direction:column;gap:8px}
+      .log-item{display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:10px;background:linear-gradient(90deg,rgba(255,255,255,0.01),rgba(255,255,255,0.006));border:1px solid rgba(255,255,255,0.02)}
+      .log-meta{font-weight:700;color:var(--muted);min-width:140px;font-size:12px}
+      .log-msg{color:#dff3ff;font-size:13px}
+      .badge-info{color:#6bd1ff}
+      .badge-warn{color:#ffd26b}
+      .badge-error{color:#ff9b9b}
+
+      .recent-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;margin-bottom:6px}
+      .recent-avatar{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#1752ff,#7b4bff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+      .recent-body{flex:1}
+      .recent-time{font-size:12px;color:var(--muted)}
+    </style>
   </div>
 
   <div id="toast" style="display:none" class="toast">Message</div>
@@ -159,6 +189,7 @@
       ping: '/api/ping',
       pingStatus: '/api/ping/status',
       logs: '/api/logs',
+      recent: '/api/recent',
       export: '/api/export'
     };
 
@@ -187,7 +218,8 @@
         const j = await res.json().catch(()=>({}));
         if(res.ok){ toast(`Ping ok ${j.status}`); } else { toast('Ping failed: '+(j.error||res.status)); }
         await fetchPingStatus();
-        fetchLogs();
+        await fetchLogs();
+        await fetchRecent();
       }catch(e){ toast('Ping error'); }
     }
 
@@ -205,7 +237,8 @@
         const j = await res.json().catch(()=>({}));
         if(res.ok){ toast('OK'); } else { toast('Erreur: '+(j.error||res.status)); }
         await fetchPingStatus();
-        fetchLogs();
+        await fetchLogs();
+        await fetchRecent();
       }catch(e){ toast('Erreur'); }
     }
 
@@ -214,7 +247,49 @@
         const res = await fetch(api.logs, {credentials:'same-origin'});
         if(!res.ok) return;
         const list = await res.json();
-        document.getElementById('logs').textContent = list.join('\n');
+        const container = document.getElementById('logsList');
+        container.innerHTML = '';
+        list.forEach(item => {
+          const el = document.createElement('div');
+          // handle older string logs and new structured logs
+          if(typeof item === 'string'){
+            el.className = 'log-item';
+            el.innerHTML = `<div class="log-meta">${escapeHtml(item.substring(0,19))}</div><div class="log-msg">${escapeHtml(item)}</div>`;
+          } else if(typeof item === 'object' && item !== null){
+            const lvl = (item.level||'info').toLowerCase();
+            el.className = 'log-item';
+            el.innerHTML = `
+              <div class="log-meta">${escapeHtml(item.ts)}</div>
+              <div style="flex:1">
+                <div class="small muted"> <span class="badge-${lvl}">[${lvl.toUpperCase()}]</span> ${escapeHtml(item.msg)}</div>
+              </div>
+            `;
+          }
+          container.appendChild(el);
+        });
+      }catch(e){ console.warn(e) }
+    }
+
+    async function fetchRecent(){
+      try{
+        const res = await fetch(api.recent, {credentials:'same-origin'});
+        if(!res.ok) return;
+        const list = await res.json();
+        const container = document.getElementById('recentList');
+        container.innerHTML = '';
+        list.forEach(r => {
+          const div = document.createElement('div');
+          div.className = 'recent-item';
+          const avatar = document.createElement('div');
+          avatar.className = 'recent-avatar';
+          avatar.textContent = (r.username||'?').charAt(0).toUpperCase();
+          const body = document.createElement('div');
+          body.className = 'recent-body';
+          body.innerHTML = `<div><strong>${escapeHtml(r.username||'—')}</strong> <span class="small muted">@${escapeHtml(r.ip||'—')}</span></div><div class="recent-time">${escapeHtml(r.ts)} • <span class="small muted">${escapeHtml(r.status)}</span></div>`;
+          div.appendChild(avatar);
+          div.appendChild(body);
+          container.appendChild(div);
+        });
       }catch(e){ console.warn(e) }
     }
 
@@ -223,7 +298,7 @@
 
     document.getElementById('manualPing').onclick = manualPing;
     document.getElementById('togglePing').onclick = togglePingHandler;
-    document.getElementById('refreshLogs').onclick = fetchLogs;
+    document.getElementById('refreshLogs').onclick = async () => { await fetchLogs(); await fetchRecent(); };
 
     // simple search/filter
     document.getElementById('search').oninput = function(){
@@ -238,6 +313,7 @@
     fetchUsers();
     fetchPingStatus();
     fetchLogs();
+    fetchRecent();
 
     async function fetchUsers(){
       const res = await fetch(api.list, {credentials:'same-origin'});
@@ -250,6 +326,8 @@
       const tbody = document.querySelector('#usersTable tbody');
       tbody.innerHTML = '';
       let count = 0;
+      let active = 0;
+      let expired = 0;
       
       users.forEach(u=>{
         count++;
@@ -261,6 +339,7 @@
         const today = new Date();
         const isExpired = expiryDate < today;
         const expiryClass = isExpired ? 'expired' : 'active';
+        if(isExpired) expired++; else active++;
         
         tr.innerHTML = `
           <td><strong>${escapeHtml(u.username)}</strong></td>
@@ -275,6 +354,8 @@
       });
       
       document.getElementById('count').textContent = count;
+      document.getElementById('activeCount').textContent = active + ' actifs';
+      document.getElementById('expiredCount').textContent = expired + ' expirés';
       
       // attach delete handlers
       document.querySelectorAll('.del').forEach(btn=>{

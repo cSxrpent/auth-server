@@ -195,24 +195,31 @@ def auth():
     if not username:
         return jsonify({"message": "username parameter is missing"}), 400
 
+    # client IP (support proxied headers)
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+
     users = load_users()
     user = find_user(users, username)
     
     if not user:
-        print(f"❌ Auth failed: username '{username}' not found")
+        log_event(f"auth fail: username '{username}' not found", level="warn")
+        record_connection(username, ip, "unauthorized")
         return jsonify({"message": "unauthorized"}), 403
 
     try:
         expiry = parse_date(user["expires"])
     except Exception:
-        print(f"❌ Auth failed: invalid expiry date for '{username}'")
+        log_event(f"auth fail: invalid expiry date for '{username}'", level="error")
+        record_connection(username, ip, "unauthorized")
         return jsonify({"message": "unauthorized"}), 403
 
     if expiry >= datetime.now():
-        print(f"✅ Auth success: '{username}' valid until {user['expires']}")
+        log_event(f"auth success: '{username}' valid until {user['expires']}", level="info")
+        record_connection(username, ip, "authorized")
         return jsonify({"message": "authorized", "expires": user["expires"]}), 200
     else:
-        print(f"⏰ Auth failed: '{username}' expired on {user['expires']}")
+        log_event(f"auth expired: '{username}' expired on {user['expires']}", level="warn")
+        record_connection(username, ip, "expired")
         return jsonify({"message": "expired", "expires": user["expires"]}), 403
 
 # ------------------------------------
@@ -422,11 +429,26 @@ PING_ADMIN_ENABLED = os.getenv("PING_ADMIN_ENABLED", "1").lower() in ("1", "true
 
 # In-memory logs and ping state (kept for admin panel)
 LOGS = deque(maxlen=500)
-def log_event(msg):
+# Recent connections (username, ip, status) to show who used the bot recently
+RECENT_CONN = deque(maxlen=300)
+
+def log_event(msg, level="info"):
+    """Store a structured log and still print a compact line for console."""
     ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
-    entry = f"[{ts}] {msg}"
+    entry = {"ts": ts, "msg": str(msg), "level": level}
     LOGS.appendleft(entry)
-    print(entry)
+    # keep console-friendly output
+    print(f"[{ts}] [{level.upper()}] {msg}")
+
+
+def record_connection(username, ip, status):
+    """Record a recent connection attempt (used by /auth endpoint)."""
+    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+    entry = {"ts": ts, "username": username, "ip": ip, "status": status}
+    RECENT_CONN.appendleft(entry)
+    # Log a short message for visibility
+    lvl = "info" if status == "authorized" else "warn"
+    log_event(f"conn {status}: {username} @{ip}", level=lvl)
 
 PING_STATE = {
     "enabled": PING_ADMIN_ENABLED,
@@ -456,7 +478,7 @@ def _ping_admin_loop(url, interval, stop_event):
             PING_STATE["last_time"] = datetime.utcnow().isoformat() + "Z"
             PING_STATE["last_code"] = None
             PING_STATE["last_error"] = str(e)
-            log_event(f"ping error -> {e}")
+            log_event(f"ping error -> {e}", level="error")
         # wait but allow early exit
         stop_event.wait(interval)
 
@@ -503,7 +525,7 @@ def api_ping():
         PING_STATE["last_time"] = datetime.utcnow().isoformat() + "Z"
         PING_STATE["last_code"] = None
         PING_STATE["last_error"] = str(e)
-        log_event(f"manual ping error -> {e}")
+        log_event(f"manual ping error -> {e}", level="error")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/ping/status", methods=["GET"])
@@ -528,7 +550,15 @@ def api_ping_toggle():
 @app.route("/api/logs", methods=["GET"])
 @login_required
 def api_logs():
+    # return structured logs
     return jsonify(list(LOGS))
+
+
+@app.route("/api/recent", methods=["GET"])
+@login_required
+def api_recent():
+    """Recent connection attempts to the bot (most recent first)."""
+    return jsonify(list(RECENT_CONN))
 
 @app.route("/api/export", methods=["GET"])
 @login_required
