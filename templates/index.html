@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>RXZBot - XP Wolvesville Bot</title>
+  <title>RXZBot</title>
   <style>
     :root{
       --bg:#0a0e1a; --card:#0f1724; --muted:#9aa4b2; --accent:#00d4ff; --danger:#ff4757; --glass: rgba(255,255,255,0.02); --success:#2ed573;
@@ -12,7 +12,10 @@
     *{box-sizing:border-box}
     body{margin:0;font-family:'Segoe UI',system-ui,Arial;background:linear-gradient(135deg,#071026,#0d1526,#1a1f35);color:#eaf1ff;min-height:100vh;padding:20px;display:flex;justify-content:center;overflow-x:hidden}
     .wrap{width:100%;max-width:1000px}
-    header{text-align:center;margin-bottom:40px}
+    header{text-align:center;margin-bottom:40px;position:relative}
+    .admin-link{position:absolute;top:10px;right:10px}
+    .admin-link a{color:var(--muted);text-decoration:none;font-size:0.9rem}
+    .admin-link a:hover{color:var(--accent)}
     h1{margin:0;font-size:3rem;background:linear-gradient(90deg,var(--accent),#7b4bff);background-clip:text;-webkit-background-clip:text;color:transparent;animation:pulse 2s infinite}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.8}}
     .subtitle{color:var(--muted);font-size:1.2rem;margin-top:10px}
@@ -37,13 +40,16 @@
   <div class="particles" id="particles"></div>
   <div class="wrap">
     <header>
+      <div class="admin-link">
+        <a href="/login">Admin</a>
+      </div>
       <h1>RXZBot</h1>
       <div class="subtitle">XP Wolvesville Bot - Boost your game with premium features</div>
     </header>
 
     <div class="card">
       <h2>About RXZBot</h2>
-      <p>RXZBot is a powerful XP bot for Wolvesville that helps you level up faster and access premium in-game items. Get roses, skins, and money without grinding endlessly. Cheaper than the in-game market!</p>
+      <p>RXZBot is a powerful XP bot for Wolvesville that helps you level up faster easily. Get roses, skins, and money without grinding endlessly. Cheaper than the bot market!</p>
     </div>
 
     <div class="card">

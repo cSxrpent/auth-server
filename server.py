@@ -326,6 +326,11 @@ def logout():
 def index():
     return render_template("index.html")
 
+@app.route("/admin")
+@login_required
+def admin():
+    return render_template("admin.html")
+
 @app.route("/admin/add", methods=["POST"])
 @login_required
 def admin_add():
