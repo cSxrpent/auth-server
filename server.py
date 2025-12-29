@@ -312,7 +312,7 @@ def login():
         password = request.form.get("password", "")
         if password == ADMIN_PASSWORD:
             session["logged_in"] = True
-            return redirect(url_for("admin"))
+            return redirect(url_for("admin_page"))
         else:
             error = "Incorrect password."
     return render_template("login.html", error=error)
@@ -328,7 +328,7 @@ def index():
 
 @app.route("/admin")
 @login_required
-def admin():
+def admin_page():
     return render_template("admin.html")
 
 @app.route("/admin/add", methods=["POST"])
@@ -339,7 +339,7 @@ def admin_add():
     duration = request.form.get("duration", "").strip()
 
     if not username:
-        return redirect(url_for("admin"))
+        return redirect(url_for("admin_page"))
 
     if not expires and duration:
         try:
@@ -359,7 +359,7 @@ def admin_add():
         users.append({"username": username, "expires": expires})
     save_res = save_users(users)
     log_event(f"web add: {username} expires {expires}")
-    return redirect(url_for("admin"))
+    return redirect(url_for("admin_page"))
 
 @app.route("/admin/delete/<username>", methods=["GET"])
 @login_required
@@ -368,7 +368,7 @@ def admin_delete(username):
     users = [u for u in users if u["username"].lower() != username.lower()]
     save_res = save_users(users)
     log_event(f"web delete: {username}")
-    return redirect(url_for("admin"))
+    return redirect(url_for("admin_page"))
 
 # -----------------------
 # Modern AJAX endpoints for admin page
