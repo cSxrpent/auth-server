@@ -42,6 +42,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change_me_locally")
 PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID")
 PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
 PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
+PAYPAL_TEST_MODE = os.getenv("PAYPAL_TEST_MODE", "false").lower() == "true"  # Skip actual PayPal calls for testing
 
 # Email config
 EMAIL_USER = os.getenv("EMAIL_USER")
@@ -54,6 +55,17 @@ paypalrestsdk.configure({
     "client_id": PAYPAL_CLIENT_ID,
     "client_secret": PAYPAL_CLIENT_SECRET
 })
+
+# Test PayPal configuration
+try:
+    # Try to get an access token to verify credentials
+    import paypalrestsdk.api as paypal_api
+    api = paypal_api.default()
+    token = api.get_token_hash()
+    print("✅ PayPal credentials verified successfully")
+except Exception as e:
+    print(f"⚠️ PayPal credentials verification failed: {e}")
+    print("   This might be normal if running without network or with invalid credentials")
 
 # Check configuration on startup
 if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
@@ -421,26 +433,91 @@ def payment_success():
     payment_id = request.args.get("paymentId")
     payer_id = request.args.get("PayerID")
     
-    payment = paypalrestsdk.Payment.find(payment_id)
+    print(f"Payment success attempt - Payment ID: {payment_id}, Payer ID: {payer_id}")
     
-    if payment.execute({"payer_id": payer_id}):
-        # Payment successful, activate license
-        username = session.get("payment_username")
-        email = session.get("payment_email")
-        item = session.get("payment_item")
-        
-        if username and item:
-            activate_license(username, item)
-            send_download_email(username, email, item)
-        
-        # Clear session
-        session.pop("payment_username", None)
-        session.pop("payment_email", None)
-        session.pop("payment_item", None)
-        
-        return render_template("payment_success.html", username=username)
+    if not payment_id or not payer_id:
+        return "Missing payment parameters", 400
+    
+    # Test mode bypass
+    if PAYPAL_TEST_MODE:
+        print("🧪 TEST MODE: Simulating successful payment")
+        success = True
+        # Create a mock payment object
+        class MockPayment:
+            def __init__(self):
+                self.id = payment_id
+                self.state = "approved"
+                self.transactions = [{"description": f"Test Purchase for {session.get('payment_username', 'testuser')}"}]
+        payment = MockPayment()
     else:
-        return "Payment execution failed", 500
+        payment = paypalrestsdk.Payment.find(payment_id)
+        print(f"Payment found: {payment.id}, state: {payment.state}")
+        
+        # Check if payment is already completed
+        if payment.state == "approved":
+            print("Payment already approved, proceeding with activation")
+            success = True
+        elif payment.state == "created":
+            success = payment.execute({"payer_id": payer_id})
+            print(f"Payment execution result: {success}")
+        else:
+            print(f"Payment in unexpected state: {payment.state}")
+            success = False
+            
+        if success:
+            print("Payment executed successfully")
+            
+            # Payment successful, activate license
+            username = session.get("payment_username")
+            email = session.get("payment_email")
+            item = session.get("payment_item")
+            
+            # If session data is missing, try to extract from payment description
+            if not username or not item:
+                print("Session data missing, trying to extract from payment")
+                if hasattr(payment, 'transactions') and payment.transactions:
+                    description = payment.transactions[0].get('description', '')
+                    # Description format: "1 Month Subscription for username"
+                    if ' for ' in description:
+                        item_desc, user_part = description.split(' for ', 1)
+                        username = user_part.strip()
+                        # Map description back to item
+                        desc_to_item = {
+                            "Test Purchase": "test",
+                            "1 Month Subscription": "1month",
+                            "2 Months Subscription": "2months", 
+                            "3 Months Subscription": "3months",
+                            "1 Year Subscription": "1year",
+                            "Raw Code (Permanent)": "rawcode",
+                            "Custom Bot (Permanent)": "custombot"
+                        }
+                        item = desc_to_item.get(item_desc, "unknown")
+                        email = f"{username}@example.com"  # Fallback email
+                        print(f"Extracted from payment: user={username}, item={item}")
+            
+            print(f"Activating license for user: {username}, item: {item}, email: {email}")
+            
+            if username and item and item != "unknown":
+                activate_license(username, item)
+                send_download_email(username, email, item)
+                print("License activated and email sent")
+            else:
+                print("WARNING: Could not determine user/item for license activation")
+            
+            # Clear session
+            session.pop("payment_username", None)
+            session.pop("payment_email", None)
+            session.pop("payment_item", None)
+            
+            return render_template("payment_success.html", username=username or "Unknown")
+        else:
+            error_details = getattr(payment, 'error', 'Unknown error')
+            print(f"Payment execution failed: {error_details}")
+            return f"Payment execution failed: {error_details}", 500
+            
+    except Exception as e:
+        print(f"Exception during payment processing: {e}")
+        return f"Payment processing error: {str(e)}", 500
 
 @app.route("/payment/cancel")
 def payment_cancel():

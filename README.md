@@ -30,6 +30,7 @@ A Flask-based authentication server for RXZBot with PayPal payment integration.
    - `PAYPAL_CLIENT_ID` (use sandbox for testing, live for production)
    - `PAYPAL_CLIENT_SECRET` (use sandbox for testing, live for production)
    - `PAYPAL_MODE` (set to "sandbox" for testing, "live" for real payments)
+   - `PAYPAL_TEST_MODE` (set to "true" to simulate payments without calling PayPal - useful for testing)
    - `EMAIL_USER`
    - `EMAIL_PASS`
    - `EMAIL_SMTP` (default: smtp.gmail.com)
@@ -41,6 +42,15 @@ A Flask-based authentication server for RXZBot with PayPal payment integration.
 ⚠️ **PayPal Credentials**: Make sure your Client ID/Secret match the PAYPAL_MODE!
 - For testing: Use sandbox credentials + `PAYPAL_MODE=sandbox`
 - For production: Use live credentials + `PAYPAL_MODE=live`
+
+### Testing Payments
+
+If you want to test the payment flow without real PayPal transactions:
+1. Set `PAYPAL_TEST_MODE=true` in your environment variables
+2. The system will simulate successful payments
+3. Users can complete the flow without real money
+
+This is useful for testing the license activation and email sending.
 
 5. Deploy!
 
