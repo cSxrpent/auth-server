@@ -9,11 +9,16 @@ from collections import deque
 from functools import wraps
 from flask import (
     Flask, request, jsonify, render_template,
-    redirect, url_for, session, send_from_directory, make_response
+    redirect, url_for, session, send_from_directory, make_response, abort, send_file
 )
 from flask_cors import CORS
 import paypalrestsdk
+import time
+import secrets
 from dotenv import load_dotenv
+import hmac
+import hashlib
+import base64
 
 load_dotenv()  # load .env file if it exists (for local development)
 
@@ -33,17 +38,13 @@ CORS(app)  # allow cross-origin for simple API access
 # Secrets & GitHub config from env (safer)
 app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key_replace_in_prod")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change_me_locally")
-
+DOWNLOAD_SECRET = app.secret_key
 # PayPal config
 PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID")
 PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
 PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
 PAYPAL_TEST_MODE = os.getenv("PAYPAL_TEST_MODE", "false").lower() == "true"  # Skip actual PayPal calls for testing
 
-# Email config (Mailgun API)
-MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
-MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "RXZBot <noreply@" + (MAILGUN_DOMAIN or "mailgun.org") + ">")
 
 paypalrestsdk.configure({
     "mode": PAYPAL_MODE,
@@ -81,14 +82,6 @@ else:
     elif PAYPAL_MODE == "sandbox":
         print("ℹ️ Using SANDBOX mode for testing")
 
-if not MAILGUN_API_KEY or not MAILGUN_DOMAIN:
-    print("⚠️ WARNING: Mailgun credentials not found in .env. Email sending will not work.")
-    print(f"   MAILGUN_API_KEY: {'Set' if MAILGUN_API_KEY else 'Not set'}")
-    print(f"   MAILGUN_DOMAIN: {'Set' if MAILGUN_DOMAIN else 'Not set'}")
-else:
-    print("✅ Mailgun configured")
-    print(f"   Domain: {MAILGUN_DOMAIN}")
-    print(f"   From: {EMAIL_FROM}")
 
 # ------------------------------------
 # Admin web UI (login + dashboard)
@@ -350,13 +343,9 @@ def buy(item):
     
     if request.method == "POST":
         username = request.form.get("username", "").strip()
-        email = request.form.get("email", "").strip()
-        if not username or not email:
-            return render_template("buy.html", item=item, price=prices[item], error="Username and email are required")
         
         # Store in session
         session["payment_username"] = username
-        session["payment_email"] = email
         session["payment_item"] = item
         
         return redirect(url_for("pay", item=item))
@@ -427,77 +416,61 @@ def pay(item):
         print(f"Client ID starts with: {PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else 'None'}...")
         return f"Payment creation failed. Check PayPal credentials for mode '{PAYPAL_MODE}'. Error: {error_msg}", 500
 
+
+def generate_download_token(username, item, ttl=3600):
+    payload = {
+        "u": username,
+        "i": item,
+        "exp": int(time.time()) + ttl
+    }
+    data = json.dumps(payload, separators=(",", ":")).encode()
+
+    sig = hmac.new(
+        DOWNLOAD_SECRET.encode(),
+        data,
+        hashlib.sha256
+    ).digest()
+
+    token = base64.urlsafe_b64encode(data + b"." + sig).decode()
+    return token
+
+
 @app.route("/payment/success")
 def payment_success():
-    payment_id = request.args.get("paymentId")
-    payer_id = request.args.get("PayerID")
-    
-    print(f"Payment success attempt - Payment ID: {payment_id}, Payer ID: {payer_id}")
-    
-    if not payment_id or not payer_id:
-        return "Missing payment parameters", 400
-    
-    # Test mode bypass
-    if PAYPAL_TEST_MODE:
-        print("🧪 TEST MODE: Simulating successful payment")
-        success = True
-        payment = None
-    else:
-        try:
-            payment = paypalrestsdk.Payment.find(payment_id)
-            print(f"Payment found: {payment.id}, state: {payment.state}")
-            
-            if payment.state == "approved":
-                print("Payment already approved")
-                success = True
-            elif payment.state == "created":
-                success = payment.execute({"payer_id": payer_id})
-                print(f"Payment execution: {success}")
-            else:
-                print(f"Unexpected payment state: {payment.state}")
-                success = False
-        except Exception as e:
-            print(f"PayPal error: {e}")
-            return f"Payment error: {str(e)}", 500
-    
-    if success:
-        # Get user data
-        username = session.get("payment_username")
-        email = session.get("payment_email") 
-        item = session.get("payment_item")
-        
-        # Fallback: extract from payment description
-        if not username and payment and hasattr(payment, 'transactions'):
-            desc = payment.transactions[0].get('description', '')
-            if ' for ' in desc:
-                parts = desc.split(' for ')
-                if len(parts) == 2:
-                    username = parts[1].strip()
-                    email = f"{username}@example.com"
-        
-        if username and item:
-            activate_license(username, item)
-            send_download_email(username, email, item)
-            print(f"✅ Activated {item} for {username}")
-        else:
-            print("❌ Could not activate license - missing data")
-        
-        # Clear session
-        session.pop("payment_username", None)
-        session.pop("payment_email", None)
-        session.pop("payment_item", None)
-        
-        return render_template("payment_success.html", username=username or "Unknown")
-    else:
-        return "Payment failed", 500
+    username = session.get("payment_username", "Customer")
+    item = session.get("payment_item", "RXZBot")
+
+    if not username or not item:
+        abort(400)
+
+    token = generate_download_token(username, item)
+    activate_license(username, item)
+    return render_template(
+        "payment_success.html",
+        username=username,
+        download_token=token
+    )
+
 
 @app.route("/payment/cancel")
 def payment_cancel():
     # Clear session
     session.pop("payment_username", None)
-    session.pop("payment_email", None)
     session.pop("payment_item", None)
     return render_template("payment_cancel.html")
+
+@app.route("/download")
+def download():
+    token = request.args.get("token")
+    if not token:
+        abort(403)
+
+    payload = verify_download_token(token)
+    if not payload:
+        abort(403)
+
+    return send_file("files/rxzbot.zip", as_attachment=True)
+
 
 def activate_license(username, item):
     days_map = {
@@ -537,187 +510,30 @@ def activate_license(username, item):
     save_users(users)
     log_event(f"payment activated: {username} for {item}")
 
-# -----------------------
-# Email sending (Mailgun API)
-# -----------------------
 
-def send_download_email(username, email, item):
-    """
-    Envoie un email via Mailgun API
-    """
-    # Vérification de la config
-    if not MAILGUN_API_KEY or not MAILGUN_DOMAIN:
-        error_msg = "Email config missing: MAILGUN_API_KEY or MAILGUN_DOMAIN not set"
-        print(f"❌ {error_msg}")
-        log_event(f"email not sent (no config): {username} for {item}")
-        return {"success": False, "error": error_msg}
-    
-    print(f"📧 Attempting to send email to {email} for {username}")
-    
-    # Lien de téléchargement
+def verify_download_token(token):
     try:
-        download_link = url_for("download_file", filename="rxzbot.zip", _external=True)
-    except RuntimeError:
-        # Si hors contexte Flask, utiliser un lien fixe
-        download_link = "https://auth-server-aj8k.onrender.com/download/rxzbot.zip"
-    
-    # Sujet et corps HTML
-    subject = f"Your RXZBot Purchase - {item}"
-    html_body = f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #00d4ff;">Hello {username}! 🎉</h2>
-            
-            <p>Thank you for purchasing <strong>{item}</strong>!</p>
-            
-            <p>Your license has been <strong>activated automatically</strong>.</p>
-            
-            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                <p style="margin: 0;">Download your file here:</p>
-                <a href="{download_link}" 
-                   style="display: inline-block; margin-top: 10px; padding: 12px 24px; background: linear-gradient(90deg, #00d4ff, #7b4bff); color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
-                    Download RXZBot
-                </a>
-            </div>
-            
-            <p>If you have any questions, contact me on Discord or Instagram.</p>
-            
-            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-            
-            <p style="color: #666; font-size: 12px;">
-                Best regards,<br>
-                <strong>RXZBot Team</strong>
-            </p>
-        </div>
-    </body>
-    </html>
-    """
-    
-    # Appel API Mailgun
-    try:
-        response = requests.post(
-            f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
-            auth=("api", MAILGUN_API_KEY),
-            data={
-                "from": EMAIL_FROM,
-                "to": email,
-                "subject": subject,
-                "html": html_body
-            },
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            print(f"✅ Email sent successfully via Mailgun. ID: {result.get('id')}")
-            log_event(f"email sent to {email} for {username} - {item}")
-            return {"success": True, "id": result.get('id'), "method": "Mailgun"}
-        else:
-            error_msg = f"Mailgun API error: {response.status_code} - {response.text}"
-            print(f"❌ {error_msg}")
-            log_event(f"email failed for {username}: {error_msg}")
-            return {"success": False, "error": error_msg}
-            
-    except Exception as e:
-        error_msg = f"Email sending exception: {str(e)}"
-        print(f"❌ {error_msg}")
-        log_event(f"email failed for {username}: {error_msg}")
-        return {"success": False, "error": error_msg}
+        raw = base64.urlsafe_b64decode(token.encode())
+        data, sig = raw.rsplit(b".", 1)
 
-def test_email_config():
-    """
-    Teste la configuration Mailgun au démarrage
-    """
-    print("\n" + "="*50)
-    print("📧 MAILGUN EMAIL CONFIGURATION TEST")
-    print("="*50)
-    
-    if not MAILGUN_API_KEY:
-        print("❌ MAILGUN_API_KEY is not set!")
-        return False
-    
-    if not MAILGUN_DOMAIN:
-        print("❌ MAILGUN_DOMAIN is not set!")
-        return False
-    
-    print(f"✅ MAILGUN_API_KEY: {MAILGUN_API_KEY[:10]}... (hidden)")
-    print(f"✅ MAILGUN_DOMAIN: {MAILGUN_DOMAIN}")
-    print(f"✅ EMAIL_FROM: {EMAIL_FROM}")
-    
-    # Test de connexion à l'API
-    print("\n🔄 Testing Mailgun API connection...")
-    
-    try:
-        response = requests.get(
-            f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}",
-            auth=("api", MAILGUN_API_KEY),
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            print("   ✅ Mailgun API connection successful!")
-            return True
-        else:
-            print(f"   ❌ Mailgun API error: {response.status_code}")
-            print(f"   Response: {response.text}")
-            return False
-            
-    except Exception as e:
-        print(f"   ❌ Mailgun API connection failed: {e}")
-        return False
-    
-    finally:
-        print("="*50 + "\n")
+        expected = hmac.new(
+            DOWNLOAD_SECRET.encode(),
+            data,
+            hashlib.sha256
+        ).digest()
 
-@app.route("/download/<filename>")
-def download_file(filename):
-    # Simple download, assume file is in static/
-    return send_from_directory("static", filename, as_attachment=True)
+        if not hmac.compare_digest(sig, expected):
+            return None
 
-# Route de test email
-@app.route("/admin/send-test-mail", methods=["GET", "POST"])
-@login_required
-def send_test_mail():
-    try:
-        if request.method == "POST":
-            test_email = request.form.get("email", EMAIL_USER)
-        else:
-            test_email = EMAIL_USER
-        
-        print(f"\n{'='*50}")
-        print(f"📧 SENDING TEST EMAIL TO: {test_email}")
-        print(f"{'='*50}\n")
-        
-        result = send_download_email(
-            username="TestUser",
-            email=test_email,
-            item="TEST LICENSE"
-        )
-        
-        if result["success"]:
-            return jsonify({
-                "status": "success",
-                "message": f"Email sent successfully via {result.get('method')}",
-                "email": test_email
-            }), 200
-        else:
-            return jsonify({
-                "status": "error",
-                "message": result.get("error", "Unknown error"),
-                "email": test_email
-            }), 500
-    except Exception as e:
-        import traceback
-        error_trace = traceback.format_exc()
-        print(f"\n🚨 ERROR IN send_test_mail:")
-        print(error_trace)
-        return jsonify({
-            "status": "error",
-            "message": str(e),
-            "traceback": error_trace,
-            "email": test_email if 'test_email' in locals() else "unknown"
-        }), 500
+        payload = json.loads(data.decode())
+        if payload["exp"] < int(time.time()):
+            return None
+
+        return payload
+    except Exception:
+        return None
+
+
 
 @app.route("/debug")
 @login_required
@@ -729,10 +545,6 @@ def debug():
         "paypal_client_id_prefix": PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else None,
         "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
         "paypal_mode": PAYPAL_MODE,
-        "mailgun_api_key_set": bool(MAILGUN_API_KEY),
-        "mailgun_api_key_prefix": MAILGUN_API_KEY[:10] if MAILGUN_API_KEY else None,
-        "mailgun_domain": MAILGUN_DOMAIN,
-        "email_from": EMAIL_FROM,
         "secret_key_set": bool(app.secret_key),
         "admin_password_set": bool(ADMIN_PASSWORD),
         "github_token_set": bool(GITHUB_TOKEN)
@@ -1152,8 +964,6 @@ def shutdown_at_3am():
 shutdown_thread = threading.Thread(target=shutdown_at_3am, daemon=True)
 shutdown_thread.start()
 
-# Test email config on startup
-test_email_config()
 
 # -----------------------
 # Run
