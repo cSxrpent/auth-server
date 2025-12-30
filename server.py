@@ -18,15 +18,15 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-load_dotenv()  # load .env file
+load_dotenv()  # load .env file if it exists (for local development)
 
-# Debug: Check if .env file exists
+# Debug: Check if .env file exists (only for local development)
 import os
 env_file = os.path.join(os.getcwd(), '.env')
 if os.path.exists(env_file):
-    print(f"✅ .env file found at {env_file}")
+    print(f"✅ .env file found at {env_file} (local development)")
 else:
-    print(f"⚠️ .env file NOT found at {env_file}")
+    print(f"ℹ️ .env file not found (using environment variables from Render dashboard)")
 
 # -----------------------
 # Configuration
@@ -72,6 +72,17 @@ if not EMAIL_USER or not EMAIL_PASS:
 else:
     print("✅ Email configured")
     print(f"   Email: {EMAIL_USER}")
+
+# ------------------------------------
+# Admin web UI (login + dashboard)
+# ------------------------------------
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_OWNER = "cSxrpent"
@@ -302,24 +313,6 @@ def save_last_connected(last_conn):
         print(f"⚠ Error saving last_connected: {e}")
 
 # -----------------------
-@app.route("/debug")
-@login_required
-def debug():
-    """Debug route to check configuration"""
-    info = {
-        "env_file_exists": os.path.exists('.env'),
-        "paypal_client_id_set": bool(PAYPAL_CLIENT_ID),
-        "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
-        "paypal_mode": PAYPAL_MODE,
-        "email_user_set": bool(EMAIL_USER),
-        "email_pass_set": bool(EMAIL_PASS),
-        "email_smtp": EMAIL_SMTP,
-        "email_port": EMAIL_PORT,
-        "secret_key_set": bool(app.secret_key),
-        "admin_password_set": bool(ADMIN_PASSWORD),
-        "github_token_set": bool(GITHUB_TOKEN)
-    }
-    return jsonify(info)
 
 @app.route("/buy/<item>", methods=["GET", "POST"])
 def buy(item):
@@ -528,9 +521,11 @@ def debug():
     info = {
         "env_file_exists": os.path.exists('.env'),
         "paypal_client_id_set": bool(PAYPAL_CLIENT_ID),
+        "paypal_client_id_prefix": PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else None,
         "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
         "paypal_mode": PAYPAL_MODE,
         "email_user_set": bool(EMAIL_USER),
+        "email_user": EMAIL_USER,
         "email_pass_set": bool(EMAIL_PASS),
         "email_smtp": EMAIL_SMTP,
         "email_port": EMAIL_PORT,
@@ -585,13 +580,6 @@ def auth():
 # ------------------------------------
 # Admin web UI (login + dashboard)
 # ------------------------------------
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get("logged_in"):
-            return redirect(url_for("login"))
-        return f(*args, **kwargs)
-    return decorated
 
 @app.route("/login", methods=["GET", "POST"])
 def login():

@@ -93,6 +93,7 @@
       <button class="nav-btn" data-section="users">👥 Users</button>
       <button class="nav-btn" data-section="connectivity">🌐 Connectivity</button>
       <button class="nav-btn" data-section="stats">📊 Stats</button>
+      <button class="nav-btn" data-section="debug">🔧 Debug</button>
     </nav>
 
     <!-- Main Section -->
@@ -228,6 +229,16 @@
           <div style="font-weight:700;margin-bottom:12px">Connections per user</div>
           <div id="statsChart"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Debug Section -->
+    <div id="debug" class="section">
+      <div class="card">
+        <h2 style="margin-top:0;color:var(--accent)">🔧 Debug Information</h2>
+        <p>Configuration status and environment variables:</p>
+        <pre id="debugInfo" style="background:rgba(0,0,0,0.3);padding:16px;border-radius:8px;font-size:12px;overflow-x:auto">Loading...</pre>
+        <button onclick="loadDebug()" style="margin-top:10px;background:var(--accent);border:none;padding:8px 16px;border-radius:6px;color:#000;font-weight:600;cursor:pointer">Refresh</button>
       </div>
     </div>
   </div>
@@ -393,6 +404,17 @@
         bar.innerHTML = `<span>${escapeHtml(user)}</span><span>${count}</span>`;
         container.appendChild(bar);
       });
+    }
+
+    async function loadDebug(){
+      try{
+        const res = await fetch('/debug', {credentials:'same-origin'});
+        if(!res.ok) return;
+        const info = await res.json();
+        document.getElementById('debugInfo').textContent = JSON.stringify(info, null, 2);
+      }catch(e){ 
+        document.getElementById('debugInfo').textContent = 'Error loading debug info: ' + e.message;
+      }
     }
 
     document.getElementById('exportBtn').onclick = ()=> { window.location = api.export };
@@ -582,6 +604,7 @@
     fetchLogs();
     fetchRecent();
     fetchStats();
+    loadDebug();
   </script>
 </body>
 </html>

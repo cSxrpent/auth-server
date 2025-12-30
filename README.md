@@ -4,6 +4,8 @@ A Flask-based authentication server for RXZBot with PayPal payment integration.
 
 ## Setup
 
+### Local Development
+
 1. Install dependencies:
    ```bash
    pip install -r requirements.txt
@@ -14,21 +16,34 @@ A Flask-based authentication server for RXZBot with PayPal payment integration.
    cp .env.example .env
    ```
 
-3. Edit `.env` with your actual values:
-   - Get PayPal Client ID and Secret from [PayPal Developer](https://developer.paypal.com/)
-   - For email, use Gmail app password (enable 2FA first)
-   - Generate a random SECRET_KEY
-
-4. Run the server:
+3. Edit `.env` with your actual values and run:
    ```bash
    python server.py
    ```
 
+### Deploy to Render.com
+
+1. Push your code to GitHub
+2. Create a new Web Service on Render.com
+3. Connect your GitHub repo
+4. Set environment variables in Render dashboard (Environment section):
+   - `PAYPAL_CLIENT_ID`
+   - `PAYPAL_CLIENT_SECRET`
+   - `PAYPAL_MODE` (sandbox or live)
+   - `EMAIL_USER`
+   - `EMAIL_PASS`
+   - `EMAIL_SMTP` (default: smtp.gmail.com)
+   - `EMAIL_PORT` (default: 587)
+   - `SECRET_KEY`
+   - `ADMIN_PASSWORD`
+   - `GITHUB_TOKEN` (optional)
+
+5. Deploy!
+
 ## Features
 
 - User authentication for RXZBot
-- PayPal payment integration
-- Automatic license activation
+- PayPal payment integration with automatic license activation
 - Email notifications with download links
 - Admin panel for user management
 
