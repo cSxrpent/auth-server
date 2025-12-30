@@ -442,80 +442,55 @@ def payment_success():
     if PAYPAL_TEST_MODE:
         print("🧪 TEST MODE: Simulating successful payment")
         success = True
-        # Create a mock payment object
-        class MockPayment:
-            def __init__(self):
-                self.id = payment_id
-                self.state = "approved"
-                self.transactions = [{"description": f"Test Purchase for {session.get('payment_username', 'testuser')}"}]
-        payment = MockPayment()
+        payment = None
     else:
         try:
             payment = paypalrestsdk.Payment.find(payment_id)
             print(f"Payment found: {payment.id}, state: {payment.state}")
             
-            # Check if payment is already completed
             if payment.state == "approved":
-                print("Payment already approved, proceeding with activation")
+                print("Payment already approved")
                 success = True
             elif payment.state == "created":
                 success = payment.execute({"payer_id": payer_id})
-                print(f"Payment execution result: {success}")
+                print(f"Payment execution: {success}")
             else:
-                print(f"Payment in unexpected state: {payment.state}")
+                print(f"Unexpected payment state: {payment.state}")
                 success = False
         except Exception as e:
-            print(f"Exception during payment processing: {e}")
-            return f"Payment processing error: {str(e)}", 500
-            print("Payment executed successfully")
-            
-            # Payment successful, activate license
-            username = session.get("payment_username")
-            email = session.get("payment_email")
-            item = session.get("payment_item")
-            
-            # If session data is missing, try to extract from payment description
-            if not username or not item:
-                print("Session data missing, trying to extract from payment")
-                if hasattr(payment, 'transactions') and payment.transactions:
-                    description = payment.transactions[0].get('description', '')
-                    # Description format: "1 Month Subscription for username"
-                    if ' for ' in description:
-                        item_desc, user_part = description.split(' for ', 1)
-                        username = user_part.strip()
-                        # Map description back to item
-                        desc_to_item = {
-                            "Test Purchase": "test",
-                            "1 Month Subscription": "1month",
-                            "2 Months Subscription": "2months", 
-                            "3 Months Subscription": "3months",
-                            "1 Year Subscription": "1year",
-                            "Raw Code (Permanent)": "rawcode",
-                            "Custom Bot (Permanent)": "custombot"
-                        }
-                        item = desc_to_item.get(item_desc, "unknown")
-                        email = f"{username}@example.com"  # Fallback email
-                        print(f"Extracted from payment: user={username}, item={item}")
-            
-            print(f"Activating license for user: {username}, item: {item}, email: {email}")
-            
-            if username and item and item != "unknown":
-                activate_license(username, item)
-                send_download_email(username, email, item)
-                print("License activated and email sent")
-            else:
-                print("WARNING: Could not determine user/item for license activation")
-            
-            # Clear session
-            session.pop("payment_username", None)
-            session.pop("payment_email", None)
-            session.pop("payment_item", None)
-            
-            return render_template("payment_success.html", username=username or "Unknown")
+            print(f"PayPal error: {e}")
+            return f"Payment error: {str(e)}", 500
+    
+    if success:
+        # Get user data
+        username = session.get("payment_username")
+        email = session.get("payment_email") 
+        item = session.get("payment_item")
+        
+        # Fallback: extract from payment description
+        if not username and payment and hasattr(payment, 'transactions'):
+            desc = payment.transactions[0].get('description', '')
+            if ' for ' in desc:
+                parts = desc.split(' for ')
+                if len(parts) == 2:
+                    username = parts[1].strip()
+                    email = f"{username}@example.com"
+        
+        if username and item:
+            activate_license(username, item)
+            send_download_email(username, email, item)
+            print(f"✅ Activated {item} for {username}")
         else:
-            error_details = getattr(payment, 'error', 'Unknown error')
-            print(f"Payment execution failed: {error_details}")
-            return f"Payment execution failed: {error_details}", 500
+            print("❌ Could not activate license - missing data")
+        
+        # Clear session
+        session.pop("payment_username", None)
+        session.pop("payment_email", None)
+        session.pop("payment_item", None)
+        
+        return render_template("payment_success.html", username=username or "Unknown")
+    else:
+        return "Payment failed", 500
 
 @app.route("/payment/cancel")
 def payment_cancel():
@@ -697,6 +672,10 @@ def logout():
 @app.route("/")
 def index():
     return render_template("index.html")
+
+@app.route("/test")
+def test_page():
+    return render_template("index.html", show_test=True)
 
 @app.route("/admin")
 @login_required

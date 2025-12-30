@@ -100,11 +100,13 @@
     <div class="card">
       <h2>Money Pricing</h2>
       <div class="pricing">
+        {% if show_test %}
         <div class="price-item">
           <h3>Test Purchase</h3>
           <p>$0.01</p>
           <a href="/buy/test" class="pay-btn">Test Buy</a>
         </div>
+        {% endif %}
         <div class="price-item">
           <h3>1 Month</h3>
           <p>$2</p>
@@ -151,6 +153,9 @@
       <a href="https://discord.com/users/rxzwashere" target="_blank">Discord: @rxzwashere</a>
     </div>
   </div>
+
+  <!-- Hidden test link -->
+  <a href="/test" style="position:absolute;bottom:10px;right:10px;color:transparent;text-decoration:none;font-size:1px;">test</a>
 
   <script>
     // Particles

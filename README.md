@@ -43,14 +43,32 @@ A Flask-based authentication server for RXZBot with PayPal payment integration.
 - For testing: Use sandbox credentials + `PAYPAL_MODE=sandbox`
 - For production: Use live credentials + `PAYPAL_MODE=live`
 
-### Testing Payments
+### ⚠️ Testing with Real Money (Live Mode)
 
-If you want to test the payment flow without real PayPal transactions:
-1. Set `PAYPAL_TEST_MODE=true` in your environment variables
-2. The system will simulate successful payments
-3. Users can complete the flow without real money
+**BE CAREFUL - This will charge real money!**
 
-This is useful for testing the license activation and email sending.
+To test with real PayPal payments:
+
+1. **Get Live Credentials**:
+   - Go to https://developer.paypal.com/
+   - Select your app
+   - Switch to "Live" tab
+   - Copy the LIVE Client ID and Client Secret
+
+2. **Set Environment Variables**:
+   - `PAYPAL_MODE=live`
+   - `PAYPAL_CLIENT_ID=(live credentials)`
+   - `PAYPAL_CLIENT_SECRET=(live credentials)`
+   - `PAYPAL_TEST_MODE=false` (or remove this variable)
+
+3. **Test Carefully**:
+   - Use small amounts
+   - Test refund process
+   - Monitor your PayPal balance
+
+4. **To Stop**: Set `PAYPAL_MODE=sandbox` to go back to test mode
+
+**Remember**: Live payments are real transactions that will deduct money from buyers' accounts!
 
 5. Deploy!
 
