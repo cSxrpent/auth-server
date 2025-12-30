@@ -403,13 +403,13 @@ def pay(item):
                     "name": price["description"],
                     "sku": item,
                     "price": price["amount"],
-                    "currency": "USD",
+                    "currency": "EUR",
                     "quantity": 1
                 }]
             },
             "amount": {
                 "total": price["amount"],
-                "currency": "USD"
+                "currency": "EUR"
             },
             "description": f"{price['description']} for {username}"
         }]
