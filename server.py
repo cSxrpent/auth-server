@@ -322,8 +322,8 @@ def buy(item):
         "2months": {"amount": "4.00", "description": "2 Months Subscription", "days": 60},
         "3months": {"amount": "5.00", "description": "3 Months Subscription", "days": 90},
         "1year": {"amount": "10.00", "description": "1 Year Subscription", "days": 365},
-        "rawcode": {"amount": "20.00", "description": "Raw Code", "days": 0},  # No expiry for raw code?
-        "custombot": {"amount": "15.00", "description": "Custom Bot", "days": 0}
+        "rawcode": {"amount": "20.00", "description": "Raw Code", "days": 0},  # Permanent license
+        "custombot": {"amount": "15.00", "description": "Custom Bot", "days": 0}  # Permanent license
     }
     
     if item not in prices:
@@ -355,12 +355,13 @@ def pay(item):
         return "PayPal not configured. Please check .env file.", 500
     
     prices = {
+        "test": {"amount": "0.01", "description": "Test Purchase"},
         "1month": {"amount": "2.00", "description": "1 Month Subscription"},
         "2months": {"amount": "4.00", "description": "2 Months Subscription"},
         "3months": {"amount": "5.00", "description": "3 Months Subscription"},
         "1year": {"amount": "10.00", "description": "1 Year Subscription"},
-        "rawcode": {"amount": "20.00", "description": "Raw Code"},
-        "custombot": {"amount": "15.00", "description": "Custom Bot"}
+        "rawcode": {"amount": "20.00", "description": "Raw Code (Permanent)"},
+        "custombot": {"amount": "15.00", "description": "Custom Bot (Permanent)"}
     }
     
     if item not in prices:
@@ -440,30 +441,38 @@ def payment_cancel():
 
 def activate_license(username, item):
     days_map = {
+        "test": 1,
         "1month": 30,
         "2months": 60,
         "3months": 90,
         "1year": 365,
-        "rawcode": 0,  # Permanent?
-        "custombot": 0
+        "rawcode": 0,  # Permanent
+        "custombot": 0  # Permanent
     }
     
     days = days_map.get(item, 30)
     
     users = load_users()
     existing = find_user(users, username)
-    if existing:
-        # Extend existing
-        current_expires = datetime.strptime(existing["expires"], "%Y-%m-%d")
-        new_expires = current_expires + timedelta(days=days)
-        existing["expires"] = new_expires.strftime("%Y-%m-%d")
-    else:
-        # New user
-        if days > 0:
-            expires = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+    
+    # Special handling for permanent items
+    if item in ["rawcode", "custombot"]:
+        expires = "2099-12-31"  # Permanent license
+        if existing:
+            existing["expires"] = expires
         else:
-            expires = "2099-12-31"  # Permanent
-        users.append({"username": username, "expires": expires})
+            users.append({"username": username, "expires": expires})
+    else:
+        # Normal subscription logic
+        if existing:
+            # Extend existing
+            current_expires = datetime.strptime(existing["expires"], "%Y-%m-%d")
+            new_expires = current_expires + timedelta(days=days)
+            existing["expires"] = new_expires.strftime("%Y-%m-%d")
+        else:
+            # New user
+            expires = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+            users.append({"username": username, "expires": expires})
     
     save_users(users)
     log_event(f"payment activated: {username} for {item}")
