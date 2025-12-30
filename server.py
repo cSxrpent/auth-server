@@ -539,13 +539,27 @@ def activate_license(username, item):
     log_event(f"payment activated: {username} for {item}")
 
 def send_download_email(username, email, item):
+    """
+    Envoie un email avec gestion d'erreurs améliorée
+    """
+    # Vérification de la config
     if not EMAIL_USER or not EMAIL_PASS:
+        error_msg = "Email config missing: EMAIL_USER or EMAIL_PASS not set"
+        print(f"❌ {error_msg}")
         log_event(f"email not sent (no config): {username} for {item}")
-        return
+        return {"success": False, "error": error_msg}
     
-    # Assume download link is /download/rxzbot.zip or something
-    download_link = url_for("download_file", filename="rxzbot.zip", _external=True)
+    print(f"📧 Attempting to send email to {email} for {username}")
     
+    # Lien de téléchargement
+    from flask import url_for
+    try:
+        download_link = url_for("download_file", filename="rxzbot.zip", _external=True)
+    except RuntimeError:
+        # Si hors contexte Flask, utiliser un lien fixe
+        download_link = "https://ton-app.onrender.com/download/rxzbot.zip"
+    
+    # Sujet et corps
     subject = f"Your RXZBot Purchase - {item}"
     body = f"""
 Hello {username},
@@ -562,28 +576,141 @@ Best,
 RXZBot Team
 """
     
+    # Construction du message
     msg = MIMEMultipart()
     msg['From'] = EMAIL_USER
     msg['To'] = email
     msg['Subject'] = subject
-    
     msg.attach(MIMEText(body, 'plain'))
     
+    # Tentative d'envoi avec plusieurs méthodes
+    methods = [
+        ("SMTP_SSL (port 465)", lambda: send_with_ssl(msg)),
+        ("SMTP + STARTTLS (port 587)", lambda: send_with_starttls(msg))
+    ]
+    
+    for method_name, method_func in methods:
+        try:
+            print(f"🔄 Trying {method_name}...")
+            method_func()
+            print(f"✅ Email sent successfully via {method_name}")
+            log_event(f"email sent to {email} for {username} - {item}")
+            return {"success": True, "method": method_name}
+        except Exception as e:
+            print(f"❌ {method_name} failed: {e}")
+            continue
+    
+    # Si toutes les méthodes échouent
+    error_msg = "All email sending methods failed"
+    print(f"❌ {error_msg}")
+    log_event(f"email failed for {username}: all methods exhausted")
+    return {"success": False, "error": error_msg}
+
+def send_with_ssl(msg):
+    """Méthode 1: SMTP_SSL (port 465) - recommandé pour Gmail"""
+    server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT, timeout=10)
+    server.login(EMAIL_USER, EMAIL_PASS)
+    server.send_message(msg)
+    server.quit()
+
+def send_with_starttls(msg):
+    """Méthode 2: SMTP + STARTTLS (port 587) - alternative"""
+    server = smtplib.SMTP(EMAIL_SMTP, 587, timeout=10)
+    server.starttls()
+    server.login(EMAIL_USER, EMAIL_PASS)
+    server.send_message(msg)
+    server.quit()
+
+def test_email_config():
+    """
+    Teste la configuration email au démarrage
+    """
+    print("\n" + "="*50)
+    print("📧 EMAIL CONFIGURATION TEST")
+    print("="*50)
+    
+    if not EMAIL_USER:
+        print("❌ EMAIL_USER is not set!")
+        return False
+    
+    if not EMAIL_PASS:
+        print("❌ EMAIL_PASS is not set!")
+        return False
+    
+    print(f"✅ EMAIL_USER: {EMAIL_USER}")
+    print(f"✅ EMAIL_SMTP: {EMAIL_SMTP}")
+    print(f"✅ EMAIL_PORT: {EMAIL_PORT}")
+    print(f"✅ EMAIL_PASS: {'*' * len(EMAIL_PASS)} (hidden)")
+    
+    # Test de connexion
+    print("\n🔄 Testing SMTP connection...")
+    
     try:
-        server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT)
+        # Test SSL (465)
+        print("   Trying SMTP_SSL on port 465...")
+        server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT, timeout=10)
         server.login(EMAIL_USER, EMAIL_PASS)
-        text = msg.as_string()
-        server.sendmail(EMAIL_USER, msg['To'], text)
         server.quit()
-        log_event(f"email sent to {email} for {username} - {item}")
+        print("   ✅ SMTP_SSL (465) works!")
+        return True
     except Exception as e:
-        log_event(f"email failed: {e}")
+        print(f"   ❌ SMTP_SSL (465) failed: {e}")
+    
+    try:
+        # Test STARTTLS (587)
+        print("   Trying SMTP + STARTTLS on port 587...")
+        server = smtplib.SMTP(EMAIL_SMTP, 587, timeout=10)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.quit()
+        print("   ✅ SMTP + STARTTLS (587) works!")
+        return True
+    except Exception as e:
+        print(f"   ❌ SMTP + STARTTLS (587) failed: {e}")
+    
+    print("\n❌ Email configuration test FAILED")
+    print("="*50 + "\n")
+    return False
 
 @app.route("/download/<filename>")
 def download_file(filename):
     # Simple download, assume file is in static/
     return send_from_directory("static", filename, as_attachment=True)
 
+# Route de test améliorée
+def create_test_route(app):
+    """
+    Ajoute une route de test email à ton app Flask
+    """
+    @app.route("/admin/send-test-mail", methods=["GET", "POST"])
+    def send_test_mail():
+        if request.method == "POST":
+            test_email = request.form.get("email", "tariksimsek594@gmail.com")
+        else:
+            test_email = "tariksimsek594@gmail.com"
+        
+        print(f"\n{'='*50}")
+        print(f"📧 SENDING TEST EMAIL TO: {test_email}")
+        print(f"{'='*50}\n")
+        
+        result = send_download_email(
+            username="TestUser",
+            email=test_email,
+            item="TEST LICENSE"
+        )
+        
+        if result["success"]:
+            return jsonify({
+                "status": "success",
+                "message": f"Email sent successfully via {result.get('method')}",
+                "email": test_email
+            }), 200
+        else:
+            return jsonify({
+                "status": "error",
+                "message": result.get("error", "Unknown error"),
+                "email": test_email
+            }), 500
 
 @app.route("/admin/send-test-mail", methods=["GET", "POST"])
 def send_test_mail():
@@ -1059,3 +1186,4 @@ if __name__ == "__main__":
     print(f"📁 GitHub repo: {GITHUB_OWNER}/{GITHUB_REPO}")
     print(f"📄 GitHub file: {GITHUB_PATH}")
     app.run(host="0.0.0.0", port=port)
+    test_email_config()
