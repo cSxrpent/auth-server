@@ -585,7 +585,7 @@ def download_file(filename):
     return send_from_directory("static", filename, as_attachment=True)
 
 
-@app.route("/admin/send-test-mail", methods=["POST"])
+@app.route("/admin/send-test-mail", methods=["GET", "POST"])
 def send_test_mail():
     email = "tariksimsek594@gmail.com"
 
@@ -596,6 +596,7 @@ def send_test_mail():
     )
 
     return {"status": "ok"}
+
 
 
 @app.route("/debug")
