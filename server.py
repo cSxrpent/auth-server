@@ -14,9 +14,6 @@ from flask import (
 from flask_cors import CORS
 import paypalrestsdk
 from dotenv import load_dotenv
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 load_dotenv()  # load .env file if it exists (for local development)
 
@@ -43,11 +40,10 @@ PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
 PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
 PAYPAL_TEST_MODE = os.getenv("PAYPAL_TEST_MODE", "false").lower() == "true"  # Skip actual PayPal calls for testing
 
-# Email config (Gmail SMTP)
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
-EMAIL_SMTP = os.getenv("EMAIL_SMTP", "smtp.gmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
+# Email config (Mailgun API)
+MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
+MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "RXZBot <noreply@" + (MAILGUN_DOMAIN or "mailgun.org") + ">")
 
 paypalrestsdk.configure({
     "mode": PAYPAL_MODE,
@@ -85,12 +81,14 @@ else:
     elif PAYPAL_MODE == "sandbox":
         print("ℹ️ Using SANDBOX mode for testing")
 
-if not EMAIL_USER or not EMAIL_PASS:
-    print("⚠️ WARNING: Email credentials not found in .env. Email sending will not work.")
-    print(f"   EMAIL_USER: {'Set' if EMAIL_USER else 'Not set'}")
+if not MAILGUN_API_KEY or not MAILGUN_DOMAIN:
+    print("⚠️ WARNING: Mailgun credentials not found in .env. Email sending will not work.")
+    print(f"   MAILGUN_API_KEY: {'Set' if MAILGUN_API_KEY else 'Not set'}")
+    print(f"   MAILGUN_DOMAIN: {'Set' if MAILGUN_DOMAIN else 'Not set'}")
 else:
-    print("✅ Email configured")
-    print(f"   Email: {EMAIL_USER}")
+    print("✅ Mailgun configured")
+    print(f"   Domain: {MAILGUN_DOMAIN}")
+    print(f"   From: {EMAIL_FROM}")
 
 # ------------------------------------
 # Admin web UI (login + dashboard)
@@ -540,16 +538,16 @@ def activate_license(username, item):
     log_event(f"payment activated: {username} for {item}")
 
 # -----------------------
-# Email sending (Gmail SMTP)
+# Email sending (Mailgun API)
 # -----------------------
 
 def send_download_email(username, email, item):
     """
-    Envoie un email avec gestion d'erreurs améliorée (Gmail SMTP)
+    Envoie un email via Mailgun API
     """
     # Vérification de la config
-    if not EMAIL_USER or not EMAIL_PASS:
-        error_msg = "Email config missing: EMAIL_USER or EMAIL_PASS not set"
+    if not MAILGUN_API_KEY or not MAILGUN_DOMAIN:
+        error_msg = "Email config missing: MAILGUN_API_KEY or MAILGUN_DOMAIN not set"
         print(f"❌ {error_msg}")
         log_event(f"email not sent (no config): {username} for {item}")
         return {"success": False, "error": error_msg}
@@ -561,7 +559,7 @@ def send_download_email(username, email, item):
         download_link = url_for("download_file", filename="rxzbot.zip", _external=True)
     except RuntimeError:
         # Si hors contexte Flask, utiliser un lien fixe
-        download_link = "https://ton-app.onrender.com/download/rxzbot.zip"
+        download_link = "https://auth-server-aj8k.onrender.com/download/rxzbot.zip"
     
     # Sujet et corps HTML
     subject = f"Your RXZBot Purchase - {item}"
@@ -596,115 +594,81 @@ def send_download_email(username, email, item):
     </html>
     """
     
-    # Construction du message
-    msg = MIMEMultipart('alternative')
-    msg['From'] = EMAIL_USER
-    msg['To'] = email
-    msg['Subject'] = subject
-    
-    # Ajouter version HTML
-    html_part = MIMEText(html_body, 'html')
-    msg.attach(html_part)
-    
-    # Tentative d'envoi avec plusieurs méthodes
-    methods = [
-        ("SMTP_SSL (port 465)", lambda: send_with_ssl(msg)),
-        ("SMTP + STARTTLS (port 587)", lambda: send_with_starttls(msg))
-    ]
-    
-    for method_name, method_func in methods:
-        try:
-            print(f"🔄 Trying {method_name}...")
-            method_func()
-            print(f"✅ Email sent successfully via {method_name}")
+    # Appel API Mailgun
+    try:
+        response = requests.post(
+            f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
+            auth=("api", MAILGUN_API_KEY),
+            data={
+                "from": EMAIL_FROM,
+                "to": email,
+                "subject": subject,
+                "html": html_body
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✅ Email sent successfully via Mailgun. ID: {result.get('id')}")
             log_event(f"email sent to {email} for {username} - {item}")
-            return {"success": True, "method": method_name}
-        except Exception as e:
-            print(f"❌ {method_name} failed: {e}")
-            continue
-    
-    # Si toutes les méthodes échouent
-    error_msg = "All email sending methods failed"
-    print(f"❌ {error_msg}")
-    log_event(f"email failed for {username}: all methods exhausted")
-    return {"success": False, "error": error_msg}
-
-def send_with_ssl(msg):
-    """Méthode 1: SMTP_SSL (port 465) - recommandé pour Gmail"""
-    print(f"   → Connecting to {EMAIL_SMTP}:{EMAIL_PORT}...")
-    server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT, timeout=10)
-    print(f"   → Connected! Logging in as {EMAIL_USER}...")
-    server.login(EMAIL_USER, EMAIL_PASS)
-    print(f"   → Logged in! Sending message...")
-    server.send_message(msg)
-    print(f"   → Message sent! Closing connection...")
-    server.quit()
-    print(f"   → Connection closed!")
-
-def send_with_starttls(msg):
-    """Méthode 2: SMTP + STARTTLS (port 587) - alternative"""
-    print(f"   → Connecting to {EMAIL_SMTP}:587...")
-    server = smtplib.SMTP(EMAIL_SMTP, 587, timeout=10)
-    print(f"   → Connected! Starting TLS...")
-    server.starttls()
-    print(f"   → TLS started! Logging in as {EMAIL_USER}...")
-    server.login(EMAIL_USER, EMAIL_PASS)
-    print(f"   → Logged in! Sending message...")
-    server.send_message(msg)
-    print(f"   → Message sent! Closing connection...")
-    server.quit()
-    print(f"   → Connection closed!")
+            return {"success": True, "id": result.get('id'), "method": "Mailgun"}
+        else:
+            error_msg = f"Mailgun API error: {response.status_code} - {response.text}"
+            print(f"❌ {error_msg}")
+            log_event(f"email failed for {username}: {error_msg}")
+            return {"success": False, "error": error_msg}
+            
+    except Exception as e:
+        error_msg = f"Email sending exception: {str(e)}"
+        print(f"❌ {error_msg}")
+        log_event(f"email failed for {username}: {error_msg}")
+        return {"success": False, "error": error_msg}
 
 def test_email_config():
     """
-    Teste la configuration email au démarrage
+    Teste la configuration Mailgun au démarrage
     """
     print("\n" + "="*50)
-    print("📧 EMAIL CONFIGURATION TEST")
+    print("📧 MAILGUN EMAIL CONFIGURATION TEST")
     print("="*50)
     
-    if not EMAIL_USER:
-        print("❌ EMAIL_USER is not set!")
+    if not MAILGUN_API_KEY:
+        print("❌ MAILGUN_API_KEY is not set!")
         return False
     
-    if not EMAIL_PASS:
-        print("❌ EMAIL_PASS is not set!")
+    if not MAILGUN_DOMAIN:
+        print("❌ MAILGUN_DOMAIN is not set!")
         return False
     
-    print(f"✅ EMAIL_USER: {EMAIL_USER}")
-    print(f"✅ EMAIL_SMTP: {EMAIL_SMTP}")
-    print(f"✅ EMAIL_PORT: {EMAIL_PORT}")
-    print(f"✅ EMAIL_PASS: {'*' * len(EMAIL_PASS)} (hidden)")
+    print(f"✅ MAILGUN_API_KEY: {MAILGUN_API_KEY[:10]}... (hidden)")
+    print(f"✅ MAILGUN_DOMAIN: {MAILGUN_DOMAIN}")
+    print(f"✅ EMAIL_FROM: {EMAIL_FROM}")
     
-    # Test de connexion
-    print("\n🔄 Testing SMTP connection...")
-    
-    try:
-        # Test SSL (465)
-        print("   Trying SMTP_SSL on port 465...")
-        server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT, timeout=10)
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.quit()
-        print("   ✅ SMTP_SSL (465) works!")
-        return True
-    except Exception as e:
-        print(f"   ❌ SMTP_SSL (465) failed: {e}")
+    # Test de connexion à l'API
+    print("\n🔄 Testing Mailgun API connection...")
     
     try:
-        # Test STARTTLS (587)
-        print("   Trying SMTP + STARTTLS on port 587...")
-        server = smtplib.SMTP(EMAIL_SMTP, 587, timeout=10)
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.quit()
-        print("   ✅ SMTP + STARTTLS (587) works!")
-        return True
+        response = requests.get(
+            f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}",
+            auth=("api", MAILGUN_API_KEY),
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            print("   ✅ Mailgun API connection successful!")
+            return True
+        else:
+            print(f"   ❌ Mailgun API error: {response.status_code}")
+            print(f"   Response: {response.text}")
+            return False
+            
     except Exception as e:
-        print(f"   ❌ SMTP + STARTTLS (587) failed: {e}")
+        print(f"   ❌ Mailgun API connection failed: {e}")
+        return False
     
-    print("\n❌ Email configuration test FAILED")
-    print("="*50 + "\n")
-    return False
+    finally:
+        print("="*50 + "\n")
 
 @app.route("/download/<filename>")
 def download_file(filename):
@@ -765,11 +729,10 @@ def debug():
         "paypal_client_id_prefix": PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else None,
         "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
         "paypal_mode": PAYPAL_MODE,
-        "email_user_set": bool(EMAIL_USER),
-        "email_user": EMAIL_USER,
-        "email_pass_set": bool(EMAIL_PASS),
-        "email_smtp": EMAIL_SMTP,
-        "email_port": EMAIL_PORT,
+        "mailgun_api_key_set": bool(MAILGUN_API_KEY),
+        "mailgun_api_key_prefix": MAILGUN_API_KEY[:10] if MAILGUN_API_KEY else None,
+        "mailgun_domain": MAILGUN_DOMAIN,
+        "email_from": EMAIL_FROM,
         "secret_key_set": bool(app.secret_key),
         "admin_password_set": bool(ADMIN_PASSWORD),
         "github_token_set": bool(GITHUB_TOKEN)
