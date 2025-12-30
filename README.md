@@ -27,9 +27,9 @@ A Flask-based authentication server for RXZBot with PayPal payment integration.
 2. Create a new Web Service on Render.com
 3. Connect your GitHub repo
 4. Set environment variables in Render dashboard (Environment section):
-   - `PAYPAL_CLIENT_ID`
-   - `PAYPAL_CLIENT_SECRET`
-   - `PAYPAL_MODE` (sandbox or live)
+   - `PAYPAL_CLIENT_ID` (use sandbox for testing, live for production)
+   - `PAYPAL_CLIENT_SECRET` (use sandbox for testing, live for production)
+   - `PAYPAL_MODE` (set to "sandbox" for testing, "live" for real payments)
    - `EMAIL_USER`
    - `EMAIL_PASS`
    - `EMAIL_SMTP` (default: smtp.gmail.com)
@@ -37,6 +37,10 @@ A Flask-based authentication server for RXZBot with PayPal payment integration.
    - `SECRET_KEY`
    - `ADMIN_PASSWORD`
    - `GITHUB_TOKEN` (optional)
+
+⚠️ **PayPal Credentials**: Make sure your Client ID/Secret match the PAYPAL_MODE!
+- For testing: Use sandbox credentials + `PAYPAL_MODE=sandbox`
+- For production: Use live credentials + `PAYPAL_MODE=live`
 
 5. Deploy!
 
@@ -49,10 +53,20 @@ A Flask-based authentication server for RXZBot with PayPal payment integration.
 
 ## PayPal Setup
 
+### Sandbox (Testing)
 1. Create a PayPal Business account
 2. Go to [PayPal Developer Dashboard](https://developer.paypal.com/)
-3. Create an app and get Client ID/Secret
-4. Use sandbox mode for testing, live for production
+3. Create an app in "Sandbox" mode
+4. Get Client ID/Secret from the sandbox app
+5. Set `PAYPAL_MODE=sandbox`
+
+### Live (Production)
+1. In the same PayPal Developer Dashboard
+2. Go to your app and switch to "Live" mode
+3. Get the LIVE Client ID/Secret (different from sandbox!)
+4. Set `PAYPAL_MODE=live`
+
+⚠️ **Important**: Sandbox and Live credentials are different! Make sure to use the correct ones for your mode.
 
 ## Email Setup (Gmail)
 

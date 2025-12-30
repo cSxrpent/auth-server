@@ -65,6 +65,14 @@ else:
     print("✅ PayPal configured")
     print(f"   Mode: {PAYPAL_MODE}")
     print(f"   Client ID starts with: {PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else 'None'}...")
+    
+    # Warning for live mode
+    if PAYPAL_MODE == "live":
+        print("⚠️ WARNING: Using LIVE mode! Make sure your PayPal credentials are for LIVE, not sandbox!")
+        if PAYPAL_CLIENT_ID and PAYPAL_CLIENT_ID.startswith("AUNBEKK"):
+            print("   ⚠️ Client ID looks like sandbox credentials (starts with 'AUNBEKK') but mode is LIVE!")
+    elif PAYPAL_MODE == "sandbox":
+        print("ℹ️ Using SANDBOX mode for testing")
 
 if not EMAIL_USER or not EMAIL_PASS:
     print("⚠️ WARNING: Email credentials not found in .env. Email sending will not work.")
@@ -401,9 +409,12 @@ def pay(item):
             if link.rel == "approval_url":
                 return redirect(link.href)
     else:
-        error_msg = f"PayPal Error: {payment.error}"
-        print(error_msg)  # Log for debugging
-        return f"Error creating payment: {error_msg}", 500
+        error_details = getattr(payment, 'error', {})
+        error_msg = f"PayPal Error: {error_details}"
+        print(f"PayPal payment creation failed: {error_msg}")
+        print(f"Mode: {PAYPAL_MODE}")
+        print(f"Client ID starts with: {PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else 'None'}...")
+        return f"Payment creation failed. Check PayPal credentials for mode '{PAYPAL_MODE}'. Error: {error_msg}", 500
 
 @app.route("/payment/success")
 def payment_success():
