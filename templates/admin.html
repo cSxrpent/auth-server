@@ -117,6 +117,9 @@
             <div style="font-size:2rem;font-weight:700" id="totalConnections">—</div>
             <div class="small">Total Connections</div>
           </div>
+          <button onclick="sendTestMail()" style="padding:10px 20px;">
+            Envoyer mail test
+          </button>
         </div>
       </div>
       <div class="card">
@@ -245,7 +248,23 @@
 
   <div id="toast" style="display:none" class="toast">Message</div>
 
+
   <script>
+function sendTestMail() {
+    fetch("/admin/send-test-mail", {
+        method: "POST"
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Mail envoyé (ou tenté). Vérifie les logs.");
+    })
+    .catch(err => {
+        alert("Erreur");
+        console.error(err);
+    });
+  }
+
+
     // Particles
     function createParticles(){
       const container = document.getElementById('particles');
