@@ -14,9 +14,6 @@ from flask import (
 from flask_cors import CORS
 import paypalrestsdk
 from dotenv import load_dotenv
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 load_dotenv()  # load .env file if it exists (for local development)
 
@@ -44,11 +41,9 @@ PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
 PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
 PAYPAL_TEST_MODE = os.getenv("PAYPAL_TEST_MODE", "false").lower() == "true"  # Skip actual PayPal calls for testing
 
-# Email config
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
-EMAIL_SMTP = os.getenv("EMAIL_SMTP", "smtp.gmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
+# Resend Email config
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "onboarding@resend.dev")  # Default Resend sender
 
 paypalrestsdk.configure({
     "mode": PAYPAL_MODE,
@@ -86,12 +81,13 @@ else:
     elif PAYPAL_MODE == "sandbox":
         print("ℹ️ Using SANDBOX mode for testing")
 
-if not EMAIL_USER or not EMAIL_PASS:
-    print("⚠️ WARNING: Email credentials not found in .env. Email sending will not work.")
-    print(f"   EMAIL_USER: {'Set' if EMAIL_USER else 'Not set'}")
+if not RESEND_API_KEY:
+    print("⚠️ WARNING: Resend API key not found in .env. Email sending will not work.")
+    print(f"   RESEND_API_KEY: {'Set' if RESEND_API_KEY else 'Not set'}")
 else:
-    print("✅ Email configured")
-    print(f"   Email: {EMAIL_USER}")
+    print("✅ Resend Email configured")
+    print(f"   API Key starts with: {RESEND_API_KEY[:10] if RESEND_API_KEY else 'None'}...")
+    print(f"   From email: {EMAIL_FROM}")
 
 # ------------------------------------
 # Admin web UI (login + dashboard)
@@ -540,137 +536,134 @@ def activate_license(username, item):
 
 def send_download_email(username, email, item):
     """
-    Envoie un email avec gestion d'erreurs améliorée
+    Envoie un email via Resend API
     """
     # Vérification de la config
-    if not EMAIL_USER or not EMAIL_PASS:
-        error_msg = "Email config missing: EMAIL_USER or EMAIL_PASS not set"
+    if not RESEND_API_KEY:
+        error_msg = "Email config missing: RESEND_API_KEY not set"
         print(f"❌ {error_msg}")
         log_event(f"email not sent (no config): {username} for {item}")
         return {"success": False, "error": error_msg}
     
-    print(f"📧 Attempting to send email to {email} for {username}")
+    print(f"📧 Attempting to send email via Resend to {email} for {username}")
     
     # Lien de téléchargement
-    from flask import url_for
     try:
         download_link = url_for("download_file", filename="rxzbot.zip", _external=True)
     except RuntimeError:
         # Si hors contexte Flask, utiliser un lien fixe
         download_link = "https://ton-app.onrender.com/download/rxzbot.zip"
     
-    # Sujet et corps
+    # Sujet et corps HTML
     subject = f"Your RXZBot Purchase - {item}"
-    body = f"""
-Hello {username},
-
-Thank you for purchasing {item}!
-
-Your license has been activated automatically.
-
-Download your file here: {download_link}
-
-If you have any questions, contact me on Discord or Instagram.
-
-Best,
-RXZBot Team
-"""
+    html_body = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #00d4ff;">Hello {username}! 🎉</h2>
+            
+            <p>Thank you for purchasing <strong>{item}</strong>!</p>
+            
+            <p>Your license has been <strong>activated automatically</strong>.</p>
+            
+            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0;">Download your file here:</p>
+                <a href="{download_link}" 
+                   style="display: inline-block; margin-top: 10px; padding: 12px 24px; background: linear-gradient(90deg, #00d4ff, #7b4bff); color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                    Download RXZBot
+                </a>
+            </div>
+            
+            <p>If you have any questions, contact me on Discord or Instagram.</p>
+            
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+            
+            <p style="color: #666; font-size: 12px;">
+                Best regards,<br>
+                <strong>RXZBot Team</strong>
+            </p>
+        </div>
+    </body>
+    </html>
+    """
     
-    # Construction du message
-    msg = MIMEMultipart()
-    msg['From'] = EMAIL_USER
-    msg['To'] = email
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain'))
-    
-    # Tentative d'envoi avec plusieurs méthodes
-    methods = [
-        ("SMTP_SSL (port 465)", lambda: send_with_ssl(msg)),
-        ("SMTP + STARTTLS (port 587)", lambda: send_with_starttls(msg))
-    ]
-    
-    for method_name, method_func in methods:
-        try:
-            print(f"🔄 Trying {method_name}...")
-            method_func()
-            print(f"✅ Email sent successfully via {method_name}")
+    # Appel API Resend
+    try:
+        response = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "from": EMAIL_FROM,
+                "to": [email],
+                "subject": subject,
+                "html": html_body
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✅ Email sent successfully via Resend. ID: {result.get('id')}")
             log_event(f"email sent to {email} for {username} - {item}")
-            return {"success": True, "method": method_name}
-        except Exception as e:
-            print(f"❌ {method_name} failed: {e}")
-            continue
-    
-    # Si toutes les méthodes échouent
-    error_msg = "All email sending methods failed"
-    print(f"❌ {error_msg}")
-    log_event(f"email failed for {username}: all methods exhausted")
-    return {"success": False, "error": error_msg}
-
-def send_with_ssl(msg):
-    """Méthode 1: SMTP_SSL (port 465) - recommandé pour Gmail"""
-    server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT, timeout=10)
-    server.login(EMAIL_USER, EMAIL_PASS)
-    server.send_message(msg)
-    server.quit()
-
-def send_with_starttls(msg):
-    """Méthode 2: SMTP + STARTTLS (port 587) - alternative"""
-    server = smtplib.SMTP(EMAIL_SMTP, 587, timeout=10)
-    server.starttls()
-    server.login(EMAIL_USER, EMAIL_PASS)
-    server.send_message(msg)
-    server.quit()
+            return {"success": True, "id": result.get('id')}
+        else:
+            error_msg = f"Resend API error: {response.status_code} - {response.text}"
+            print(f"❌ {error_msg}")
+            log_event(f"email failed for {username}: {error_msg}")
+            return {"success": False, "error": error_msg}
+            
+    except Exception as e:
+        error_msg = f"Email sending exception: {str(e)}"
+        print(f"❌ {error_msg}")
+        log_event(f"email failed for {username}: {error_msg}")
+        return {"success": False, "error": error_msg}
 
 def test_email_config():
     """
-    Teste la configuration email au démarrage
+    Teste la configuration Resend au démarrage
     """
     print("\n" + "="*50)
-    print("📧 EMAIL CONFIGURATION TEST")
+    print("📧 RESEND EMAIL CONFIGURATION TEST")
     print("="*50)
     
-    if not EMAIL_USER:
-        print("❌ EMAIL_USER is not set!")
+    if not RESEND_API_KEY:
+        print("❌ RESEND_API_KEY is not set!")
         return False
     
-    if not EMAIL_PASS:
-        print("❌ EMAIL_PASS is not set!")
+    print(f"✅ RESEND_API_KEY: {RESEND_API_KEY[:10]}... (hidden)")
+    print(f"✅ EMAIL_FROM: {EMAIL_FROM}")
+    
+    # Test de connexion à l'API
+    print("\n🔄 Testing Resend API connection...")
+    
+    try:
+        response = requests.get(
+            "https://api.resend.com/domains",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}"
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            print("   ✅ Resend API connection successful!")
+            domains = response.json()
+            if domains.get('data'):
+                print(f"   ℹ️ Found {len(domains['data'])} domain(s)")
+            return True
+        else:
+            print(f"   ❌ Resend API error: {response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"   ❌ Resend API connection failed: {e}")
         return False
     
-    print(f"✅ EMAIL_USER: {EMAIL_USER}")
-    print(f"✅ EMAIL_SMTP: {EMAIL_SMTP}")
-    print(f"✅ EMAIL_PORT: {EMAIL_PORT}")
-    print(f"✅ EMAIL_PASS: {'*' * len(EMAIL_PASS)} (hidden)")
-    
-    # Test de connexion
-    print("\n🔄 Testing SMTP connection...")
-    
-    try:
-        # Test SSL (465)
-        print("   Trying SMTP_SSL on port 465...")
-        server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT, timeout=10)
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.quit()
-        print("   ✅ SMTP_SSL (465) works!")
-        return True
-    except Exception as e:
-        print(f"   ❌ SMTP_SSL (465) failed: {e}")
-    
-    try:
-        # Test STARTTLS (587)
-        print("   Trying SMTP + STARTTLS on port 587...")
-        server = smtplib.SMTP(EMAIL_SMTP, 587, timeout=10)
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.quit()
-        print("   ✅ SMTP + STARTTLS (587) works!")
-        return True
-    except Exception as e:
-        print(f"   ❌ SMTP + STARTTLS (587) failed: {e}")
-    
-    print("\n❌ Email configuration test FAILED")
-    print("="*50 + "\n")
-    return False
+    finally:
+        print("="*50 + "\n")
 
 @app.route("/download/<filename>")
 def download_file(filename):
@@ -678,53 +671,36 @@ def download_file(filename):
     return send_from_directory("static", filename, as_attachment=True)
 
 # Route de test améliorée
-def create_test_route(app):
-    """
-    Ajoute une route de test email à ton app Flask
-    """
-    @app.route("/admin/send-test-mail", methods=["GET", "POST"])
-    def send_test_mail():
-        if request.method == "POST":
-            test_email = request.form.get("email", "tariksimsek594@gmail.com")
-        else:
-            test_email = "tariksimsek594@gmail.com"
-        
-        print(f"\n{'='*50}")
-        print(f"📧 SENDING TEST EMAIL TO: {test_email}")
-        print(f"{'='*50}\n")
-        
-        result = send_download_email(
-            username="TestUser",
-            email=test_email,
-            item="TEST LICENSE"
-        )
-        
-        if result["success"]:
-            return jsonify({
-                "status": "success",
-                "message": f"Email sent successfully via {result.get('method')}",
-                "email": test_email
-            }), 200
-        else:
-            return jsonify({
-                "status": "error",
-                "message": result.get("error", "Unknown error"),
-                "email": test_email
-            }), 500
-
 @app.route("/admin/send-test-mail", methods=["GET", "POST"])
 def send_test_mail():
-    email = "tariksimsek594@gmail.com"
-
-    send_download_email(
-        username="Tarik",
-        email=email,
+    if request.method == "POST":
+        test_email = request.form.get("email", "tariksimsek594@gmail.com")
+    else:
+        test_email = "tariksimsek594@gmail.com"
+    
+    print(f"\n{'='*50}")
+    print(f"📧 SENDING TEST EMAIL TO: {test_email}")
+    print(f"{'='*50}\n")
+    
+    result = send_download_email(
+        username="TestUser",
+        email=test_email,
         item="TEST LICENSE"
     )
-
-    return {"status": "ok"}
-
-
+    
+    if result["success"]:
+        return jsonify({
+            "status": "success",
+            "message": f"Email sent successfully via Resend",
+            "email": test_email,
+            "id": result.get("id")
+        }), 200
+    else:
+        return jsonify({
+            "status": "error",
+            "message": result.get("error", "Unknown error"),
+            "email": test_email
+        }), 500
 
 @app.route("/debug")
 @login_required
@@ -736,11 +712,9 @@ def debug():
         "paypal_client_id_prefix": PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else None,
         "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
         "paypal_mode": PAYPAL_MODE,
-        "email_user_set": bool(EMAIL_USER),
-        "email_user": EMAIL_USER,
-        "email_pass_set": bool(EMAIL_PASS),
-        "email_smtp": EMAIL_SMTP,
-        "email_port": EMAIL_PORT,
+        "resend_api_key_set": bool(RESEND_API_KEY),
+        "resend_api_key_prefix": RESEND_API_KEY[:10] if RESEND_API_KEY else None,
+        "email_from": EMAIL_FROM,
         "secret_key_set": bool(app.secret_key),
         "admin_password_set": bool(ADMIN_PASSWORD),
         "github_token_set": bool(GITHUB_TOKEN)
@@ -985,10 +959,6 @@ def static_files(path):
 # -----------------------
 # Background ping to admin (enhanced)
 # -----------------------
-# Configurable via environment variables:
-# - PING_ADMIN_URL (default: http://auth-server-aj8k.onrender.com/admin)
-# - PING_ADMIN_INTERVAL (seconds, default: 300)
-# - PING_ADMIN_ENABLED (1/true to enable, default: 1)
 PING_ADMIN_URL = os.getenv("PING_ADMIN_URL", "http://auth-server-aj8k.onrender.com/admin")
 try:
     PING_ADMIN_INTERVAL = int(os.getenv("PING_ADMIN_INTERVAL", "300"))
@@ -996,36 +966,30 @@ except Exception:
     PING_ADMIN_INTERVAL = 300
 PING_ADMIN_ENABLED = os.getenv("PING_ADMIN_ENABLED", "1").lower() in ("1", "true", "yes", "on")
 
-# In-memory logs and ping state (kept for admin panel)
+# In-memory logs and ping state
 LOGS = deque(maxlen=500)
-# Recent connections (username, ip, status) to show who used the bot recently
 RECENT_CONN = deque(maxlen=300)
 
 def log_event(msg, level="info"):
-    """Store a structured log and still print a compact line for console."""
+    """Store a structured log and print to console."""
     ts = (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d %H:%M:%SZ")
     entry = {"ts": ts, "msg": str(msg), "level": level}
     LOGS.appendleft(entry)
-    # keep console-friendly output
     print(f"[{ts}] [{level.upper()}] {msg}")
 
-
 def record_connection(username, ip, status):
-    """Record a recent connection attempt (used by /auth endpoint)."""
+    """Record a recent connection attempt."""
     ts = (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d %H:%M:%SZ")
     entry = {"ts": ts, "username": username, "ip": ip, "status": status}
     RECENT_CONN.appendleft(entry)
-    # Log a short message for visibility
     lvl = "info" if status == "authorized" else "warn"
     log_event(f"conn {status}: {username} @{ip}", level=lvl)
     
-    # Update stats if authorized
     if status == "authorized":
         stats = load_stats()
         stats[username] = stats.get(username, 0) + 1
         save_stats(stats)
         
-        # Update last connected
         last_conn = load_last_connected()
         last_conn[username] = ts
         save_last_connected(last_conn)
@@ -1044,16 +1008,15 @@ _ping_thread = None
 _ping_lock = threading.Lock()
 
 def _ping_admin_loop(url, interval, stop_event):
-    session = requests.Session()
+    session_req = requests.Session()
     while not stop_event.is_set():
         now = datetime.utcnow() + CET_OFFSET
         if now.hour == 3 and now.minute < 30:
-            # Skip pinging between 3:00 and 3:30 CET
             log_event("Skipping ping as it's between 3:00 and 3:30 CET")
         else:
             try:
                 start = time.time()
-                r = session.get(url, timeout=10)
+                r = session_req.get(url, timeout=10)
                 elapsed = time.time() - start
                 PING_STATE["last_time"] = now.isoformat() + "Z"
                 PING_STATE["last_code"] = r.status_code
@@ -1064,7 +1027,6 @@ def _ping_admin_loop(url, interval, stop_event):
                 PING_STATE["last_code"] = None
                 PING_STATE["last_error"] = str(e)
                 log_event(f"ping error -> {e}", level="error")
-        # wait but allow early exit
         stop_event.wait(interval)
 
 def start_ping_thread():
@@ -1091,11 +1053,10 @@ def stop_ping_thread():
             return True
         return False
 
-# expose API endpoints for admin
 @app.route("/api/ping", methods=["POST"])
 @login_required
 def api_ping():
-    """Trigger a manual ping to the admin URL"""
+    """Trigger a manual ping"""
     try:
         session_req = requests.Session()
         start = time.time()
@@ -1135,26 +1096,23 @@ def api_ping_toggle():
 @app.route("/api/logs", methods=["GET"])
 @login_required
 def api_logs():
-    # return structured logs
     return jsonify(list(LOGS))
-
 
 @app.route("/api/recent", methods=["GET"])
 @login_required
 def api_recent():
-    """Recent connection attempts to the bot (most recent first)."""
+    """Recent connection attempts"""
     return jsonify(list(RECENT_CONN))
 
 @app.route("/api/stats", methods=["GET"])
 @login_required
 def api_stats():
-    """Return user connection stats."""
+    """Return user connection stats"""
     stats = load_stats()
-    # Sort by count descending
     sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
     return jsonify(sorted_stats)
 
-# start background ping if configured
+# Start background ping if configured
 if PING_ADMIN_ENABLED:
     start_ping_thread()
 else:
@@ -1164,7 +1122,6 @@ else:
 def shutdown_at_3am():
     while True:
         now = datetime.utcnow() + CET_OFFSET
-        # Calculate next 3:30 AM CET
         next_3am = now.replace(hour=3, minute=30, second=0, microsecond=0)
         if now >= next_3am:
             next_3am += timedelta(days=1)
@@ -1177,6 +1134,9 @@ def shutdown_at_3am():
 shutdown_thread = threading.Thread(target=shutdown_at_3am, daemon=True)
 shutdown_thread.start()
 
+# Test email config on startup
+test_email_config()
+
 # -----------------------
 # Run
 # -----------------------
@@ -1186,4 +1146,3 @@ if __name__ == "__main__":
     print(f"📁 GitHub repo: {GITHUB_OWNER}/{GITHUB_REPO}")
     print(f"📄 GitHub file: {GITHUB_PATH}")
     app.run(host="0.0.0.0", port=port)
-    test_email_config()
