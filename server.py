@@ -12,6 +12,13 @@ from flask import (
     redirect, url_for, session, send_from_directory, make_response
 )
 from flask_cors import CORS
+import paypalrestsdk
+from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+load_dotenv()  # load .env file
 
 # -----------------------
 # Configuration
@@ -22,6 +29,23 @@ CORS(app)  # allow cross-origin for simple API access
 # Secrets & GitHub config from env (safer)
 app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key_replace_in_prod")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change_me_locally")
+
+# PayPal config
+PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID")
+PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
+PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
+
+# Email config
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+EMAIL_SMTP = os.getenv("EMAIL_SMTP", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+
+paypalrestsdk.configure({
+    "mode": PAYPAL_MODE,
+    "client_id": PAYPAL_CLIENT_ID,
+    "client_secret": PAYPAL_CLIENT_SECRET
+})
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_OWNER = "cSxrpent"
@@ -252,6 +276,204 @@ def save_last_connected(last_conn):
         print(f"⚠ Error saving last_connected: {e}")
 
 # -----------------------
+# -----------------------
+# PayPal Payment Routes
+# -----------------------
+
+@app.route("/buy/<item>", methods=["GET", "POST"])
+def buy(item):
+    prices = {
+        "1month": {"amount": "2.00", "description": "1 Month Subscription", "days": 30},
+        "2months": {"amount": "4.00", "description": "2 Months Subscription", "days": 60},
+        "3months": {"amount": "5.00", "description": "3 Months Subscription", "days": 90},
+        "1year": {"amount": "10.00", "description": "1 Year Subscription", "days": 365},
+        "rawcode": {"amount": "20.00", "description": "Raw Code", "days": 0},  # No expiry for raw code?
+        "custombot": {"amount": "15.00", "description": "Custom Bot", "days": 0}
+    }
+    
+    if item not in prices:
+        return "Invalid item", 400
+    
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        email = request.form.get("email", "").strip()
+        if not username or not email:
+            return render_template("buy.html", item=item, price=prices[item], error="Username and email are required")
+        
+        # Store in session
+        session["payment_username"] = username
+        session["payment_email"] = email
+        session["payment_item"] = item
+        
+        return redirect(url_for("pay", item=item))
+    
+    return render_template("buy.html", item=item, price=prices[item])
+
+@app.route("/pay/<item>", methods=["GET"])
+def pay(item):
+    username = session.get("payment_username")
+    if not username:
+        return redirect(url_for("buy", item=item))
+    
+    prices = {
+        "1month": {"amount": "2.00", "description": "1 Month Subscription"},
+        "2months": {"amount": "4.00", "description": "2 Months Subscription"},
+        "3months": {"amount": "5.00", "description": "3 Months Subscription"},
+        "1year": {"amount": "10.00", "description": "1 Year Subscription"},
+        "rawcode": {"amount": "20.00", "description": "Raw Code"},
+        "custombot": {"amount": "15.00", "description": "Custom Bot"}
+    }
+    
+    if item not in prices:
+        return "Invalid item", 400
+    
+    price = prices[item]
+    
+    # Create PayPal payment
+    payment = paypalrestsdk.Payment({
+        "intent": "sale",
+        "payer": {"payment_method": "paypal"},
+        "redirect_urls": {
+            "return_url": url_for("payment_success", _external=True),
+            "cancel_url": url_for("payment_cancel", _external=True)
+        },
+        "transactions": [{
+            "item_list": {
+                "items": [{
+                    "name": price["description"],
+                    "sku": item,
+                    "price": price["amount"],
+                    "currency": "USD",
+                    "quantity": 1
+                }]
+            },
+            "amount": {
+                "total": price["amount"],
+                "currency": "USD"
+            },
+            "description": f"{price['description']} for {username}"
+        }]
+    })
+    
+    if payment.create():
+        # Find approval URL
+        for link in payment.links:
+            if link.rel == "approval_url":
+                return redirect(link.href)
+    else:
+        return "Error creating payment", 500
+
+@app.route("/payment/success")
+def payment_success():
+    payment_id = request.args.get("paymentId")
+    payer_id = request.args.get("PayerID")
+    
+    payment = paypalrestsdk.Payment.find(payment_id)
+    
+    if payment.execute({"payer_id": payer_id}):
+        # Payment successful, activate license
+        username = session.get("payment_username")
+        email = session.get("payment_email")
+        item = session.get("payment_item")
+        
+        if username and item:
+            activate_license(username, item)
+            send_download_email(username, email, item)
+        
+        # Clear session
+        session.pop("payment_username", None)
+        session.pop("payment_email", None)
+        session.pop("payment_item", None)
+        
+        return render_template("payment_success.html", username=username)
+    else:
+        return "Payment execution failed", 500
+
+@app.route("/payment/cancel")
+def payment_cancel():
+    # Clear session
+    session.pop("payment_username", None)
+    session.pop("payment_email", None)
+    session.pop("payment_item", None)
+    return render_template("payment_cancel.html")
+
+def activate_license(username, item):
+    days_map = {
+        "1month": 30,
+        "2months": 60,
+        "3months": 90,
+        "1year": 365,
+        "rawcode": 0,  # Permanent?
+        "custombot": 0
+    }
+    
+    days = days_map.get(item, 30)
+    
+    users = load_users()
+    existing = find_user(users, username)
+    if existing:
+        # Extend existing
+        current_expires = datetime.strptime(existing["expires"], "%Y-%m-%d")
+        new_expires = current_expires + timedelta(days=days)
+        existing["expires"] = new_expires.strftime("%Y-%m-%d")
+    else:
+        # New user
+        if days > 0:
+            expires = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+        else:
+            expires = "2099-12-31"  # Permanent
+        users.append({"username": username, "expires": expires})
+    
+    save_users(users)
+    log_event(f"payment activated: {username} for {item}")
+
+def send_download_email(username, email, item):
+    if not EMAIL_USER or not EMAIL_PASS:
+        log_event(f"email not sent (no config): {username} for {item}")
+        return
+    
+    # Assume download link is /download/rxzbot.zip or something
+    download_link = url_for("download_file", filename="rxzbot.zip", _external=True)
+    
+    subject = f"Your RXZBot Purchase - {item}"
+    body = f"""
+Hello {username},
+
+Thank you for purchasing {item}!
+
+Your license has been activated automatically.
+
+Download your file here: {download_link}
+
+If you have any questions, contact me on Discord or Instagram.
+
+Best,
+RXZBot Team
+"""
+    
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_USER
+    msg['To'] = email
+    msg['Subject'] = subject
+    
+    msg.attach(MIMEText(body, 'plain'))
+    
+    try:
+        server = smtplib.SMTP(EMAIL_SMTP, EMAIL_PORT)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        text = msg.as_string()
+        server.sendmail(EMAIL_USER, msg['To'], text)
+        server.quit()
+        log_event(f"email sent to {email} for {username} - {item}")
+    except Exception as e:
+        log_event(f"email failed: {e}")
+
+@app.route("/download/<filename>")
+def download_file(filename):
+    # Simple download, assume file is in static/
+    return send_from_directory("static", filename, as_attachment=True)
+
 # Auth API used by extension
 # -----------------------
 @app.route("/auth", methods=["GET"])
