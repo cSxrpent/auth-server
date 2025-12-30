@@ -450,21 +450,23 @@ def payment_success():
                 self.transactions = [{"description": f"Test Purchase for {session.get('payment_username', 'testuser')}"}]
         payment = MockPayment()
     else:
-        payment = paypalrestsdk.Payment.find(payment_id)
-        print(f"Payment found: {payment.id}, state: {payment.state}")
-        
-        # Check if payment is already completed
-        if payment.state == "approved":
-            print("Payment already approved, proceeding with activation")
-            success = True
-        elif payment.state == "created":
-            success = payment.execute({"payer_id": payer_id})
-            print(f"Payment execution result: {success}")
-        else:
-            print(f"Payment in unexpected state: {payment.state}")
-            success = False
+        try:
+            payment = paypalrestsdk.Payment.find(payment_id)
+            print(f"Payment found: {payment.id}, state: {payment.state}")
             
-        if success:
+            # Check if payment is already completed
+            if payment.state == "approved":
+                print("Payment already approved, proceeding with activation")
+                success = True
+            elif payment.state == "created":
+                success = payment.execute({"payer_id": payer_id})
+                print(f"Payment execution result: {success}")
+            else:
+                print(f"Payment in unexpected state: {payment.state}")
+                success = False
+        except Exception as e:
+            print(f"Exception during payment processing: {e}")
+            return f"Payment processing error: {str(e)}", 500
             print("Payment executed successfully")
             
             # Payment successful, activate license
@@ -514,10 +516,6 @@ def payment_success():
             error_details = getattr(payment, 'error', 'Unknown error')
             print(f"Payment execution failed: {error_details}")
             return f"Payment execution failed: {error_details}", 500
-            
-    except Exception as e:
-        print(f"Exception during payment processing: {e}")
-        return f"Payment processing error: {str(e)}", 500
 
 @app.route("/payment/cancel")
 def payment_cancel():
