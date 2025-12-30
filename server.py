@@ -631,18 +631,29 @@ def send_download_email(username, email, item):
 
 def send_with_ssl(msg):
     """Méthode 1: SMTP_SSL (port 465) - recommandé pour Gmail"""
+    print(f"   → Connecting to {EMAIL_SMTP}:{EMAIL_PORT}...")
     server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT, timeout=10)
+    print(f"   → Connected! Logging in as {EMAIL_USER}...")
     server.login(EMAIL_USER, EMAIL_PASS)
+    print(f"   → Logged in! Sending message...")
     server.send_message(msg)
+    print(f"   → Message sent! Closing connection...")
     server.quit()
+    print(f"   → Connection closed!")
 
 def send_with_starttls(msg):
     """Méthode 2: SMTP + STARTTLS (port 587) - alternative"""
+    print(f"   → Connecting to {EMAIL_SMTP}:587...")
     server = smtplib.SMTP(EMAIL_SMTP, 587, timeout=10)
+    print(f"   → Connected! Starting TLS...")
     server.starttls()
+    print(f"   → TLS started! Logging in as {EMAIL_USER}...")
     server.login(EMAIL_USER, EMAIL_PASS)
+    print(f"   → Logged in! Sending message...")
     server.send_message(msg)
+    print(f"   → Message sent! Closing connection...")
     server.quit()
+    print(f"   → Connection closed!")
 
 def test_email_config():
     """
@@ -704,32 +715,44 @@ def download_file(filename):
 @app.route("/admin/send-test-mail", methods=["GET", "POST"])
 @login_required
 def send_test_mail():
-    if request.method == "POST":
-        test_email = request.form.get("email", EMAIL_USER)
-    else:
-        test_email = EMAIL_USER
-    
-    print(f"\n{'='*50}")
-    print(f"📧 SENDING TEST EMAIL TO: {test_email}")
-    print(f"{'='*50}\n")
-    
-    result = send_download_email(
-        username="TestUser",
-        email=test_email,
-        item="TEST LICENSE"
-    )
-    
-    if result["success"]:
-        return jsonify({
-            "status": "success",
-            "message": f"Email sent successfully via {result.get('method')}",
-            "email": test_email
-        }), 200
-    else:
+    try:
+        if request.method == "POST":
+            test_email = request.form.get("email", EMAIL_USER)
+        else:
+            test_email = EMAIL_USER
+        
+        print(f"\n{'='*50}")
+        print(f"📧 SENDING TEST EMAIL TO: {test_email}")
+        print(f"{'='*50}\n")
+        
+        result = send_download_email(
+            username="TestUser",
+            email=test_email,
+            item="TEST LICENSE"
+        )
+        
+        if result["success"]:
+            return jsonify({
+                "status": "success",
+                "message": f"Email sent successfully via {result.get('method')}",
+                "email": test_email
+            }), 200
+        else:
+            return jsonify({
+                "status": "error",
+                "message": result.get("error", "Unknown error"),
+                "email": test_email
+            }), 500
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"\n🚨 ERROR IN send_test_mail:")
+        print(error_trace)
         return jsonify({
             "status": "error",
-            "message": result.get("error", "Unknown error"),
-            "email": test_email
+            "message": str(e),
+            "traceback": error_trace,
+            "email": test_email if 'test_email' in locals() else "unknown"
         }), 500
 
 @app.route("/debug")
@@ -1177,4 +1200,4 @@ if __name__ == "__main__":
     print(f"🚀 Starting server on port {port}")
     print(f"📁 GitHub repo: {GITHUB_OWNER}/{GITHUB_REPO}")
     print(f"📄 GitHub file: {GITHUB_PATH}")
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=True)  # DEBUG MODE ACTIVÉ
