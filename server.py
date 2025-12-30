@@ -570,8 +570,7 @@ RXZBot Team
     msg.attach(MIMEText(body, 'plain'))
     
     try:
-        server = smtplib.SMTP(EMAIL_SMTP, EMAIL_PORT)
-        server.starttls()
+        server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT)
         server.login(EMAIL_USER, EMAIL_PASS)
         text = msg.as_string()
         server.sendmail(EMAIL_USER, msg['To'], text)
@@ -584,6 +583,20 @@ RXZBot Team
 def download_file(filename):
     # Simple download, assume file is in static/
     return send_from_directory("static", filename, as_attachment=True)
+
+
+@app.route("/admin/send-test-mail", methods=["POST"])
+def send_test_mail():
+    email = "tariksimsek594@gmail.com"
+
+    send_download_email(
+        username="Tarik",
+        email=email,
+        item="TEST LICENSE"
+    )
+
+    return {"status": "ok"}
+
 
 @app.route("/debug")
 @login_required
