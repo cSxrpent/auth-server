@@ -14,11 +14,13 @@ from flask import (
 from flask_cors import CORS
 import paypalrestsdk
 from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 load_dotenv()  # load .env file if it exists (for local development)
 
 # Debug: Check if .env file exists (only for local development)
-import os
 env_file = os.path.join(os.getcwd(), '.env')
 if os.path.exists(env_file):
     print(f"✅ .env file found at {env_file} (local development)")
@@ -41,9 +43,11 @@ PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
 PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
 PAYPAL_TEST_MODE = os.getenv("PAYPAL_TEST_MODE", "false").lower() == "true"  # Skip actual PayPal calls for testing
 
-# Resend Email config
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "onboarding@resend.dev")  # Default Resend sender
+# Email config (Gmail SMTP)
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+EMAIL_SMTP = os.getenv("EMAIL_SMTP", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
 
 paypalrestsdk.configure({
     "mode": PAYPAL_MODE,
@@ -81,13 +85,12 @@ else:
     elif PAYPAL_MODE == "sandbox":
         print("ℹ️ Using SANDBOX mode for testing")
 
-if not RESEND_API_KEY:
-    print("⚠️ WARNING: Resend API key not found in .env. Email sending will not work.")
-    print(f"   RESEND_API_KEY: {'Set' if RESEND_API_KEY else 'Not set'}")
+if not EMAIL_USER or not EMAIL_PASS:
+    print("⚠️ WARNING: Email credentials not found in .env. Email sending will not work.")
+    print(f"   EMAIL_USER: {'Set' if EMAIL_USER else 'Not set'}")
 else:
-    print("✅ Resend Email configured")
-    print(f"   API Key starts with: {RESEND_API_KEY[:10] if RESEND_API_KEY else 'None'}...")
-    print(f"   From email: {EMAIL_FROM}")
+    print("✅ Email configured")
+    print(f"   Email: {EMAIL_USER}")
 
 # ------------------------------------
 # Admin web UI (login + dashboard)
@@ -329,6 +332,8 @@ def save_last_connected(last_conn):
         print(f"⚠ Error saving last_connected: {e}")
 
 # -----------------------
+# Payment routes
+# -----------------------
 
 @app.route("/buy/<item>", methods=["GET", "POST"])
 def buy(item):
@@ -534,18 +539,22 @@ def activate_license(username, item):
     save_users(users)
     log_event(f"payment activated: {username} for {item}")
 
+# -----------------------
+# Email sending (Gmail SMTP)
+# -----------------------
+
 def send_download_email(username, email, item):
     """
-    Envoie un email via Resend API
+    Envoie un email avec gestion d'erreurs améliorée (Gmail SMTP)
     """
     # Vérification de la config
-    if not RESEND_API_KEY:
-        error_msg = "Email config missing: RESEND_API_KEY not set"
+    if not EMAIL_USER or not EMAIL_PASS:
+        error_msg = "Email config missing: EMAIL_USER or EMAIL_PASS not set"
         print(f"❌ {error_msg}")
         log_event(f"email not sent (no config): {username} for {item}")
         return {"success": False, "error": error_msg}
     
-    print(f"📧 Attempting to send email via Resend to {email} for {username}")
+    print(f"📧 Attempting to send email to {email} for {username}")
     
     # Lien de téléchargement
     try:
@@ -587,96 +596,118 @@ def send_download_email(username, email, item):
     </html>
     """
     
-    # Appel API Resend
-    try:
-        response = requests.post(
-            "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "from": EMAIL_FROM,
-                "to": [email],
-                "subject": subject,
-                "html": html_body
-            },
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            print(f"✅ Email sent successfully via Resend. ID: {result.get('id')}")
+    # Construction du message
+    msg = MIMEMultipart('alternative')
+    msg['From'] = EMAIL_USER
+    msg['To'] = email
+    msg['Subject'] = subject
+    
+    # Ajouter version HTML
+    html_part = MIMEText(html_body, 'html')
+    msg.attach(html_part)
+    
+    # Tentative d'envoi avec plusieurs méthodes
+    methods = [
+        ("SMTP_SSL (port 465)", lambda: send_with_ssl(msg)),
+        ("SMTP + STARTTLS (port 587)", lambda: send_with_starttls(msg))
+    ]
+    
+    for method_name, method_func in methods:
+        try:
+            print(f"🔄 Trying {method_name}...")
+            method_func()
+            print(f"✅ Email sent successfully via {method_name}")
             log_event(f"email sent to {email} for {username} - {item}")
-            return {"success": True, "id": result.get('id')}
-        else:
-            error_msg = f"Resend API error: {response.status_code} - {response.text}"
-            print(f"❌ {error_msg}")
-            log_event(f"email failed for {username}: {error_msg}")
-            return {"success": False, "error": error_msg}
-            
-    except Exception as e:
-        error_msg = f"Email sending exception: {str(e)}"
-        print(f"❌ {error_msg}")
-        log_event(f"email failed for {username}: {error_msg}")
-        return {"success": False, "error": error_msg}
+            return {"success": True, "method": method_name}
+        except Exception as e:
+            print(f"❌ {method_name} failed: {e}")
+            continue
+    
+    # Si toutes les méthodes échouent
+    error_msg = "All email sending methods failed"
+    print(f"❌ {error_msg}")
+    log_event(f"email failed for {username}: all methods exhausted")
+    return {"success": False, "error": error_msg}
+
+def send_with_ssl(msg):
+    """Méthode 1: SMTP_SSL (port 465) - recommandé pour Gmail"""
+    server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT, timeout=10)
+    server.login(EMAIL_USER, EMAIL_PASS)
+    server.send_message(msg)
+    server.quit()
+
+def send_with_starttls(msg):
+    """Méthode 2: SMTP + STARTTLS (port 587) - alternative"""
+    server = smtplib.SMTP(EMAIL_SMTP, 587, timeout=10)
+    server.starttls()
+    server.login(EMAIL_USER, EMAIL_PASS)
+    server.send_message(msg)
+    server.quit()
 
 def test_email_config():
     """
-    Teste la configuration Resend au démarrage
+    Teste la configuration email au démarrage
     """
     print("\n" + "="*50)
-    print("📧 RESEND EMAIL CONFIGURATION TEST")
+    print("📧 EMAIL CONFIGURATION TEST")
     print("="*50)
     
-    if not RESEND_API_KEY:
-        print("❌ RESEND_API_KEY is not set!")
+    if not EMAIL_USER:
+        print("❌ EMAIL_USER is not set!")
         return False
     
-    print(f"✅ RESEND_API_KEY: {RESEND_API_KEY[:10]}... (hidden)")
-    print(f"✅ EMAIL_FROM: {EMAIL_FROM}")
+    if not EMAIL_PASS:
+        print("❌ EMAIL_PASS is not set!")
+        return False
     
-    # Test de connexion à l'API
-    print("\n🔄 Testing Resend API connection...")
+    print(f"✅ EMAIL_USER: {EMAIL_USER}")
+    print(f"✅ EMAIL_SMTP: {EMAIL_SMTP}")
+    print(f"✅ EMAIL_PORT: {EMAIL_PORT}")
+    print(f"✅ EMAIL_PASS: {'*' * len(EMAIL_PASS)} (hidden)")
+    
+    # Test de connexion
+    print("\n🔄 Testing SMTP connection...")
     
     try:
-        response = requests.get(
-            "https://api.resend.com/domains",
-            headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}"
-            },
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            print("   ✅ Resend API connection successful!")
-            domains = response.json()
-            if domains.get('data'):
-                print(f"   ℹ️ Found {len(domains['data'])} domain(s)")
-            return True
-        else:
-            print(f"   ❌ Resend API error: {response.status_code}")
-            return False
-            
+        # Test SSL (465)
+        print("   Trying SMTP_SSL on port 465...")
+        server = smtplib.SMTP_SSL(EMAIL_SMTP, EMAIL_PORT, timeout=10)
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.quit()
+        print("   ✅ SMTP_SSL (465) works!")
+        return True
     except Exception as e:
-        print(f"   ❌ Resend API connection failed: {e}")
-        return False
+        print(f"   ❌ SMTP_SSL (465) failed: {e}")
     
-    finally:
-        print("="*50 + "\n")
+    try:
+        # Test STARTTLS (587)
+        print("   Trying SMTP + STARTTLS on port 587...")
+        server = smtplib.SMTP(EMAIL_SMTP, 587, timeout=10)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.quit()
+        print("   ✅ SMTP + STARTTLS (587) works!")
+        return True
+    except Exception as e:
+        print(f"   ❌ SMTP + STARTTLS (587) failed: {e}")
+    
+    print("\n❌ Email configuration test FAILED")
+    print("="*50 + "\n")
+    return False
 
 @app.route("/download/<filename>")
 def download_file(filename):
     # Simple download, assume file is in static/
     return send_from_directory("static", filename, as_attachment=True)
 
-# Route de test améliorée
+# Route de test email
 @app.route("/admin/send-test-mail", methods=["GET", "POST"])
+@login_required
 def send_test_mail():
     if request.method == "POST":
-        test_email = request.form.get("email", "tariksimsek594@gmail.com")
+        test_email = request.form.get("email", EMAIL_USER)
     else:
-        test_email = "tariksimsek594@gmail.com"
+        test_email = EMAIL_USER
     
     print(f"\n{'='*50}")
     print(f"📧 SENDING TEST EMAIL TO: {test_email}")
@@ -691,9 +722,8 @@ def send_test_mail():
     if result["success"]:
         return jsonify({
             "status": "success",
-            "message": f"Email sent successfully via Resend",
-            "email": test_email,
-            "id": result.get("id")
+            "message": f"Email sent successfully via {result.get('method')}",
+            "email": test_email
         }), 200
     else:
         return jsonify({
@@ -712,9 +742,11 @@ def debug():
         "paypal_client_id_prefix": PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else None,
         "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
         "paypal_mode": PAYPAL_MODE,
-        "resend_api_key_set": bool(RESEND_API_KEY),
-        "resend_api_key_prefix": RESEND_API_KEY[:10] if RESEND_API_KEY else None,
-        "email_from": EMAIL_FROM,
+        "email_user_set": bool(EMAIL_USER),
+        "email_user": EMAIL_USER,
+        "email_pass_set": bool(EMAIL_PASS),
+        "email_smtp": EMAIL_SMTP,
+        "email_port": EMAIL_PORT,
         "secret_key_set": bool(app.secret_key),
         "admin_password_set": bool(ADMIN_PASSWORD),
         "github_token_set": bool(GITHUB_TOKEN)
