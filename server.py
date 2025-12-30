@@ -841,7 +841,7 @@ def _ping_admin_loop(url, interval, stop_event):
     session_req = requests.Session()
     while not stop_event.is_set():
         now = datetime.utcnow() + CET_OFFSET
-        if now.hour == 3 and now.minute < 30:
+        if now.hour == 300 and now.minute < 30:
             log_event("Skipping ping as it's between 3:00 and 3:30 CET")
         else:
             try:
