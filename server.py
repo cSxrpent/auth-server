@@ -20,6 +20,14 @@ from email.mime.multipart import MIMEMultipart
 
 load_dotenv()  # load .env file
 
+# Debug: Check if .env file exists
+import os
+env_file = os.path.join(os.getcwd(), '.env')
+if os.path.exists(env_file):
+    print(f"✅ .env file found at {env_file}")
+else:
+    print(f"⚠️ .env file NOT found at {env_file}")
+
 # -----------------------
 # Configuration
 # -----------------------
@@ -46,6 +54,24 @@ paypalrestsdk.configure({
     "client_id": PAYPAL_CLIENT_ID,
     "client_secret": PAYPAL_CLIENT_SECRET
 })
+
+# Check configuration on startup
+if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+    print("⚠️ WARNING: PayPal credentials not found in .env. Payments will not work.")
+    print(f"   PAYPAL_CLIENT_ID: {'Set' if PAYPAL_CLIENT_ID else 'Not set'}")
+    print(f"   PAYPAL_CLIENT_SECRET: {'Set' if PAYPAL_CLIENT_SECRET else 'Not set'}")
+    print(f"   PAYPAL_MODE: {PAYPAL_MODE}")
+else:
+    print("✅ PayPal configured")
+    print(f"   Mode: {PAYPAL_MODE}")
+    print(f"   Client ID starts with: {PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else 'None'}...")
+
+if not EMAIL_USER or not EMAIL_PASS:
+    print("⚠️ WARNING: Email credentials not found in .env. Email sending will not work.")
+    print(f"   EMAIL_USER: {'Set' if EMAIL_USER else 'Not set'}")
+else:
+    print("✅ Email configured")
+    print(f"   Email: {EMAIL_USER}")
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_OWNER = "cSxrpent"
@@ -276,9 +302,24 @@ def save_last_connected(last_conn):
         print(f"⚠ Error saving last_connected: {e}")
 
 # -----------------------
-# -----------------------
-# PayPal Payment Routes
-# -----------------------
+@app.route("/debug")
+@login_required
+def debug():
+    """Debug route to check configuration"""
+    info = {
+        "env_file_exists": os.path.exists('.env'),
+        "paypal_client_id_set": bool(PAYPAL_CLIENT_ID),
+        "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
+        "paypal_mode": PAYPAL_MODE,
+        "email_user_set": bool(EMAIL_USER),
+        "email_pass_set": bool(EMAIL_PASS),
+        "email_smtp": EMAIL_SMTP,
+        "email_port": EMAIL_PORT,
+        "secret_key_set": bool(app.secret_key),
+        "admin_password_set": bool(ADMIN_PASSWORD),
+        "github_token_set": bool(GITHUB_TOKEN)
+    }
+    return jsonify(info)
 
 @app.route("/buy/<item>", methods=["GET", "POST"])
 def buy(item):
@@ -314,6 +355,10 @@ def pay(item):
     username = session.get("payment_username")
     if not username:
         return redirect(url_for("buy", item=item))
+    
+    # Check PayPal credentials
+    if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+        return "PayPal not configured. Please check .env file.", 500
     
     prices = {
         "1month": {"amount": "2.00", "description": "1 Month Subscription"},
@@ -361,7 +406,9 @@ def pay(item):
             if link.rel == "approval_url":
                 return redirect(link.href)
     else:
-        return "Error creating payment", 500
+        error_msg = f"PayPal Error: {payment.error}"
+        print(error_msg)  # Log for debugging
+        return f"Error creating payment: {error_msg}", 500
 
 @app.route("/payment/success")
 def payment_success():
@@ -473,6 +520,25 @@ RXZBot Team
 def download_file(filename):
     # Simple download, assume file is in static/
     return send_from_directory("static", filename, as_attachment=True)
+
+@app.route("/debug")
+@login_required
+def debug():
+    """Debug route to check configuration"""
+    info = {
+        "env_file_exists": os.path.exists('.env'),
+        "paypal_client_id_set": bool(PAYPAL_CLIENT_ID),
+        "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
+        "paypal_mode": PAYPAL_MODE,
+        "email_user_set": bool(EMAIL_USER),
+        "email_pass_set": bool(EMAIL_PASS),
+        "email_smtp": EMAIL_SMTP,
+        "email_port": EMAIL_PORT,
+        "secret_key_set": bool(app.secret_key),
+        "admin_password_set": bool(ADMIN_PASSWORD),
+        "github_token_set": bool(GITHUB_TOKEN)
+    }
+    return jsonify(info)
 
 # Auth API used by extension
 # -----------------------
