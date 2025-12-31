@@ -740,19 +740,36 @@ def generate_download_token(username, item, ttl=3600):
 
 @app.route("/payment/success")
 def payment_success():
-    username = session.get("payment_username", "Customer")
-    item = session.get("payment_item", "RXZBot")
+    payment_id = request.args.get("paymentId")
+    payer_id = request.args.get("PayerID")
 
-    if not username or not item:
+    if not payment_id or not payer_id:
         abort(400)
 
-    token = generate_download_token(username, item)
-    activate_license(username, item)
-    return render_template(
-        "payment_success.html",
-        username=username,
-        download_token=token
-    )
+    payment = paypalrestsdk.Payment.find(payment_id)
+
+    if payment.execute({"payer_id": payer_id}):
+        if payment.state != "approved":
+            abort(400)
+
+        username = session.get("payment_username")
+        item = session.get("payment_item")
+
+        if not username or not item:
+            abort(400)
+
+        activate_license(username, item)
+        token = generate_download_token(username, item)
+
+        return render_template(
+            "payment_success.html",
+            username=username,
+            download_token=token
+        )
+    else:
+        print(payment.error)
+        abort(500)
+
 
 
 @app.route("/payment/cancel")
