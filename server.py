@@ -100,6 +100,7 @@ GITHUB_OWNER = "cSxrpent"
 GITHUB_REPO = "auth-users"
 GITHUB_BRANCH = "main"
 GITHUB_PATH = "users.json"
+GITHUB_KEYS_PATH = "keys.json"  # Add keys file path
 
 # GitHub raw URL (public access, no token needed if repo is public)
 GITHUB_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_PATH}"
@@ -114,26 +115,162 @@ CET_OFFSET = timedelta(hours=1)  # CET = UTC+1 in winter
 # -----------------------
 # Keys management helpers
 # -----------------------
+def load_keys_from_github():
+    """Fetch keys.json from GitHub API (no cache). Returns list of keys or None on failure."""
+    try:
+        # Use GitHub API instead of raw URL to avoid cache
+        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_KEYS_PATH}"
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        
+        if GITHUB_TOKEN:
+            headers["Authorization"] = f"token {GITHUB_TOKEN}"
+        
+        # Add cache-busting parameter
+        params = {"ref": GITHUB_BRANCH, "t": int(time.time())}
+        
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            content_b64 = data.get("content", "")
+            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
+            keys = json.loads(decoded)
+            print(f"✓ Loaded {len(keys)} keys from GitHub API")
+            return keys
+        else:
+            print(f"✗ GitHub API fetch failed for keys: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"✗ Error fetching keys from GitHub API: {e}")
+        return None
+
+def _github_get_keys_file():
+    """Return (ok, info). If ok True: info={'content': <python obj list>, 'sha': <sha>}"""
+    if not GITHUB_TOKEN:
+        return False, {"error": "no_github_token"}
+    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_KEYS_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    params = {"ref": GITHUB_BRANCH}
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=10)
+        if r.status_code == 200:
+            j = r.json()
+            content_b64 = j.get("content", "")
+            sha = j.get("sha")
+            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
+            try:
+                data = json.loads(decoded)
+            except Exception as e:
+                return False, {"error": f"invalid_json_in_github:{e}"}
+            return True, {"content": data, "sha": sha}
+        elif r.status_code == 404:
+            # File doesn't exist yet, that's ok
+            return True, {"content": [], "sha": None}
+        else:
+            return False, {"error": f"gh_get_status_{r.status_code}", "detail": r.text}
+    except Exception as e:
+        return False, {"error": f"gh_get_exception:{e}"}
+
+def _github_put_keys_file(new_keys, sha=None):
+    """Create/Update keys.json on GitHub. Return (ok, detail)."""
+    if not GITHUB_TOKEN:
+        return False, {"error": "no_github_token"}
+    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_KEYS_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    content_b64 = base64.b64encode(json.dumps(new_keys, ensure_ascii=False, indent=2).encode("utf-8")).decode("utf-8")
+    payload = {
+        "message": f"Update keys.json via server at {(datetime.utcnow() + CET_OFFSET).isoformat()}Z",
+        "content": content_b64,
+        "branch": GITHUB_BRANCH
+    }
+    if sha:
+        payload["sha"] = sha
+    try:
+        r = requests.put(url, headers=headers, json=payload, timeout=15)
+        if r.status_code in (200, 201):
+            return True, r.json()
+        else:
+            return False, {"error": f"gh_put_status_{r.status_code}", "detail": r.text}
+    except Exception as e:
+        return False, {"error": f"gh_put_exception:{e}"}
+
 def load_keys():
-    """Load activation keys from local file."""
+    """Try GitHub first, then fallback to local keys.json. Overwrite local if different from GitHub."""
+    print("🔍 Loading keys...")
+    
+    # Try GitHub API first
+    keys = load_keys_from_github()
+    if keys is not None:
+        print(f"✅ Loaded keys from GitHub: {len(keys)} keys")
+        
+        # Check if local file exists and differs
+        try:
+            with open(KEYS_FILE, "r", encoding="utf-8") as f:
+                local_keys = json.load(f)
+            
+            # Normalize for comparison (sort by code)
+            def normalize(k_list):
+                return sorted(k_list, key=lambda x: x.get('code', '').lower())
+            
+            github_normalized = normalize(keys)
+            local_normalized = normalize(local_keys)
+            
+            if github_normalized != local_normalized:
+                print("🔄 Local keys file differs from GitHub, overwriting local with GitHub data")
+                with open(KEYS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(keys, f, indent=2, ensure_ascii=False)
+                log_event("Overwrote local keys.json with GitHub data")
+            else:
+                print("✅ Local keys file matches GitHub")
+        
+        except FileNotFoundError:
+            print("📝 Local keys.json not found, creating it with GitHub data")
+            with open(KEYS_FILE, "w", encoding="utf-8") as f:
+                json.dump(keys, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"⚠️ Error checking/comparing local keys file: {e}")
+        
+        return keys
+    
+    # Fallback to local file
+    print("⚠️ GitHub failed for keys, falling back to local file")
     try:
         with open(KEYS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            local_keys = json.load(f)
+            print(f"✅ Loaded keys from local: {len(local_keys)} keys")
+            return local_keys
     except FileNotFoundError:
+        print("⚠ Local keys.json not found")
         return []
     except Exception as e:
-        print(f"⚠ Error loading keys: {e}")
+        print(f"⚠ Error loading local keys.json: {e}")
         return []
 
 def save_keys(keys):
-    """Save activation keys to local file."""
+    """
+    Write local file then try to push to GitHub if token is present.
+    Returns dict describing results.
+    """
+    result = {"saved_local": False, "github": None}
+    # write local
     try:
         with open(KEYS_FILE, "w", encoding="utf-8") as f:
             json.dump(keys, f, indent=2, ensure_ascii=False)
-        return True
+        result["saved_local"] = True
     except Exception as e:
-        print(f"⚠ Error saving keys: {e}")
-        return False
+        result["saved_local"] = False
+        result["local_error"] = str(e)
+    
+    # try pushing to GitHub
+    if GITHUB_TOKEN:
+        ok, info = _github_get_keys_file()
+        sha = info.get("sha") if ok else None
+        ok2, put_res = _github_put_keys_file(keys, sha=sha)
+        result["github"] = {"ok": ok2, "detail": put_res}
+    else:
+        result["github"] = {"ok": False, "detail": "no_github_token"}
+    
+    return result
 
 def generate_key():
     """Generate a random 6-character key with uppercase, lowercase, and numbers."""
@@ -1138,5 +1275,6 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
     print(f"🚀 Starting server on port {port}")
     print(f"📁 GitHub repo: {GITHUB_OWNER}/{GITHUB_REPO}")
-    print(f"📄 GitHub file: {GITHUB_PATH}")
+    print(f"📄 GitHub users file: {GITHUB_PATH}")
+    print(f"🎁 GitHub keys file: {GITHUB_KEYS_PATH}")
     app.run(host="0.0.0.0", port=port, debug=True)
