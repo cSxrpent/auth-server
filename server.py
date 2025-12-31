@@ -632,7 +632,7 @@ def api_delete_key():
 @app.route("/buy/<item>", methods=["GET", "POST"])
 def buy(item):
     prices = {
-        "test": {"amount": "0.01", "description": "Test Purchase", "days": 1},
+        "test": {"amount": "0.05", "description": "Test Purchase", "days": 1},
         "1month": {"amount": "2.00", "description": "1 Month Subscription", "days": 30},
         "2months": {"amount": "4.00", "description": "2 Months Subscription", "days": 60},
         "3months": {"amount": "5.00", "description": "3 Months Subscription", "days": 90},
@@ -666,7 +666,7 @@ def pay(item):
         return "PayPal not configured. Please check .env file.", 500
     
     prices = {
-        "test": {"amount": "0.01", "description": "Test Purchase"},
+        "test": {"amount": "0.05", "description": "Test Purchase"},
         "1month": {"amount": "2.00", "description": "1 Month Subscription"},
         "2months": {"amount": "4.00", "description": "2 Months Subscription"},
         "3months": {"amount": "5.00", "description": "3 Months Subscription"},
