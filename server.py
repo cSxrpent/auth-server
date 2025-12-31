@@ -4,6 +4,8 @@ import base64
 import requests
 import time
 import threading
+import secrets
+import string
 from datetime import datetime, timedelta
 from collections import deque
 from functools import wraps
@@ -14,7 +16,6 @@ from flask import (
 from flask_cors import CORS
 import paypalrestsdk
 import time
-import secrets
 from dotenv import load_dotenv
 import hmac
 import hashlib
@@ -104,12 +105,47 @@ GITHUB_PATH = "users.json"
 GITHUB_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_PATH}"
 
 USERS_FILE = "users.json"  # local fallback file
-
+KEYS_FILE = "keys.json"  # activation keys storage
 STATS_FILE = "stats.json"  # track user connection counts
-
 LAST_CONNECTED_FILE = "last_connected.json"  # track last connection per user
 
 CET_OFFSET = timedelta(hours=1)  # CET = UTC+1 in winter
+
+# -----------------------
+# Keys management helpers
+# -----------------------
+def load_keys():
+    """Load activation keys from local file."""
+    try:
+        with open(KEYS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        print(f"⚠ Error loading keys: {e}")
+        return []
+
+def save_keys(keys):
+    """Save activation keys to local file."""
+    try:
+        with open(KEYS_FILE, "w", encoding="utf-8") as f:
+            json.dump(keys, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"⚠ Error saving keys: {e}")
+        return False
+
+def generate_key():
+    """Generate a random 6-character key with uppercase, lowercase, and numbers."""
+    characters = string.ascii_uppercase + string.ascii_lowercase + string.digits
+    return ''.join(secrets.choice(characters) for _ in range(6))
+
+def find_key(keys, key_code):
+    """Find a key by its code."""
+    for k in keys:
+        if k["code"] == key_code:
+            return k
+    return None
 
 # -----------------------
 # GitHub helpers
@@ -321,6 +357,131 @@ def save_last_connected(last_conn):
             json.dump(last_conn, f, indent=2, ensure_ascii=False)
     except Exception as e:
         print(f"⚠ Error saving last_connected: {e}")
+
+# -----------------------
+# Key redemption routes
+# -----------------------
+
+@app.route("/redeem", methods=["GET", "POST"])
+def redeem():
+    """Page to redeem an activation key"""
+    if request.method == "POST":
+        key_code = request.form.get("key", "").strip().upper()
+        username = request.form.get("username", "").strip()
+        
+        if not key_code or not username:
+            return render_template("redeem.html", error="Key and username are required")
+        
+        # Load keys
+        keys = load_keys()
+        key = find_key(keys, key_code)
+        
+        if not key:
+            log_event(f"redeem fail: key '{key_code}' not found", level="warn")
+            return render_template("redeem.html", error="Invalid key")
+        
+        if key.get("used"):
+            log_event(f"redeem fail: key '{key_code}' already used", level="warn")
+            return render_template("redeem.html", error="This key has already been used")
+        
+        # Activate the key
+        days = key["duration"]
+        users = load_users()
+        existing = find_user(users, username)
+        
+        if existing:
+            # Extend existing user
+            current_expires = datetime.strptime(existing["expires"], "%Y-%m-%d")
+            if current_expires < datetime.now():
+                base_date = datetime.now()
+            else:
+                base_date = current_expires
+            new_expires = base_date + timedelta(days=days)
+            existing["expires"] = new_expires.strftime("%Y-%m-%d")
+        else:
+            # Create new user
+            expires = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+            users.append({"username": username, "expires": expires})
+        
+        # Mark key as used
+        key["used"] = True
+        key["used_by"] = username
+        key["used_at"] = (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d %H:%M:%SZ")
+        
+        # Save everything
+        save_users(users)
+        save_keys(keys)
+        
+        log_event(f"key redeemed: {key_code} by {username} for {days} days")
+        
+        # Generate download token
+        token = generate_download_token(username, f"{days}days")
+        
+        return render_template("payment_success.html", username=username, download_token=token, from_key=True)
+    
+    return render_template("redeem.html", error=None)
+
+# -----------------------
+# Admin API for keys
+# -----------------------
+
+@app.route("/api/keys", methods=["GET"])
+@login_required
+def api_get_keys():
+    """Get all activation keys"""
+    keys = load_keys()
+    return jsonify(keys)
+
+@app.route("/api/keys/generate", methods=["POST"])
+@login_required
+def api_generate_key():
+    """Generate a new activation key"""
+    body = request.get_json() or {}
+    duration = body.get("duration")
+    
+    if not duration or not isinstance(duration, int) or duration <= 0:
+        return jsonify({"error": "Invalid duration"}), 400
+    
+    # Generate unique key
+    keys = load_keys()
+    key_code = generate_key()
+    
+    # Ensure uniqueness
+    while find_key(keys, key_code):
+        key_code = generate_key()
+    
+    # Create key object
+    new_key = {
+        "code": key_code,
+        "duration": duration,
+        "created": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d %H:%M:%SZ"),
+        "used": False
+    }
+    
+    keys.append(new_key)
+    save_keys(keys)
+    
+    log_event(f"key generated: {key_code} for {duration} days")
+    
+    return jsonify({"message": "Key generated", "key": new_key}), 200
+
+@app.route("/api/keys/delete", methods=["POST"])
+@login_required
+def api_delete_key():
+    """Delete an activation key"""
+    body = request.get_json() or {}
+    key_code = body.get("code", "").strip()
+    
+    if not key_code:
+        return jsonify({"error": "Key code required"}), 400
+    
+    keys = load_keys()
+    keys = [k for k in keys if k["code"] != key_code]
+    save_keys(keys)
+    
+    log_event(f"key deleted: {key_code}")
+    
+    return jsonify({"message": "Key deleted"}), 200
 
 # -----------------------
 # Payment routes
@@ -973,4 +1134,4 @@ if __name__ == "__main__":
     print(f"🚀 Starting server on port {port}")
     print(f"📁 GitHub repo: {GITHUB_OWNER}/{GITHUB_REPO}")
     print(f"📄 GitHub file: {GITHUB_PATH}")
-    app.run(host="0.0.0.0", port=port, debug=True)  # DEBUG MODE ACTIVÉ
+    app.run(host="0.0.0.0", port=port, debug=True)
