@@ -1144,22 +1144,19 @@ def _ping_admin_loop(url, interval, stop_event):
     session_req = requests.Session()
     while not stop_event.is_set():
         now = datetime.utcnow() + CET_OFFSET
-        if now.hour == 300 and now.minute < 30:
-            log_event("Skipping ping as it's between 3:00 and 3:30 CET")
-        else:
-            try:
-                start = time.time()
-                r = session_req.get(url, timeout=10)
-                elapsed = time.time() - start
-                PING_STATE["last_time"] = now.isoformat() + "Z"
-                PING_STATE["last_code"] = r.status_code
-                PING_STATE["last_error"] = None
-                log_event(f"ping -> {url} {r.status_code} ({elapsed:.2f}s)")
-            except Exception as e:
-                PING_STATE["last_time"] = now.isoformat() + "Z"
-                PING_STATE["last_code"] = None
-                PING_STATE["last_error"] = str(e)
-                log_event(f"ping error -> {e}", level="error")
+        try:
+            start = time.time()
+            r = session_req.get(url, timeout=10)
+            elapsed = time.time() - start
+            PING_STATE["last_time"] = now.isoformat() + "Z"
+            PING_STATE["last_code"] = r.status_code
+            PING_STATE["last_error"] = None
+            log_event(f"ping -> {url} {r.status_code} ({elapsed:.2f}s)")
+        except Exception as e:
+            PING_STATE["last_time"] = now.isoformat() + "Z"
+            PING_STATE["last_code"] = None
+            PING_STATE["last_error"] = str(e)
+            log_event(f"ping error -> {e}", level="error")
         stop_event.wait(interval)
 
 def start_ping_thread():
@@ -1250,22 +1247,6 @@ if PING_ADMIN_ENABLED:
     start_ping_thread()
 else:
     print("ℹ️ ping_admin is disabled (PING_ADMIN_ENABLED not set)")
-
-# Schedule shutdown at 3:30 AM CET every day
-def shutdown_at_3am():
-    while True:
-        now = datetime.utcnow() + CET_OFFSET
-        next_3am = now.replace(hour=3, minute=30, second=0, microsecond=0)
-        if now >= next_3am:
-            next_3am += timedelta(days=1)
-        sleep_time = (next_3am - now).total_seconds()
-        time.sleep(sleep_time)
-        log_event("Shutting down server at 3:30 AM CET")
-        stop_ping_thread()
-        os._exit(0)
-
-shutdown_thread = threading.Thread(target=shutdown_at_3am, daemon=True)
-shutdown_thread.start()
 
 
 # -----------------------
