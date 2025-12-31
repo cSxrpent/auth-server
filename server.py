@@ -366,7 +366,7 @@ def save_last_connected(last_conn):
 def redeem():
     """Page to redeem an activation key"""
     if request.method == "POST":
-        key_code = request.form.get("key", "").strip().upper()
+        key_code = request.form.get("key", "").strip()
         username = request.form.get("username", "").strip()
         
         if not key_code or not username:
@@ -374,7 +374,12 @@ def redeem():
         
         # Load keys
         keys = load_keys()
-        key = find_key(keys, key_code)
+        # Case-insensitive key lookup
+        key = None
+        for k in keys:
+            if k["code"].lower() == key_code.lower():
+                key = k
+                break
         
         if not key:
             log_event(f"redeem fail: key '{key_code}' not found", level="warn")
