@@ -6,38 +6,242 @@
   <title>Buy {{ price.description }} - RXZBot</title>
   <style>
     :root{
-      --bg:#0a0e1a; --card:#0f1724; --muted:#9aa4b2; --accent:#00d4ff; --danger:#ff4757; --success:#2ed573;
-      --radius:16px;
+      --bg:#0a0e1a; --card:#0f1724; --muted:#9aa4b2; --accent:#00d4ff; --danger:#ff4757; --success:#2ed573; --glass:rgba(255,255,255,0.02);
+      --radius:16px; --glow:0 0 20px rgba(0,212,255,0.3);
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:'Segoe UI',system-ui,Arial;background:linear-gradient(135deg,#071026,#0d1526,#1a1f35);color:#eaf1ff;min-height:100vh;padding:20px;display:flex;justify-content:center;}
-    .wrap{width:100%;max-width:600px}
-    .card{background:linear-gradient(135deg,var(--card),rgba(15,23,36,0.8));border-radius:var(--radius);padding:40px;margin:20px;text-align:center;box-shadow:0 10px 50px rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.05);}
-    h1{color:var(--accent);margin-bottom:20px;}
-    p{color:var(--muted);margin:20px 0;}
-    form{max-width:400px;margin:0 auto;}
-    input{background:var(--card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;color:#fff;width:100%;margin-bottom:20px;}
-    input:focus{outline:none;border-color:var(--accent);}
-    button{background:linear-gradient(90deg,var(--accent),#7b4bff);color:#fff;border:none;padding:12px 24px;border-radius:12px;font-weight:600;cursor:pointer;transition:all 0.3s;width:100%;}
-    button:hover{transform:scale(1.02);}
-    .error{color:var(--danger);margin-bottom:20px;}
-    a{color:var(--accent);text-decoration:none;}
+    body{margin:0;font-family:'Segoe UI',system-ui,Arial;background:linear-gradient(135deg,#071026,#0d1526,#1a1f35);color:#eaf1ff;min-height:100vh;padding:20px;display:flex;justify-content:center;align-items:center;overflow-x:hidden}
+    
+    /* Particles Background */
+    .particles{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:-1}
+    .particle{position:absolute;background:var(--accent);border-radius:50%;opacity:0.1;animation:float 10s infinite linear}
+    @keyframes float{from{transform:translateY(100vh) rotate(0deg)}to{transform:translateY(-100px) rotate(360deg)}}
+    
+    /* Container */
+    .container{width:100%;max-width:900px;animation:slideIn 0.6s ease}
+    @keyframes slideIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+    
+    /* Header with back button */
+    .header{display:flex;align-items:center;gap:15px;margin-bottom:30px}
+    .back-btn{background:linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));border:1px solid rgba(255,255,255,0.1);padding:12px 20px;border-radius:12px;color:var(--muted);text-decoration:none;font-weight:600;transition:all 0.3s;display:inline-flex;align-items:center;gap:8px}
+    .back-btn:hover{background:rgba(255,255,255,0.08);color:#fff;border-color:var(--accent);transform:translateX(-3px)}
+    
+    /* Main Card */
+    .card{background:linear-gradient(135deg,var(--card),rgba(15,23,36,0.9));border-radius:var(--radius);padding:40px;box-shadow:0 20px 80px rgba(0,0,0,0.8);border:1px solid rgba(255,255,255,0.05);position:relative;overflow:hidden}
+    .card::before{content:'';position:absolute;top:-50%;right:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(0,212,255,0.03),transparent 70%);pointer-events:none}
+    
+    /* Layout Grid */
+    .layout{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start}
+    
+    /* Left Column - Product Info */
+    .product-info{position:relative}
+    .product-icon{font-size:4rem;margin-bottom:20px;filter:drop-shadow(0 0 20px rgba(0,212,255,0.4));animation:pulse 3s infinite}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+    h1{margin:0 0 15px 0;font-size:2.2rem;background:linear-gradient(90deg,var(--accent),#7b4bff);background-clip:text;-webkit-background-clip:text;color:transparent;line-height:1.3}
+    .price-display{font-size:3rem;font-weight:700;color:var(--accent);margin:20px 0;text-shadow:0 0 30px rgba(0,212,255,0.3)}
+    .price-display small{font-size:1.2rem;color:var(--muted);font-weight:400}
+    
+    /* Features List */
+    .features{list-style:none;padding:0;margin:25px 0}
+    .features li{padding:12px 0;color:var(--muted);font-size:0.95rem;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,0.03)}
+    .features li::before{content:'✓';color:var(--success);font-weight:700;font-size:1.2rem;width:24px;height:24px;background:rgba(46,213,115,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    
+    /* Right Column - Form */
+    .form-section{background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));padding:30px;border-radius:16px;border:1px solid rgba(255,255,255,0.05)}
+    .form-section h2{margin:0 0 20px 0;font-size:1.3rem;color:#fff}
+    
+    /* Form Elements */
+    .form-group{margin-bottom:20px}
+    label{display:block;color:var(--muted);margin-bottom:8px;font-weight:600;font-size:0.9rem;text-transform:uppercase;letter-spacing:0.5px}
+    input{width:100%;padding:14px 16px;border-radius:12px;border:2px solid rgba(255,255,255,0.1);background:linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));color:#fff;font-size:16px;transition:all 0.3s;font-weight:500}
+    input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 20px rgba(0,212,255,0.2);background:rgba(255,255,255,0.05)}
+    input::placeholder{color:var(--muted);opacity:0.6}
+    
+    /* Submit Button */
+    .submit-btn{width:100%;background:linear-gradient(90deg,var(--accent),#7b4bff);border:none;padding:16px;border-radius:12px;color:#fff;font-weight:700;font-size:1.1rem;cursor:pointer;transition:all 0.3s;margin-top:10px;position:relative;overflow:hidden}
+    .submit-btn::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;border-radius:50%;background:rgba(255,255,255,0.2);transition:width 0.6s,height 0.6s,top 0.6s,left 0.6s}
+    .submit-btn:hover::before{width:300px;height:300px;top:-150px;left:-150px}
+    .submit-btn:hover{transform:translateY(-2px);box-shadow:0 10px 40px rgba(0,212,255,0.4)}
+    .submit-btn:active{transform:translateY(0)}
+    
+    /* Security Badges */
+    .security-section{margin-top:25px;padding-top:25px;border-top:1px solid rgba(255,255,255,0.05)}
+    .security-badges{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+    .security-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(46,213,115,0.08);padding:8px 14px;border-radius:20px;border:1px solid rgba(46,213,115,0.2);color:var(--success);font-size:0.85rem;font-weight:600}
+    .security-badge-icon{font-size:1rem}
+    
+    /* Trust Indicators */
+    .trust-indicators{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:25px 0;padding:20px;background:rgba(0,212,255,0.03);border-radius:12px;border:1px solid rgba(0,212,255,0.1)}
+    .trust-item{text-align:center}
+    .trust-number{font-size:1.8rem;font-weight:700;color:var(--accent);display:block}
+    .trust-label{font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+    
+    /* Info Box */
+    .info-box{background:linear-gradient(135deg,rgba(0,212,255,0.08),rgba(123,75,255,0.05));padding:20px;border-radius:12px;border:1px solid rgba(0,212,255,0.2);margin:25px 0}
+    .info-box-title{display:flex;align-items:center;gap:10px;font-weight:700;color:#fff;margin-bottom:10px;font-size:1rem}
+    .info-box-text{color:var(--muted);font-size:0.9rem;line-height:1.6}
+    
+    /* Error Message */
+    .error{background:linear-gradient(90deg,rgba(255,71,87,0.15),rgba(255,71,87,0.08));border:2px solid var(--danger);color:var(--danger);padding:16px 20px;border-radius:12px;margin-bottom:25px;text-align:center;font-weight:600;animation:shake 0.5s}
+    @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+    
+    /* Responsive */
+    @media(max-width:768px){
+      .layout{grid-template-columns:1fr;gap:30px}
+      h1{font-size:1.8rem}
+      .price-display{font-size:2.5rem}
+      .trust-indicators{grid-template-columns:1fr}
+      .card{padding:25px}
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="particles" id="particles"></div>
+  
+  <div class="container">
+    <div class="header">
+      <a href="/" class="back-btn">
+        <span>←</span> Back to Home
+      </a>
+    </div>
+    
     <div class="card">
-      <h1>Buy {{ price.description }}</h1>
-      <p>Price: ${{ price.amount }}</p>
       {% if error %}
-      <p class="error">{{ error }}</p>
+      <div class="error">❌ {{ error }}</div>
       {% endif %}
-      <form method="post">
-        <input type="text" name="username" placeholder="Enter your Wolvesville username" required>
-        <button type="submit">Proceed to Payment</button>
-      </form>
-      <p><a href="/">← Back to Home</a></p>
+      
+      <div class="layout">
+        <!-- Left Column - Product Info -->
+        <div class="product-info">
+          <div class="product-icon">⚡</div>
+          <h1>{{ price.description }}</h1>
+          <div class="price-display">
+            ${{ price.amount }}
+            <small>/{{ price.days }} days</small>
+          </div>
+          
+          <div class="trust-indicators">
+            <div class="trust-item">
+              <span class="trust-number">70+</span>
+              <span class="trust-label">Active Users</span>
+            </div>
+            <div class="trust-item">
+              <span class="trust-number">100%</span>
+              <span class="trust-label">Satisfied</span>
+            </div>
+            <div class="trust-item">
+              <span class="trust-number">24/7</span>
+              <span class="trust-label">Support</span>
+            </div>
+          </div>
+          
+          <ul class="features">
+            <li>Instant automated activation</li>
+            <li>3000-5000 XP per hour per instance</li>
+            <li>Asia + Europe instances included</li>
+            <li>Randomized actions for safety</li>
+            <li>Regular updates and improvements</li>
+            <li>Direct developer support</li>
+            <li>Download link immediately after payment</li>
+          </ul>
+          
+          <div class="info-box">
+            <div class="info-box-title">
+              <span>💡</span> What happens after payment?
+            </div>
+            <div class="info-box-text">
+              After completing your PayPal payment, you'll be instantly redirected to a success page with your download link. Your license will be automatically activated and you can start using RXZBot immediately!
+            </div>
+          </div>
+        </div>
+        
+        <!-- Right Column - Form -->
+        <div class="form-section">
+          <h2>Complete Your Purchase</h2>
+          
+          <form method="post">
+            <div class="form-group">
+              <label for="username">Wolvesville Username</label>
+              <input 
+                type="text" 
+                id="username" 
+                name="username" 
+                placeholder="Enter your username" 
+                required 
+                autofocus
+                autocomplete="off"
+              />
+            </div>
+            
+            <button type="submit" class="submit-btn">
+              Proceed to PayPal Checkout →
+            </button>
+          </form>
+          
+          <div class="security-section">
+            <div class="security-badges">
+              <div class="security-badge">
+                <span class="security-badge-icon">🔒</span>
+                Secure Payment
+              </div>
+              <div class="security-badge">
+                <span class="security-badge-icon">⚡</span>
+                Instant Access
+              </div>
+              <div class="security-badge">
+                <span class="security-badge-icon">✓</span>
+                SSL Protected
+              </div>
+            </div>
+          </div>
+          
+          <div class="info-box" style="margin-top:20px">
+            <div class="info-box-title">
+              <span>🛡️</span> Safe & Secure
+            </div>
+            <div class="info-box-text">
+              Your payment is processed securely through PayPal. We never store your payment information. All transactions are encrypted and protected.
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+
+  <script>
+    // Particles animation
+    function createParticles(){
+      const container = document.getElementById('particles');
+      for(let i=0;i<40;i++){
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.style.left = Math.random()*100 + '%';
+        p.style.width = p.style.height = Math.random()*4 + 2 + 'px';
+        p.style.animationDelay = Math.random()*10 + 's';
+        container.appendChild(p);
+      }
+    }
+    createParticles();
+    
+    // Focus animation on input
+    const input = document.getElementById('username');
+    input.addEventListener('focus', function(){
+      this.style.transform = 'scale(1.02)';
+    });
+    input.addEventListener('blur', function(){
+      this.style.transform = 'scale(1)';
+    });
+    
+    // Button ripple effect on click
+    const btn = document.querySelector('.submit-btn');
+    btn.addEventListener('click', function(e){
+      if(!input.value.trim()) return;
+      
+      // Add loading state
+      btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:10px">Processing <span style="animation:spin 1s linear infinite;display:inline-block">⚙️</span></span>';
+      btn.style.opacity = '0.8';
+      btn.disabled = true;
+    });
+  </script>
 </body>
 </html>
