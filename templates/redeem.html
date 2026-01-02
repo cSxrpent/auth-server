@@ -127,7 +127,7 @@
         <div class="subtitle">Enter your activation key to unlock RXZBot</div>
       </div>
       
-      <!-- Error Message -->
+      <!-- Error Message (Jinja2 template) -->
       {% if error %}
       <div class="error">❌ {{ error }}</div>
       {% endif %}
@@ -284,12 +284,6 @@
       submitBtn.style.opacity = '0.8';
       submitBtn.disabled = true;
     });
-    
-    // Shake animation on invalid key
-    {% if error %}
-    keyInput.classList.add('shake');
-    setTimeout(() => keyInput.classList.remove('shake'), 500);
-    {% endif %}
   </script>
 </body>
 </html>
