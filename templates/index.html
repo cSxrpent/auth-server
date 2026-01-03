@@ -1163,21 +1163,9 @@
         const data = await res.json();
         
         if(res.ok){
-          // Check if server wants us to redirect
-          if(data.redirect){
-            // Redirect to success page (with bonus message)
-            window.location.href = data.redirect;
-          } else {
-            // Fallback to old inline success display
-            reviewForm.style.display = 'none';
-            reviewSuccess.classList.add('show');
-            reviewSuccess.style.display = 'block';
-            
-            // Reload testimonials
-            setTimeout(() => {
-              loadTestimonials();
-            }, 1000);
-          }
+          const data = await res.json();
+
+          window.location.href = '/testimonial-success';
         } else {
           showMessage(data.error || 'Failed to submit review', 'error');
           submitReviewBtn.classList.remove('loading');
