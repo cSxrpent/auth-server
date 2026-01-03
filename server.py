@@ -1396,7 +1396,7 @@ def api_submit_testimonial():
         "comment": comment,
         "anonymous": anonymous,
         "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d"),
-        "approved": False  # Auto-approve (change to False if you want manual approval)
+        "approved": True  # Auto-approve (change to False if you want manual approval)
     }
     
     testimonials.append(new_testimonial)
