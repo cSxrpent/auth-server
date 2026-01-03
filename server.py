@@ -497,24 +497,169 @@ def save_last_connected(last_conn):
     except Exception as e:
         print(f"⚠ Error saving last_connected: {e}")
 
+def load_testimonials_from_github():
+    """Fetch testimonials.json from GitHub API (no cache). Returns list or None on failure."""
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_TESTIMONIALS_PATH}"
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        
+        if GITHUB_TOKEN:
+            headers["Authorization"] = f"token {GITHUB_TOKEN}"
+        
+        params = {"ref": GITHUB_BRANCH, "t": int(time.time())}
+        
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            content_b64 = data.get("content", "")
+            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
+            testimonials = json.loads(decoded)
+            print(f"✓ Loaded {len(testimonials)} testimonials from GitHub API")
+            return testimonials
+        elif response.status_code == 404:
+            print("ℹ️ testimonials.json not found on GitHub, will create on first save")
+            return []
+        else:
+            print(f"✗ GitHub API fetch failed for testimonials: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"✗ Error fetching testimonials from GitHub API: {e}")
+        return None
+
+def _github_get_testimonials_file():
+    """Return (ok, info). If ok True: info={'content': <python obj list>, 'sha': <sha>}"""
+    if not GITHUB_TOKEN:
+        return False, {"error": "no_github_token"}
+    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_TESTIMONIALS_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    params = {"ref": GITHUB_BRANCH}
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=10)
+        if r.status_code == 200:
+            j = r.json()
+            content_b64 = j.get("content", "")
+            sha = j.get("sha")
+            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
+            try:
+                data = json.loads(decoded)
+            except Exception as e:
+                return False, {"error": f"invalid_json_in_github:{e}"}
+            return True, {"content": data, "sha": sha}
+        elif r.status_code == 404:
+            return True, {"content": [], "sha": None}
+        else:
+            return False, {"error": f"gh_get_status_{r.status_code}", "detail": r.text}
+    except Exception as e:
+        return False, {"error": f"gh_get_exception:{e}"}
+
+def _github_put_testimonials_file(new_testimonials, sha=None):
+    """Create/Update testimonials.json on GitHub. Return (ok, detail)."""
+    if not GITHUB_TOKEN:
+        return False, {"error": "no_github_token"}
+    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_TESTIMONIALS_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    content_b64 = base64.b64encode(json.dumps(new_testimonials, ensure_ascii=False, indent=2).encode("utf-8")).decode("utf-8")
+    payload = {
+        "message": f"Update testimonials.json via server at {(datetime.utcnow() + CET_OFFSET).isoformat()}Z",
+        "content": content_b64,
+        "branch": GITHUB_BRANCH
+    }
+    if sha:
+        payload["sha"] = sha
+    try:
+        r = requests.put(url, headers=headers, json=payload, timeout=15)
+        if r.status_code in (200, 201):
+            return True, r.json()
+        else:
+            return False, {"error": f"gh_put_status_{r.status_code}", "detail": r.text}
+    except Exception as e:
+        return False, {"error": f"gh_put_exception:{e}"}
+
 def load_testimonials():
-    """Load testimonials from local file."""
+    """Try GitHub first, then fallback to local testimonials.json. Overwrite local if different from GitHub."""
+    print("🔍 Loading testimonials...")
+    
+    # Try GitHub API first
+    testimonials = load_testimonials_from_github()
+    if testimonials is not None:
+        print(f"✅ Loaded testimonials from GitHub: {len(testimonials)} testimonials")
+        
+        # Check if local file exists and differs
+        try:
+            with open(TESTIMONIALS_FILE, "r", encoding="utf-8") as f:
+                local_testimonials = json.load(f)
+            
+            # Normalize for comparison (sort by id)
+            def normalize(t_list):
+                return sorted(t_list, key=lambda x: x.get('id', '').lower())
+            
+            github_normalized = normalize(testimonials)
+            local_normalized = normalize(local_testimonials)
+            
+            if github_normalized != local_normalized:
+                print("🔄 Local testimonials file differs from GitHub, overwriting local with GitHub data")
+                with open(TESTIMONIALS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(testimonials, f, indent=2, ensure_ascii=False)
+                log_event("Overwrote local testimonials.json with GitHub data")
+            else:
+                print("✅ Local testimonials file matches GitHub")
+        
+        except FileNotFoundError:
+            print("📝 Local testimonials.json not found, creating it with GitHub data")
+            with open(TESTIMONIALS_FILE, "w", encoding="utf-8") as f:
+                json.dump(testimonials, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"⚠️ Error checking/comparing local testimonials file: {e}")
+        
+        return testimonials
+    
+    # Fallback to local file
+    print("⚠️ GitHub failed for testimonials, falling back to local file")
     try:
         with open(TESTIMONIALS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            local_testimonials = json.load(f)
+            print(f"✅ Loaded testimonials from local: {len(local_testimonials)} testimonials")
+            return local_testimonials
     except FileNotFoundError:
+        print("⚠ Local testimonials.json not found")
         return []
     except Exception as e:
-        print(f"⚠ Error loading testimonials: {e}")
+        print(f"⚠ Error loading local testimonials.json: {e}")
         return []
 
 def save_testimonials(testimonials):
-    """Save testimonials to local file."""
+    """
+    Write local file then try to push to GitHub if token is present.
+    Returns dict describing results.
+    """
+    result = {"saved_local": False, "github": None}
+    # write local
     try:
         with open(TESTIMONIALS_FILE, "w", encoding="utf-8") as f:
             json.dump(testimonials, f, indent=2, ensure_ascii=False)
+        result["saved_local"] = True
+        print(f"✅ Saved {len(testimonials)} testimonials to local file")
     except Exception as e:
-        print(f"⚠ Error saving testimonials: {e}")
+        result["saved_local"] = False
+        result["local_error"] = str(e)
+        print(f"❌ Error saving local testimonials: {e}")
+    
+    # try pushing to GitHub
+    if GITHUB_TOKEN:
+        ok, info = _github_get_testimonials_file()
+        sha = info.get("sha") if ok else None
+        ok2, put_res = _github_put_testimonials_file(testimonials, sha=sha)
+        result["github"] = {"ok": ok2, "detail": put_res}
+        if ok2:
+            print(f"✅ Pushed {len(testimonials)} testimonials to GitHub")
+        else:
+            print(f"❌ Failed to push testimonials to GitHub: {put_res}")
+    else:
+        result["github"] = {"ok": False, "detail": "no_github_token"}
+        print("⚠️ No GitHub token, testimonials only saved locally")
+    
+    return result
         
 # -----------------------
 # Key redemption routes
@@ -551,20 +696,33 @@ def redeem():
         days = key["duration"]
         users = load_users()
         existing = find_user(users, username)
-        
+
+        today = datetime.now()
+
         if existing:
-            # Extend existing user
-            current_expires = datetime.strptime(existing["expires"], "%Y-%m-%d")
-            if current_expires < datetime.now():
-                base_date = datetime.now()
-            else:
-                base_date = current_expires
-            new_expires = base_date + timedelta(days=days)
-            existing["expires"] = new_expires.strftime("%Y-%m-%d")
+            # User exists - check if license is still valid or expired
+            try:
+                current_expires = datetime.strptime(existing["expires"], "%Y-%m-%d")
+                
+                # If license is still valid, extend from expiry date
+                if current_expires > today:
+                    new_expires = current_expires + timedelta(days=days)
+                    log_event(f"Key redemption - Extended valid license: {username} from {existing['expires']} to {new_expires.strftime('%Y-%m-%d')}")
+                else:
+                    # License expired, start fresh from today
+                    new_expires = today + timedelta(days=days)
+                    log_event(f"Key redemption - Renewed expired license: {username} from today to {new_expires.strftime('%Y-%m-%d')}")
+                
+                existing["expires"] = new_expires.strftime("%Y-%m-%d")
+            except Exception as e:
+                log_event(f"Key redemption - Error parsing date for {username}, starting fresh: {e}", level="warn")
+                new_expires = today + timedelta(days=days)
+                existing["expires"] = new_expires.strftime("%Y-%m-%d")
         else:
-            # Create new user
-            expires = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+            # New user - create from today
+            expires = (today + timedelta(days=days)).strftime("%Y-%m-%d")
             users.append({"username": username, "expires": expires})
+            log_event(f"Key redemption - New user created: {username} expires {expires}")
         
         # Mark key as used
         key["used"] = True
@@ -584,6 +742,12 @@ def redeem():
     
     return render_template("redeem.html", error=None)
 
+@app.route("/testimonial-success")
+def testimonial_success():
+    """Success page after submitting a testimonial"""
+    return render_template("testimonial_success.html")
+
+    
 # -----------------------
 # Admin API for keys
 # -----------------------
@@ -837,19 +1001,37 @@ def activate_license(username, item):
         else:
             users.append({"username": username, "expires": expires})
     else:
-        # Normal subscription logic
+        # Normal subscription logic with PROPER RENEWAL
+        today = datetime.now()
+        
         if existing:
-            # Extend existing
-            current_expires = datetime.strptime(existing["expires"], "%Y-%m-%d")
-            new_expires = current_expires + timedelta(days=days)
-            existing["expires"] = new_expires.strftime("%Y-%m-%d")
+            # User exists - check if license is still valid or expired
+            try:
+                current_expires = datetime.strptime(existing["expires"], "%Y-%m-%d")
+                
+                # If license is still valid, extend from expiry date
+                if current_expires > today:
+                    new_expires = current_expires + timedelta(days=days)
+                    log_event(f"Extended valid license: {username} from {existing['expires']} to {new_expires.strftime('%Y-%m-%d')}")
+                else:
+                    # License expired, start fresh from today
+                    new_expires = today + timedelta(days=days)
+                    log_event(f"Renewed expired license: {username} from today to {new_expires.strftime('%Y-%m-%d')}")
+                
+                existing["expires"] = new_expires.strftime("%Y-%m-%d")
+            except Exception as e:
+                # If date parsing fails, start fresh
+                log_event(f"Error parsing date for {username}, starting fresh: {e}", level="warn")
+                new_expires = today + timedelta(days=days)
+                existing["expires"] = new_expires.strftime("%Y-%m-%d")
         else:
-            # New user
-            expires = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+            # New user - create from today
+            expires = (today + timedelta(days=days)).strftime("%Y-%m-%d")
             users.append({"username": username, "expires": expires})
+            log_event(f"New user created: {username} expires {expires}")
     
     save_users(users)
-    log_event(f"payment activated: {username} for {item}")
+    log_event(f"License activated: {username} for {item} ({days} days)")
 
 
 def verify_download_token(token):
@@ -1286,11 +1468,17 @@ def api_stats():
 
 @app.route("/api/testimonials", methods=["GET"])
 def api_get_testimonials():
-    """Get all approved testimonials (public endpoint)"""
+    """Get testimonials - public gets approved only, logged in gets all"""
     testimonials = load_testimonials()
-    # Filter only approved testimonials for public view
+    
+    # If admin is logged in, return all testimonials (including pending)
+    if session.get("logged_in"):
+        # Sort by approved status (pending first) then by date
+        testimonials.sort(key=lambda x: (x.get('approved', True), x.get('date', '')), reverse=True)
+        return jsonify(testimonials)
+    
+    # Public endpoint - only return approved testimonials
     approved = [t for t in testimonials if t.get('approved', True) == True]
-    # Sort by date, newest first
     approved.sort(key=lambda x: x.get('date', ''), reverse=True)
     return jsonify(approved)
 
@@ -1353,7 +1541,7 @@ def api_delete_testimonial():
 
 @app.route("/api/testimonials/submit", methods=["POST"])
 def api_submit_testimonial():
-    """Public endpoint for users to submit testimonials (pending approval)"""
+    """Public endpoint for users to submit testimonials (pending approval) + 3 days bonus"""
     body = request.get_json() or {}
     username = (body.get("username") or "").strip()
     rating = body.get("rating", 5)
@@ -1372,7 +1560,7 @@ def api_submit_testimonial():
     if not isinstance(rating, int) or rating < 1 or rating > 5:
         return jsonify({"error": "Invalid rating"}), 400
     
-    # Check if user exists (optional - you can remove this if you want anyone to review)
+    # Check if user exists
     users = load_users()
     user = find_user(users, username)
     if not user:
@@ -1380,7 +1568,7 @@ def api_submit_testimonial():
     
     testimonials = load_testimonials()
     
-    # Check if user already submitted a review
+    # Check if user already submitted a review (ONE REVIEW PER USER MAX)
     existing = next((t for t in testimonials if t.get('username', '').lower() == username.lower()), None)
     if existing:
         return jsonify({"error": "You have already submitted a review. Thank you!"}), 400
@@ -1396,17 +1584,41 @@ def api_submit_testimonial():
         "comment": comment,
         "anonymous": anonymous,
         "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d"),
-        "approved": True  # Auto-approve (change to False if you want manual approval)
+        "approved": False  # PENDING - admin must approve
     }
     
     testimonials.append(new_testimonial)
     save_testimonials(testimonials)
     
+    # 🎁 BONUS: Add 3 days to user's license as a thank you!
+    try:
+        today = datetime.now()
+        current_expires = datetime.strptime(user["expires"], "%Y-%m-%d")
+        
+        # If license is still valid, extend from expiry date
+        if current_expires > today:
+            new_expires = current_expires + timedelta(days=3)
+        else:
+            # If expired, add 3 days from today
+            new_expires = today + timedelta(days=3)
+        
+        user["expires"] = new_expires.strftime("%Y-%m-%d")
+        save_users(users)
+        
+        log_event(f"testimonial bonus: {username} got +3 days (new expiry: {user['expires']})")
+    except Exception as e:
+        log_event(f"Error adding bonus to {username}: {e}", level="error")
+    
     # Get client IP
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-    log_event(f"testimonial submitted: {username} ({rating}★) from {ip}")
+    log_event(f"testimonial submitted (pending): {username} ({rating}★) from {ip}")
     
-    return jsonify({"message": "Thank you! Your review has been submitted."}), 200
+    return jsonify({
+        "success": True,
+        "message": "Thank you! Your review has been submitted.",
+        "bonus": "+3 days added to your license!",
+        "redirect": "/testimonial-success"
+    }), 200
 
 @app.route("/api/testimonials/approve", methods=["POST"])
 @login_required

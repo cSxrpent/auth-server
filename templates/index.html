@@ -258,6 +258,26 @@
     .cta-btn{display:inline-flex;align-items:center;gap:10px;background:linear-gradient(90deg,var(--gold),#ffed4e);color:#000;text-decoration:none;padding:18px 40px;border-radius:12px;font-weight:700;font-size:1.2rem;transition:all 0.3s;box-shadow:0 10px 40px rgba(255,215,0,0.4)}
     .cta-btn:hover{transform:translateY(-3px) scale(1.05);box-shadow:0 15px 60px rgba(255,215,0,0.6)}
     
+    /* XP Rate Buttons */
+    .xp-rate-buttons{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+    .xp-rate-btn{background:linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));border:2px solid rgba(255,255,255,0.1);padding:15px 10px;border-radius:12px;color:var(--muted);cursor:pointer;transition:all 0.3s;font-size:0.85rem;text-align:center;line-height:1.4}
+    .xp-rate-btn:hover{background:rgba(255,255,255,0.08);border-color:rgba(0,212,255,0.3);transform:translateY(-2px)}
+    .xp-rate-btn.active{background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(123,75,255,0.1));border-color:var(--accent);color:#fff;box-shadow:0 0 20px rgba(0,212,255,0.3)}
+    .xp-rate-btn strong{display:block;margin-top:5px;font-size:1.1rem;color:var(--accent)}
+
+    /* Slider */
+    .slider{-webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:5px;background:linear-gradient(90deg,rgba(255,255,255,0.1),rgba(0,212,255,0.3));outline:none;transition:all 0.3s}
+    .slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7b4bff);cursor:pointer;box-shadow:0 4px 15px rgba(0,212,255,0.4);transition:all 0.3s}
+    .slider::-webkit-slider-thumb:hover{transform:scale(1.2);box-shadow:0 6px 25px rgba(0,212,255,0.6)}
+    .slider::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7b4bff);cursor:pointer;border:none;box-shadow:0 4px 15px rgba(0,212,255,0.4);transition:all 0.3s}
+    .slider::-moz-range-thumb:hover{transform:scale(1.2);box-shadow:0 6px 25px rgba(0,212,255,0.6)}
+
+    /* Checkbox for calculator */
+    .checkbox-label-calc{display:flex;align-items:center;gap:12px;cursor:pointer;color:var(--muted);font-size:1rem;padding:15px;background:linear-gradient(135deg,rgba(255,215,0,0.05),rgba(255,237,78,0.02));border-radius:12px;border:2px solid rgba(255,215,0,0.2);transition:all 0.3s;font-weight:600}
+    .checkbox-label-calc:hover{background:rgba(255,215,0,0.08);border-color:var(--gold);color:#fff}
+    .checkbox-label-calc input[type="checkbox"]{width:22px;height:22px;cursor:pointer;accent-color:var(--gold)}
+    .checkbox-label-calc input[type="checkbox"]:checked + span{color:var(--gold)}
+
     /* Responsive */
     @media(max-width:768px){
       .calculator-inputs{grid-template-columns:1fr}
@@ -359,53 +379,81 @@
       
       <div class="calculator-container">
         <div class="calculator-inputs">
-          <div class="input-group">
-            <label for="currentLevel">
-              <span class="input-icon">📊</span>
-              <span>Current Level</span>
-            </label>
-            <input 
-              type="number" 
-              id="currentLevel" 
-              min="1" 
-              max="100" 
-              value="1" 
-              placeholder="1"
-            />
-          </div>
-          
-          <div class="input-group">
-            <label for="targetLevel">
-              <span class="input-icon">🎯</span>
-              <span>Target Level</span>
-            </label>
-            <input 
-              type="number" 
-              id="targetLevel" 
-              min="1" 
-              max="100" 
-              value="50" 
-              placeholder="50"
-            />
-          </div>
-          
-          <div class="input-group">
-            <label for="xpPerHour">
-              <span class="input-icon">⚡</span>
-              <span>RXZBot XP/Hour</span>
-            </label>
-            <select id="xpPerHour">
-              <option value="3000">Conservative (3000 XP/h)</option>
-              <option value="4000" selected>Average (4000 XP/h)</option>
-              <option value="5000">Optimal (5000 XP/h)</option>
-            </select>
-          </div>
-          
-          <button class="calculate-btn" id="calculateBtn">
-            <span>Calculate Savings</span>
-            <span class="calc-icon">🚀</span>
-          </button>
-        </div>
+  <div class="input-group">
+    <label for="currentLevel">
+      <span class="input-icon">📊</span>
+      <span>Current Level</span>
+    </label>
+    <input 
+      type="number" 
+      id="currentLevel" 
+      min="1" 
+      max="10000" 
+      value="1" 
+      placeholder="1"
+    />
+  </div>
+  
+  <div class="input-group">
+    <label for="targetLevel">
+      <span class="input-icon">🎯</span>
+      <span>Target Level</span>
+    </label>
+    <input 
+      type="number" 
+      id="targetLevel" 
+      min="1" 
+      max="10000" 
+      value="50" 
+      placeholder="50"
+    />
+  </div>
+  
+  <div class="input-group" style="grid-column: 1/-1;">
+    <label>
+      <span class="input-icon">⚡</span>
+      <span>RXZBot XP Rate</span>
+    </label>
+    <div class="xp-rate-buttons">
+      <button type="button" class="xp-rate-btn" data-xp="3000">
+        Conservative<br><strong>3000 XP/h</strong>
+      </button>
+      <button type="button" class="xp-rate-btn active" data-xp="4000">
+        Average<br><strong>4000 XP/h</strong>
+      </button>
+      <button type="button" class="xp-rate-btn" data-xp="5000">
+        Optimal<br><strong>5000 XP/h</strong>
+      </button>
+    </div>
+  </div>
+  
+  <div class="input-group" style="grid-column: 1/-1;">
+    <label>
+      <span class="input-icon">⏰</span>
+      <span>Hours Per Day: <strong id="hoursPerDayDisplay">8</strong> hours</span>
+    </label>
+    <input 
+      type="range" 
+      id="hoursPerDay" 
+      min="1" 
+      max="24" 
+      value="8" 
+      class="slider"
+    />
+  </div>
+  
+  <div class="input-group" style="grid-column: 1/-1;">
+    <label class="checkbox-label-calc">
+      <input type="checkbox" id="doubleInstance" />
+      <span>🔥 Use 2 Instances (Double XP)</span>
+    </label>
+  </div>
+  
+  <button class="calculate-btn" id="calculateBtn">
+    <span>Calculate Savings</span>
+    <span class="calc-icon">🚀</span>
+  </button>
+</div>
         
         <div class="calculator-results" id="calculatorResults">
           <div class="results-header">
@@ -1115,15 +1163,21 @@
         const data = await res.json();
         
         if(res.ok){
-          // Show success state
-          reviewForm.style.display = 'none';
-          reviewSuccess.classList.add('show');
-          reviewSuccess.style.display = 'block';
-          
-          // Reload testimonials
-          setTimeout(() => {
-            loadTestimonials();
-          }, 1000);
+          // Check if server wants us to redirect
+          if(data.redirect){
+            // Redirect to success page (with bonus message)
+            window.location.href = data.redirect;
+          } else {
+            // Fallback to old inline success display
+            reviewForm.style.display = 'none';
+            reviewSuccess.classList.add('show');
+            reviewSuccess.style.display = 'block';
+            
+            // Reload testimonials
+            setTimeout(() => {
+              loadTestimonials();
+            }, 1000);
+          }
         } else {
           showMessage(data.error || 'Failed to submit review', 'error');
           submitReviewBtn.classList.remove('loading');
@@ -1162,18 +1216,40 @@
       reviewMessage.style.display = 'none';
     }
 
-    // ROI Calculator - VALEURS RÉELLES WOLVESVILLE
+    // ROI Calculator - ENHANCED VERSION
     const calculateBtn = document.getElementById('calculateBtn');
     const calculatorResults = document.getElementById('calculatorResults');
-    
+    const hoursPerDaySlider = document.getElementById('hoursPerDay');
+    const hoursPerDayDisplay = document.getElementById('hoursPerDayDisplay');
+
     // XP requirements per level - FIXE à 2000 XP par niveau
     const XP_PER_LEVEL = 2000;
-    
+
+    // Update hours display when slider moves
+    hoursPerDaySlider.addEventListener('input', function(){
+      hoursPerDayDisplay.textContent = this.value;
+    });
+
+    // XP Rate buttons selection
+    let selectedXPRate = 4000; // Default
+    document.querySelectorAll('.xp-rate-btn').forEach(btn => {
+      btn.addEventListener('click', function(){
+        document.querySelectorAll('.xp-rate-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        selectedXPRate = parseInt(this.dataset.xp);
+        
+        // Auto-recalculate if results are shown
+        if(calculatorResults.classList.contains('show')){
+          calculateBtn.click();
+        }
+      });
+    });
+
     function getTotalXPNeeded(currentLevel, targetLevel){
       const levelsToGain = targetLevel - currentLevel;
       return levelsToGain * XP_PER_LEVEL;
     }
-    
+
     function formatTime(hours){
       if(hours < 1) return `${Math.round(hours * 60)} minutes`;
       if(hours < 24) return `${Math.round(hours * 10) / 10} hours`;
@@ -1182,7 +1258,7 @@
       if(remainingHours === 0) return `${days} day${days > 1 ? 's' : ''}`;
       return `${days} day${days > 1 ? 's' : ''} ${remainingHours}h`;
     }
-    
+
     function getFunComparison(hours){
       const comparisons = [
         { threshold: 1.5, text: "That's a movie! 🎬" },
@@ -1204,16 +1280,17 @@
       }
       return "Every minute saved counts! ⏱️";
     }
-    
+
     function getEfficiencyPercentage(manualHours, botHours){
       const efficiency = ((manualHours - botHours) / manualHours) * 100;
       return Math.round(efficiency);
     }
-    
+
     calculateBtn.addEventListener('click', () => {
       const currentLevel = parseInt(document.getElementById('currentLevel').value);
       const targetLevel = parseInt(document.getElementById('targetLevel').value);
-      const xpPerHour = parseInt(document.getElementById('xpPerHour').value);
+      const hoursPerDay = parseInt(hoursPerDaySlider.value);
+      const doubleInstance = document.getElementById('doubleInstance').checked;
       
       // Validation
       if(!currentLevel || !targetLevel){
@@ -1226,8 +1303,8 @@
         return;
       }
       
-      if(currentLevel < 1 || targetLevel > 100){
-        alert('Levels must be between 1 and 100');
+      if(currentLevel < 1 || targetLevel > 10000){
+        alert('Levels must be between 1 and 10000');
         return;
       }
       
@@ -1235,26 +1312,35 @@
       const totalXP = getTotalXPNeeded(currentLevel, targetLevel);
       const manualXPPerHour = 1300; // Manuel grinding réel
       
+      // Apply double instance multiplier if checked
+      let effectiveXPRate = selectedXPRate;
+      if(doubleInstance){
+        effectiveXPRate = selectedXPRate * 2;
+      }
+      
       const manualHours = totalXP / manualXPPerHour;
-      const botHours = totalXP / xpPerHour;
+      const botHours = totalXP / effectiveXPRate;
       const savedHours = manualHours - botHours;
       const efficiency = getEfficiencyPercentage(manualHours, botHours);
       
-      // Calculate days (assuming 8 hours of play per day)
-      const manualDays = Math.ceil(manualHours / 8);
-      const botDays = Math.ceil(botHours / 8);
+      // Calculate days based on user's hours per day
+      const manualDays = Math.ceil(manualHours / hoursPerDay);
+      const botDays = Math.ceil(botHours / hoursPerDay);
       
       // Update UI
       document.getElementById('manualTime').textContent = formatTime(manualHours);
       document.getElementById('botTime').textContent = formatTime(botHours);
-      document.getElementById('botDesc').textContent = `${xpPerHour.toLocaleString()} XP/hour (${efficiency}% faster!)`;
+      
+      const instancesText = doubleInstance ? ' (2 instances!)' : '';
+      document.getElementById('botDesc').textContent = `${effectiveXPRate.toLocaleString()} XP/hour${instancesText} (${efficiency}% faster!)`;
+      
       document.getElementById('timeSaved').textContent = formatTime(savedHours);
       document.getElementById('savingsFun').textContent = getFunComparison(savedHours);
       document.getElementById('totalXP').textContent = totalXP.toLocaleString() + ' XP';
       
-      // Days needed with 8h/day
+      // Days needed with custom hours/day
       const daysText = botDays === 1 ? '1 day' : `${botDays} days`;
-      document.getElementById('daysNeeded').textContent = `${daysText} (8h/day)`;
+      document.getElementById('daysNeeded').textContent = `${daysText} (${hoursPerDay}h/day)`;
       
       // Show results with animation
       calculatorResults.classList.add('show');
@@ -1274,33 +1360,49 @@
       console.log({
         levels: `${currentLevel} → ${targetLevel}`,
         totalXP,
+        xpRate: effectiveXPRate,
+        doubleInstance,
+        hoursPerDay,
         manualHours: Math.round(manualHours * 10) / 10,
         botHours: Math.round(botHours * 10) / 10,
         savedHours: Math.round(savedHours * 10) / 10,
         efficiency: efficiency + '%'
       });
     });
-    
+
     // Auto-calculate on input change
-    ['currentLevel', 'targetLevel', 'xpPerHour'].forEach(id => {
+    ['currentLevel', 'targetLevel'].forEach(id => {
       document.getElementById(id).addEventListener('change', () => {
         if(calculatorResults.classList.contains('show')){
           calculateBtn.click();
         }
       });
     });
-    
+
+    // Auto-recalculate when slider or checkbox changes
+    hoursPerDaySlider.addEventListener('change', () => {
+      if(calculatorResults.classList.contains('show')){
+        calculateBtn.click();
+      }
+    });
+
+    document.getElementById('doubleInstance').addEventListener('change', () => {
+      if(calculatorResults.classList.contains('show')){
+        calculateBtn.click();
+      }
+    });
+
     // Validation en temps réel
     document.getElementById('currentLevel').addEventListener('input', function(){
       const val = parseInt(this.value);
       if(val < 1) this.value = 1;
-      if(val > 100) this.value = 100;
+      if(val > 10000) this.value = 10000;
     });
-    
+
     document.getElementById('targetLevel').addEventListener('input', function(){
       const val = parseInt(this.value);
       if(val < 1) this.value = 1;
-      if(val > 100) this.value = 100;
+      if(val > 10000) this.value = 10000;
     });
     
     let autoSlideInterval;

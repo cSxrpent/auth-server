@@ -80,6 +80,13 @@
     .key-status-used{color:var(--muted);font-style:italic}
     .copy-btn{background:linear-gradient(90deg,var(--accent),#7b4bff);border:none;padding:6px 12px;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.3s}
     .copy-btn:hover{transform:scale(1.05);box-shadow:0 0 10px rgba(0,212,255,0.3)}
+    /* Pending testimonials button */
+    .btn-pending{background:linear-gradient(90deg,rgba(154,164,178,0.3),rgba(154,164,178,0.2));border:2px solid rgba(154,164,178,0.3);padding:10px 16px;border-radius:12px;color:var(--muted);font-weight:600;cursor:pointer;transition:all 0.3s;display:flex;align-items:center;gap:8px}
+    .btn-pending.has-pending{background:linear-gradient(90deg,var(--success),#7bed9f);border-color:var(--success);color:#fff;animation:pulse-pending 2s infinite}
+    .btn-pending:hover{transform:scale(1.05)}
+    @keyframes pulse-pending{0%,100%{box-shadow:0 0 10px rgba(46,213,115,0.3)}50%{box-shadow:0 0 25px rgba(46,213,115,0.6)}}
+    #pendingBadge{background:rgba(255,255,255,0.2);padding:4px 10px;border-radius:20px;font-weight:700;font-size:0.9rem}
+    .btn-pending.has-pending #pendingBadge{background:#fff;color:var(--success)}
   </style>
 </head>
 <body>
@@ -90,7 +97,10 @@
         <h1>Admin Panel</h1>
         <div class="small muted">Manage users and subscriptions</div>
       </div>
-      <div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button id="pendingTestimonialsBtn" class="btn-pending" style="display:none" onclick="switchSection('testimonials')">
+          <span id="pendingBadge">0</span> Pending Reviews
+        </button>
         <a class="btn-logout" href="/logout">Logout</a>
       </div>
     </header>
@@ -827,7 +837,8 @@
         if(!res.ok){ toast('Error loading testimonials'); return; }
         const testimonials = await res.json();
         renderTestimonials(testimonials);
-      }catch(e){ 
+        updatePendingBadge(testimonials);
+      }catch(e){
         console.error(e);
         toast('Error loading testimonials');
       }
@@ -870,6 +881,22 @@
         `;
         tbody.appendChild(tr);
       });
+    }
+
+    function updatePendingBadge(testimonials){
+      const pending = testimonials.filter(t => !t.approved);
+      const btn = document.getElementById('pendingTestimonialsBtn');
+      const badge = document.getElementById('pendingBadge');
+      
+      if(pending.length > 0){
+        btn.style.display = 'flex';
+        btn.classList.add('has-pending');
+        badge.textContent = pending.length;
+      } else {
+        btn.style.display = 'flex';
+        btn.classList.remove('has-pending');
+        badge.textContent = '0';
+      }
     }
     
     async function approveTestimonial(id){
@@ -959,6 +986,7 @@
     fetchRecent();
     fetchStats();
     loadDebug();
+    fetchTestimonials();
   </script>
 </body>
 </html>
