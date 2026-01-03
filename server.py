@@ -747,7 +747,7 @@ def testimonial_success():
     """Success page after submitting a testimonial"""
     return render_template("testimonial_success.html")
 
-    
+
 # -----------------------
 # Admin API for keys
 # -----------------------
@@ -1474,11 +1474,11 @@ def api_get_testimonials():
     # If admin is logged in, return all testimonials (including pending)
     if session.get("logged_in"):
         # Sort by approved status (pending first) then by date
-        testimonials.sort(key=lambda x: (x.get('approved', True), x.get('date', '')), reverse=True)
+        testimonials.sort(key=lambda x: (x.get('approved', False), x.get('date', '')), reverse=True)
         return jsonify(testimonials)
     
     # Public endpoint - only return approved testimonials
-    approved = [t for t in testimonials if t.get('approved', True) == True]
+    approved = [t for t in testimonials if t.get('approved', False) == True]
     approved.sort(key=lambda x: x.get('date', ''), reverse=True)
     return jsonify(approved)
 
