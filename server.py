@@ -45,6 +45,8 @@ PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID")
 PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
 PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
 PAYPAL_TEST_MODE = os.getenv("PAYPAL_TEST_MODE", "false").lower() == "true"  # Skip actual PayPal calls for testing
+TESTIMONIALS_FILE = "testimonials.json"  # testimonials storage
+GITHUB_TESTIMONIALS_PATH = "testimonials.json"  # GitHub path
 
 
 paypalrestsdk.configure({
@@ -495,6 +497,25 @@ def save_last_connected(last_conn):
     except Exception as e:
         print(f"⚠ Error saving last_connected: {e}")
 
+def load_testimonials():
+    """Load testimonials from local file."""
+    try:
+        with open(TESTIMONIALS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        print(f"⚠ Error loading testimonials: {e}")
+        return []
+
+def save_testimonials(testimonials):
+    """Save testimonials to local file."""
+    try:
+        with open(TESTIMONIALS_FILE, "w", encoding="utf-8") as f:
+            json.dump(testimonials, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"⚠ Error saving testimonials: {e}")
+        
 # -----------------------
 # Key redemption routes
 # -----------------------
@@ -1258,6 +1279,75 @@ def api_stats():
     stats = load_stats()
     sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
     return jsonify(sorted_stats)
+
+    # -----------------------
+# Testimonials API
+# -----------------------
+
+@app.route("/api/testimonials", methods=["GET"])
+def api_get_testimonials():
+    """Get all testimonials (public endpoint)"""
+    testimonials = load_testimonials()
+    # Sort by date, newest first
+    testimonials.sort(key=lambda x: x.get('date', ''), reverse=True)
+    return jsonify(testimonials)
+
+@app.route("/api/testimonials/add", methods=["POST"])
+@login_required
+def api_add_testimonial():
+    """Add a new testimonial"""
+    body = request.get_json() or {}
+    username = (body.get("username") or "").strip()
+    rating = body.get("rating", 5)
+    comment = (body.get("comment") or "").strip()
+    anonymous = body.get("anonymous", False)
+    
+    if not username:
+        return jsonify({"error": "username missing"}), 400
+    if not comment:
+        return jsonify({"error": "comment missing"}), 400
+    if not isinstance(rating, int) or rating < 1 or rating > 5:
+        return jsonify({"error": "invalid rating (must be 1-5)"}), 400
+    
+    testimonials = load_testimonials()
+    
+    # Generate unique ID
+    import uuid
+    testimonial_id = str(uuid.uuid4())[:8]
+    
+    new_testimonial = {
+        "id": testimonial_id,
+        "username": username,
+        "rating": rating,
+        "comment": comment,
+        "anonymous": anonymous,
+        "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d")
+    }
+    
+    testimonials.append(new_testimonial)
+    save_testimonials(testimonials)
+    
+    log_event(f"testimonial added: {username} ({rating}★)")
+    
+    return jsonify({"message": "ok", "testimonial": new_testimonial}), 200
+
+@app.route("/api/testimonials/delete", methods=["POST"])
+@login_required
+def api_delete_testimonial():
+    """Delete a testimonial"""
+    body = request.get_json() or {}
+    testimonial_id = (body.get("id") or "").strip()
+    
+    if not testimonial_id:
+        return jsonify({"error": "id missing"}), 400
+    
+    testimonials = load_testimonials()
+    testimonials = [t for t in testimonials if t.get("id") != testimonial_id]
+    save_testimonials(testimonials)
+    
+    log_event(f"testimonial deleted: {testimonial_id}")
+    
+    return jsonify({"message": "deleted"}), 200
 
 # Start background ping if configured
 if PING_ADMIN_ENABLED:

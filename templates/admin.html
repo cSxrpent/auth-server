@@ -100,6 +100,7 @@
       <button class="nav-btn" data-section="users">👥 Users</button>
       <button class="nav-btn" data-section="keys">🎁 Keys</button>
       <button class="nav-btn" data-section="connectivity">🌐 Connectivity</button>
+      <button class="nav-btn" data-section="testimonials">⭐ Testimonials</button>
       <button class="nav-btn" data-section="stats">📊 Stats</button>
       <button class="nav-btn" data-section="debug">🔧 Debug</button>
     </nav>
@@ -277,6 +278,53 @@
       </div>
     </div>
 
+    <!-- Testimonials Section -->
+    <div id="testimonials" class="section">
+      <div class="card">
+        <div class="grid">
+          <div class="list">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+              <div style="font-weight:700;font-size:1.2rem">⭐ Testimonials</div>
+              <div class="pill" id="testimonialsCount">0 reviews</div>
+            </div>
+            <table id="testimonialsTable">
+              <thead>
+                <tr><th>User</th><th>Rating</th><th>Comment</th><th>Date</th><th>Actions</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <aside style="padding:16px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent)">
+            <div style="font-weight:700;margin-bottom:12px;font-size:1.1rem">Add Testimonial</div>
+            <div class="small muted" style="margin-bottom:16px">Create a new review</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <label style="color:var(--muted);font-size:13px">Username</label>
+              <input id="testimonialUsername" placeholder="Player username" />
+              
+              <label style="color:var(--muted);font-size:13px">Rating</label>
+              <select id="testimonialRating">
+                <option value="5" selected>⭐⭐⭐⭐⭐ (5 stars)</option>
+                <option value="4">⭐⭐⭐⭐☆ (4 stars)</option>
+                <option value="3">⭐⭐⭐☆☆ (3 stars)</option>
+                <option value="2">⭐⭐☆☆☆ (2 stars)</option>
+                <option value="1">⭐☆☆☆☆ (1 star)</option>
+              </select>
+              
+              <label style="color:var(--muted);font-size:13px">Comment</label>
+              <textarea id="testimonialComment" placeholder="Review text..." style="padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:linear-gradient(90deg,var(--glass),rgba(255,255,255,0.01));color:inherit;font-size:14px;font-family:inherit;min-height:100px;resize:vertical"></textarea>
+              
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;color:var(--muted);font-size:14px;margin-top:5px">
+                <input type="checkbox" id="testimonialAnonymous" style="width:auto;cursor:pointer" />
+                <span>Anonymous (hide username)</span>
+              </label>
+              
+              <button class="primary" id="addTestimonialBtn" style="background:linear-gradient(90deg,var(--gold),#ffed4e);color:#000">✨ Add Review</button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
     <!-- Debug Section -->
     <div id="debug" class="section">
       <div class="card">
@@ -342,9 +390,11 @@
       document.getElementById(section).classList.add('active');
       document.querySelector(`[data-section="${section}"]`).classList.add('active');
       
-      // Load data when switching to keys section
+      // Load data when switching to specific sections
       if(section === 'keys') {
         fetchKeys();
+      } else if(section === 'testimonials') {
+        fetchTestimonials();
       }
     }
 
@@ -761,6 +811,112 @@
       } else {
         const j = await res.json().catch(()=>({}));
         toast('Error: ' + (j.error || res.status));
+      }
+    }
+
+    // Testimonials management
+    const testimonialsApi = {
+      list: '/api/testimonials',
+      add: '/api/testimonials/add',
+      delete: '/api/testimonials/delete'
+    };
+    
+    async function fetchTestimonials(){
+      try{
+        const res = await fetch(testimonialsApi.list, {credentials:'same-origin'});
+        if(!res.ok){ toast('Error loading testimonials'); return; }
+        const testimonials = await res.json();
+        renderTestimonials(testimonials);
+      }catch(e){ 
+        console.error(e);
+        toast('Error loading testimonials');
+      }
+    }
+    
+    function renderTestimonials(testimonials){
+      const tbody = document.querySelector('#testimonialsTable tbody');
+      tbody.innerHTML = '';
+      document.getElementById('testimonialsCount').textContent = testimonials.length + ' reviews';
+      
+      if(testimonials.length === 0){
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No testimonials yet</td></tr>';
+        return;
+      }
+      
+      testimonials.forEach(t => {
+        const tr = document.createElement('tr');
+        const stars = '⭐'.repeat(t.rating);
+        const displayName = t.anonymous ? '🕶️ Anonymous' : t.username;
+        const truncatedComment = t.comment.length > 50 ? t.comment.substring(0, 50) + '...' : t.comment;
+        
+        tr.innerHTML = `
+          <td><strong>${escapeHtml(displayName)}</strong></td>
+          <td>${stars}</td>
+          <td class="small muted" title="${escapeHtml(t.comment)}">${escapeHtml(truncatedComment)}</td>
+          <td class="small muted">${t.date}</td>
+          <td class="actions">
+            <button class="del" onclick="deleteTestimonial('${escapeHtml(t.id)}')">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+    
+    document.getElementById('addTestimonialBtn').onclick = async () => {
+      const username = document.getElementById('testimonialUsername').value.trim();
+      const rating = parseInt(document.getElementById('testimonialRating').value);
+      const comment = document.getElementById('testimonialComment').value.trim();
+      const anonymous = document.getElementById('testimonialAnonymous').checked;
+      
+      if(!username){ toast('Username required'); return; }
+      if(!comment){ toast('Comment required'); return; }
+      
+      try{
+        const res = await fetch(testimonialsApi.add, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({username, rating, comment, anonymous}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          toast('✅ Testimonial added');
+          document.getElementById('testimonialUsername').value = '';
+          document.getElementById('testimonialComment').value = '';
+          document.getElementById('testimonialAnonymous').checked = false;
+          document.getElementById('testimonialRating').value = '5';
+          await fetchTestimonials();
+        } else {
+          const j = await res.json().catch(()=>({}));
+          toast('❌ ' + (j.error || 'Error'));
+        }
+      }catch(e){
+        console.error(e);
+        toast('Error adding testimonial');
+      }
+    };
+    
+    async function deleteTestimonial(id){
+      if(!confirm('Delete this testimonial?')) return;
+      
+      try{
+        const res = await fetch(testimonialsApi.delete, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({id}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          toast('Testimonial deleted');
+          await fetchTestimonials();
+        } else {
+          const j = await res.json().catch(()=>({}));
+          toast('❌ ' + (j.error || 'Error'));
+        }
+      }catch(e){
+        console.error(e);
+        toast('Error deleting testimonial');
       }
     }
 

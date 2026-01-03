@@ -102,6 +102,43 @@
     .security-badges{display:flex;gap:15px;justify-content:center;flex-wrap:wrap;margin:20px 0}
     .security-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(46,213,115,0.1);padding:10px 18px;border-radius:20px;border:1px solid var(--success);color:var(--success);font-size:0.9rem;font-weight:600}
     
+    /* Testimonials Section */
+    .testimonials-container{position:relative;margin-top:30px;min-height:280px}
+    .testimonials-slider{display:flex;overflow:hidden;border-radius:16px;position:relative}
+    .testimonial{min-width:100%;padding:40px;background:linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));border-radius:16px;border:1px solid rgba(255,255,255,0.1);transition:all 0.5s ease;opacity:0;transform:translateX(100%);position:absolute;width:100%}
+    .testimonial.active{opacity:1;transform:translateX(0);position:relative}
+    .testimonial.prev{transform:translateX(-100%)}
+    .testimonial-header{display:flex;align-items:center;gap:20px;margin-bottom:20px}
+    .testimonial-avatar{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7b4bff);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 8px 20px rgba(0,212,255,0.3)}
+    .testimonial-info{flex:1}
+    .testimonial-name{font-size:1.3rem;font-weight:700;color:#fff;margin-bottom:5px}
+    .testimonial-date{font-size:0.85rem;color:var(--muted)}
+    .testimonial-stars{display:flex;gap:4px;margin-bottom:15px}
+    .star{color:var(--gold);font-size:1.2rem}
+    .star.empty{color:rgba(255,215,0,0.2)}
+    .testimonial-text{color:var(--muted);line-height:1.8;font-size:1.05rem;font-style:italic;position:relative;padding-left:30px}
+    .testimonial-text::before{content:'"';position:absolute;left:0;top:-10px;font-size:4rem;color:var(--accent);opacity:0.2;font-family:serif}
+    .testimonial-verified{display:inline-flex;align-items:center;gap:6px;background:rgba(46,213,115,0.1);padding:6px 12px;border-radius:20px;border:1px solid var(--success);color:var(--success);font-size:0.8rem;font-weight:600;margin-top:15px}
+    
+    /* Navigation */
+    .testimonials-dots{display:flex;justify-content:center;gap:10px;margin-top:25px}
+    .dot{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,0.2);cursor:pointer;transition:all 0.3s;border:2px solid transparent}
+    .dot:hover{background:rgba(255,255,255,0.4)}
+    .dot.active{background:var(--accent);box-shadow:0 0 10px rgba(0,212,255,0.5);transform:scale(1.2)}
+    .testimonial-nav{position:absolute;top:50%;transform:translateY(-50%);background:linear-gradient(135deg,var(--accent),#7b4bff);border:none;width:45px;height:45px;border-radius:50%;color:#fff;font-size:1.5rem;cursor:pointer;transition:all 0.3s;display:flex;align-items:center;justify-content:center;z-index:10;opacity:0.8}
+    .testimonial-nav:hover{opacity:1;transform:translateY(-50%) scale(1.1);box-shadow:0 8px 30px rgba(0,212,255,0.5)}
+    .testimonial-prev{left:-20px}
+    .testimonial-next{right:-20px}
+    
+    /* Anonymous badge */
+    .testimonial-anonymous{display:inline-flex;align-items:center;gap:6px;background:rgba(154,164,178,0.1);padding:6px 12px;border-radius:20px;border:1px solid var(--muted);color:var(--muted);font-size:0.8rem;font-weight:600;margin-top:15px}
+    
+    @media(max-width:768px){
+      .testimonial-nav{opacity:1}
+      .testimonial-prev{left:10px}
+      .testimonial-next{right:10px}
+    }
+
     /* Responsive */
     @media(max-width:768px){
       h1{font-size:2.8rem}
@@ -422,6 +459,31 @@
       </div>
     </div>
 
+    <!-- Testimonials Section - AJOUTEZ CECI AVANT LA FAQ -->
+    <div class="card">
+      <h2>⭐ What Our Users Say</h2>
+      <p style="color:var(--muted);margin-bottom:30px;font-size:1.05rem">Real feedback from RXZBot users</p>
+      
+      <div class="testimonials-container">
+        <div class="testimonials-slider" id="testimonialsSlider">
+          <!-- Les témoignages seront chargés ici via JavaScript -->
+          <div class="testimonial-placeholder">
+            <div style="text-align:center;color:var(--muted);padding:40px">
+              <div style="font-size:3rem;margin-bottom:15px">💬</div>
+              <div>Loading testimonials...</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Navigation dots -->
+        <div class="testimonials-dots" id="testimonialsDots"></div>
+        
+        <!-- Navigation arrows -->
+        <button class="testimonial-nav testimonial-prev" id="prevTestimonial">❮</button>
+        <button class="testimonial-nav testimonial-next" id="nextTestimonial">❯</button>
+      </div>
+    </div>
+
     <!-- FAQ -->
     <div class="card">
       <h2>❓ Frequently Asked Questions</h2>
@@ -538,10 +600,13 @@
       <p style="color:var(--muted);font-size:1.1rem;margin:20px 0">Our support team is available to assist you!</p>
       <div class="contact-links">
         <a href="https://instagram.com/smsk_tarik" target="_blank" class="contact-link">
-          <span>📱</span> Instagram: @smsk_tarik
+          <span>📱</span> Contact me on instagram!
         </a>
         <a href="https://discord.com/users/rxzwashere" target="_blank" class="contact-link">
-          <span>💬</span> Discord: @rxzwashere
+          <span>💬</span> DM me on discord!
+        </a>
+        <a href="https://discord.gg/SHdrgSD2RJ" target="_blank" class="contact-link">
+          <span>🌐</span> Join our discord!
         </a>
       </div>
     </div>
@@ -564,6 +629,108 @@
       }
     }
     createParticles();
+
+    // Testimonials Slider
+    let currentTestimonial = 0;
+    let testimonials = [];
+    
+    async function loadTestimonials(){
+      try{
+        const res = await fetch('/api/testimonials');
+        if(!res.ok) throw new Error('Failed to load');
+        testimonials = await res.json();
+        
+        if(testimonials.length === 0){
+          document.getElementById('testimonialsSlider').innerHTML = '<div class="testimonial-placeholder"><div style="text-align:center;color:var(--muted);padding:40px"><div style="font-size:3rem;margin-bottom:15px">💬</div><div>No testimonials yet</div></div></div>';
+          return;
+        }
+        
+        renderTestimonials();
+        startAutoSlide();
+      }catch(e){
+        console.warn('Could not load testimonials:', e);
+      }
+    }
+    
+    function renderTestimonials(){
+      const slider = document.getElementById('testimonialsSlider');
+      const dots = document.getElementById('testimonialsDots');
+      
+      slider.innerHTML = testimonials.map((t, i) => {
+        const stars = '★'.repeat(t.rating) + '☆'.repeat(5 - t.rating);
+        const displayName = t.anonymous ? 'Anonymous User' : t.username;
+        const initial = t.anonymous ? '🕶️' : displayName.charAt(0).toUpperCase();
+        const verifiedBadge = t.anonymous ? 
+          '<span class="testimonial-anonymous">🕶️ Anonymous</span>' : 
+          '<span class="testimonial-verified">✓ Verified User</span>';
+        
+        return `
+          <div class="testimonial ${i === 0 ? 'active' : ''}" data-index="${i}">
+            <div class="testimonial-header">
+              <div class="testimonial-avatar">${initial}</div>
+              <div class="testimonial-info">
+                <div class="testimonial-name">${displayName}</div>
+                <div class="testimonial-date">${t.date}</div>
+              </div>
+            </div>
+            <div class="testimonial-stars">
+              ${stars.split('').map(s => `<span class="star ${s === '☆' ? 'empty' : ''}">${s}</span>`).join('')}
+            </div>
+            <div class="testimonial-text">${t.comment}</div>
+            ${verifiedBadge}
+          </div>
+        `;
+      }).join('');
+      
+      dots.innerHTML = testimonials.map((_, i) => 
+        `<div class="dot ${i === 0 ? 'active' : ''}" data-index="${i}"></div>`
+      ).join('');
+      
+      // Dot click handlers
+      document.querySelectorAll('.dot').forEach(dot => {
+        dot.addEventListener('click', () => {
+          goToTestimonial(parseInt(dot.dataset.index));
+        });
+      });
+    }
+    
+    function goToTestimonial(index){
+      if(index < 0) index = testimonials.length - 1;
+      if(index >= testimonials.length) index = 0;
+      
+      currentTestimonial = index;
+      
+      document.querySelectorAll('.testimonial').forEach((t, i) => {
+        t.classList.remove('active', 'prev');
+        if(i === index) t.classList.add('active');
+        else if(i < index) t.classList.add('prev');
+      });
+      
+      document.querySelectorAll('.dot').forEach((d, i) => {
+        d.classList.toggle('active', i === index);
+      });
+    }
+    
+    let autoSlideInterval;
+    function startAutoSlide(){
+      clearInterval(autoSlideInterval);
+      autoSlideInterval = setInterval(() => {
+        goToTestimonial(currentTestimonial + 1);
+      }, 6000); // Change every 6 seconds
+    }
+    
+    document.getElementById('prevTestimonial')?.addEventListener('click', () => {
+      goToTestimonial(currentTestimonial - 1);
+      startAutoSlide(); // Reset timer
+    });
+    
+    document.getElementById('nextTestimonial')?.addEventListener('click', () => {
+      goToTestimonial(currentTestimonial + 1);
+      startAutoSlide(); // Reset timer
+    });
+    
+    // Load testimonials on page load
+    loadTestimonials();
 
     // Payment method selector
     const paymentMethods = document.querySelectorAll('.payment-method');
