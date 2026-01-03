@@ -836,30 +836,62 @@
     function renderTestimonials(testimonials){
       const tbody = document.querySelector('#testimonialsTable tbody');
       tbody.innerHTML = '';
-      document.getElementById('testimonialsCount').textContent = testimonials.length + ' reviews';
+      
+      // Séparer pending et approved
+      const pending = testimonials.filter(t => !t.approved);
+      const approved = testimonials.filter(t => t.approved);
+      
+      document.getElementById('testimonialsCount').textContent = `${testimonials.length} reviews (${pending.length} pending)`;
       
       if(testimonials.length === 0){
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No testimonials yet</td></tr>';
         return;
       }
       
-      testimonials.forEach(t => {
+      // Show pending first
+      [...pending, ...approved].forEach(t => {
         const tr = document.createElement('tr');
         const stars = '⭐'.repeat(t.rating);
         const displayName = t.anonymous ? '🕶️ Anonymous' : t.username;
         const truncatedComment = t.comment.length > 50 ? t.comment.substring(0, 50) + '...' : t.comment;
+        const statusBadge = t.approved ? 
+          '<span style="color:var(--success);font-weight:600">✓ Approved</span>' : 
+          '<span style="color:#ff9b9b;font-weight:600">⏳ Pending</span>';
         
         tr.innerHTML = `
-          <td><strong>${escapeHtml(displayName)}</strong></td>
+          <td><strong>${escapeHtml(displayName)}</strong><br><small>${statusBadge}</small></td>
           <td>${stars}</td>
           <td class="small muted" title="${escapeHtml(t.comment)}">${escapeHtml(truncatedComment)}</td>
           <td class="small muted">${t.date}</td>
           <td class="actions">
+            ${!t.approved ? `<button class="extend-btn" onclick="approveTestimonial('${escapeHtml(t.id)}')">✓ Approve</button>` : ''}
             <button class="del" onclick="deleteTestimonial('${escapeHtml(t.id)}')">Delete</button>
           </td>
         `;
         tbody.appendChild(tr);
       });
+    }
+    
+    async function approveTestimonial(id){
+      try{
+        const res = await fetch('/api/testimonials/approve', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({id}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          toast('✅ Testimonial approved');
+          await fetchTestimonials();
+        } else {
+          const j = await res.json().catch(()=>({}));
+          toast('❌ ' + (j.error || 'Error'));
+        }
+      }catch(e){
+        console.error(e);
+        toast('Error approving testimonial');
+      }
     }
     
     document.getElementById('addTestimonialBtn').onclick = async () => {

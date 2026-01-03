@@ -1289,7 +1289,7 @@ def api_get_testimonials():
     """Get all approved testimonials (public endpoint)"""
     testimonials = load_testimonials()
     # Filter only approved testimonials for public view
-    approved = [t for t in testimonials if t.get('approved', True)]
+    approved = [t for t in testimonials if t.get('approved', True) == True]
     # Sort by date, newest first
     approved.sort(key=lambda x: x.get('date', ''), reverse=True)
     return jsonify(approved)
@@ -1396,7 +1396,7 @@ def api_submit_testimonial():
         "comment": comment,
         "anonymous": anonymous,
         "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d"),
-        "approved": True  # Auto-approve (change to False if you want manual approval)
+        "approved": False  # Auto-approve (change to False if you want manual approval)
     }
     
     testimonials.append(new_testimonial)
@@ -1407,6 +1407,29 @@ def api_submit_testimonial():
     log_event(f"testimonial submitted: {username} ({rating}★) from {ip}")
     
     return jsonify({"message": "Thank you! Your review has been submitted."}), 200
+
+@app.route("/api/testimonials/approve", methods=["POST"])
+@login_required
+def api_approve_testimonial():
+    """Approve a pending testimonial"""
+    body = request.get_json() or {}
+    testimonial_id = (body.get("id") or "").strip()
+    
+    if not testimonial_id:
+        return jsonify({"error": "id missing"}), 400
+    
+    testimonials = load_testimonials()
+    testimonial = next((t for t in testimonials if t.get("id") == testimonial_id), None)
+    
+    if not testimonial:
+        return jsonify({"error": "Testimonial not found"}), 404
+    
+    testimonial["approved"] = True
+    save_testimonials(testimonials)
+    
+    log_event(f"testimonial approved: {testimonial_id}")
+    
+    return jsonify({"message": "approved"}), 200
 
 # Start background ping if configured
 if PING_ADMIN_ENABLED:
