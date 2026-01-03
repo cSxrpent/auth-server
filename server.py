@@ -1286,11 +1286,13 @@ def api_stats():
 
 @app.route("/api/testimonials", methods=["GET"])
 def api_get_testimonials():
-    """Get all testimonials (public endpoint)"""
+    """Get all approved testimonials (public endpoint)"""
     testimonials = load_testimonials()
+    # Filter only approved testimonials for public view
+    approved = [t for t in testimonials if t.get('approved', True)]
     # Sort by date, newest first
-    testimonials.sort(key=lambda x: x.get('date', ''), reverse=True)
-    return jsonify(testimonials)
+    approved.sort(key=lambda x: x.get('date', ''), reverse=True)
+    return jsonify(approved)
 
 @app.route("/api/testimonials/add", methods=["POST"])
 @login_required
@@ -1348,6 +1350,63 @@ def api_delete_testimonial():
     log_event(f"testimonial deleted: {testimonial_id}")
     
     return jsonify({"message": "deleted"}), 200
+
+@app.route("/api/testimonials/submit", methods=["POST"])
+def api_submit_testimonial():
+    """Public endpoint for users to submit testimonials (pending approval)"""
+    body = request.get_json() or {}
+    username = (body.get("username") or "").strip()
+    rating = body.get("rating", 5)
+    comment = (body.get("comment") or "").strip()
+    anonymous = body.get("anonymous", False)
+    
+    # Validation
+    if not username:
+        return jsonify({"error": "Username is required"}), 400
+    if not comment:
+        return jsonify({"error": "Comment is required"}), 400
+    if len(comment) < 10:
+        return jsonify({"error": "Review must be at least 10 characters"}), 400
+    if len(comment) > 500:
+        return jsonify({"error": "Review must be less than 500 characters"}), 400
+    if not isinstance(rating, int) or rating < 1 or rating > 5:
+        return jsonify({"error": "Invalid rating"}), 400
+    
+    # Check if user exists (optional - you can remove this if you want anyone to review)
+    users = load_users()
+    user = find_user(users, username)
+    if not user:
+        return jsonify({"error": "User not found. Please use your registered username."}), 404
+    
+    testimonials = load_testimonials()
+    
+    # Check if user already submitted a review
+    existing = next((t for t in testimonials if t.get('username', '').lower() == username.lower()), None)
+    if existing:
+        return jsonify({"error": "You have already submitted a review. Thank you!"}), 400
+    
+    # Generate unique ID
+    import uuid
+    testimonial_id = str(uuid.uuid4())[:8]
+    
+    new_testimonial = {
+        "id": testimonial_id,
+        "username": username,
+        "rating": rating,
+        "comment": comment,
+        "anonymous": anonymous,
+        "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d"),
+        "approved": True  # Auto-approve (change to False if you want manual approval)
+    }
+    
+    testimonials.append(new_testimonial)
+    save_testimonials(testimonials)
+    
+    # Get client IP
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    log_event(f"testimonial submitted: {username} ({rating}★) from {ip}")
+    
+    return jsonify({"message": "Thank you! Your review has been submitted."}), 200
 
 # Start background ping if configured
 if PING_ADMIN_ENABLED:
