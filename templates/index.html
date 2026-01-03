@@ -1256,11 +1256,16 @@
         { threshold: 24, text: "That's AN ENTIRE DAY of your life! 😱" },
         { threshold: 48, text: "That's TWO FULL DAYS! 🤯" },
         { threshold: 72, text: "That's 3 DAYS! You could go on a weekend trip! ✈️" },
-        { threshold: 168, text: "That's A WHOLE WEEK! 🏖️" },
-        { threshold: 336, text: "That's TWO WEEKS! Go on vacation! ✈️" },
-        { threshold: 720, text: "That's A WHOLE MONTH OF YOUR LIFE! 🤯" }
+        { threshold: 168, text: "That's A WHOLE WEEK! 🏖️" },              // 7 days
+        { threshold: 336, text: "That's TWO WEEKS! 📅" },                  // 14 days
+        { threshold: 504, text: "That's THREE WEEKS! Plan a vacation! ✈️" }, // 21 days ← NEW
+        { threshold: 672, text: "That's ALMOST A MONTH! 🤯" },            // 28 days ← NEW
+        { threshold: 720, text: "That's A WHOLE MONTH OF YOUR LIFE! 🤯" }, // 30 days
+        { threshold: 1440, text: "That's TWO MONTHS! 😱" },               // 60 days ← NEW
+        { threshold: 2160, text: "That's THREE MONTHS! 🤯" }              // 90 days ← NEW
       ];
       
+      // Loop from highest to lowest threshold
       for(let i = comparisons.length - 1; i >= 0; i--){
         if(hours >= comparisons[i].threshold){
           return comparisons[i].text;
@@ -1268,7 +1273,6 @@
       }
       return "Every minute saved counts! ⏱️";
     }
-
     function getEfficiencyPercentage(manualHours, botHours){
       const efficiency = ((manualHours - botHours) / manualHours) * 100;
       return Math.round(efficiency);
