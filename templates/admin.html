@@ -230,12 +230,16 @@
             <div style="display:flex;flex-direction:column;gap:10px">
               <label style="color:var(--muted);font-size:13px">Duration</label>
               <select id="keyDuration">
+                <option value="1">1 day</option>
                 <option value="7">1 week (7 days)</option>
                 <option value="30" selected>1 month (30 days)</option>
                 <option value="60">2 months (60 days)</option>
                 <option value="90">3 months (90 days)</option>
-                <option value="180">6 months (180 days)</option>
+                <option value="120">4 months (120 days)</option>
+                <option value="150">5 months (150 days)</option>
+                <option value="270">9 months (270 days)</option>
                 <option value="365">1 year (365 days)</option>
+                <option value="36500">Permanent (100 years)</option>
               </select>
               <button class="primary" id="generateKeyBtn" style="background:linear-gradient(90deg,var(--gold),#ffed4e);color:#000">✨ Generate Key</button>
             </div>
