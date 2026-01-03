@@ -1163,16 +1163,16 @@
         const data = await res.json();
         
         if(res.ok){
-          const data = await res.json();
-
+          // Success - redirect to success page
           window.location.href = '/testimonial-success';
         } else {
+          // Show error message
           showMessage(data.error || 'Failed to submit review', 'error');
           submitReviewBtn.classList.remove('loading');
           submitReviewBtn.disabled = false;
         }
       } catch(e){
-        console.error(e);
+        console.error('Submission error:', e);
         showMessage('Network error. Please try again.', 'error');
         submitReviewBtn.classList.remove('loading');
         submitReviewBtn.disabled = false;
