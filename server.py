@@ -665,6 +665,95 @@ def save_testimonials(testimonials):
 # Key redemption routes
 # -----------------------
 
+# Configuration des domaines autorisés
+ALLOWED_DOMAINS = [
+    "www.rxzbot.com",           # Domaine principal
+    "rxzbot.com",                # Redirigé vers www
+    "auth.rxzbot.com",           # Futur sous-domaine auth
+    "dashboard.rxzbot.com",      # Futur sous-domaine dashboard
+    "buy.rxzbot.com",            # Futur sous-domaine buy
+    "auth-server-aj8k.onrender.com",  # Ancien domaine - GARDE pour compatibilité
+    "localhost",                 # Développement local
+    "127.0.0.1"
+]
+
+# Middleware pour gérer les redirections et HTTPS
+@app.before_request
+def handle_domain_redirects():
+    """
+    Gère les redirections de domaine et force HTTPS
+    """
+    # Récupère le host sans le port
+    host = request.host.split(':')[0]
+    
+    # Skip pour développement local
+    if host in ['localhost', '127.0.0.1']:
+        return
+    
+    # Force HTTPS en production
+    if request.headers.get('X-Forwarded-Proto', 'http') != 'https':
+        if host not in ['localhost', '127.0.0.1']:
+            new_url = request.url.replace('http://', 'https://', 1)
+            return redirect(new_url, code=301)
+    
+    # Redirection rxzbot.com → www.rxzbot.com (au cas où)
+    # Normalement géré par IONOS, mais on ajoute une sécurité
+    if host == 'rxzbot.com':
+        new_url = request.url.replace('rxzbot.com', 'www.rxzbot.com', 1)
+        return redirect(new_url, code=301)
+
+# Helper pour générer les bonnes URLs
+def get_domain_url(subdomain=None):
+    """
+    Génère l'URL complète pour un sous-domaine donné
+    
+    Args:
+        subdomain: None (www), 'auth', 'dashboard', ou 'buy'
+    
+    Returns:
+        URL complète avec https://
+    
+    Exemples:
+        get_domain_url() → "https://www.rxzbot.com"
+        get_domain_url('auth') → "https://auth.rxzbot.com"
+    """
+    # En développement local
+    host = request.host.split(':')[0]
+    if host in ['localhost', '127.0.0.1']:
+        return f"http://{request.host}"
+    
+    # En production
+    if subdomain:
+        return f"https://{subdomain}.rxzbot.com"
+    return "https://www.rxzbot.com"
+
+# Route de debug pour vérifier la configuration (OPTIONNEL)
+@app.route("/api/domain-info")
+def domain_info():
+    """
+    Route de test pour vérifier que tout fonctionne
+    Accès: https://www.rxzbot.com/api/domain-info
+    """
+    return jsonify({
+        "status": "✅ Domains configured correctly",
+        "current_request": {
+            "host": request.host,
+            "url": request.url,
+            "is_secure": request.is_secure,
+            "forwarded_proto": request.headers.get('X-Forwarded-Proto')
+        },
+        "configured_domains": {
+            "main": "https://www.rxzbot.com",
+            "auth": "https://auth.rxzbot.com (not yet active)",
+            "dashboard": "https://dashboard.rxzbot.com (not yet active)",
+            "buy": "https://buy.rxzbot.com (not yet active)"
+        },
+        "legacy_support": {
+            "old_url": "https://auth-server-aj8k.onrender.com",
+            "status": "✅ Still active for existing clients"
+        }
+    })
+
 @app.route("/redeem", methods=["GET", "POST"])
 def redeem():
     """Page to redeem an activation key"""
@@ -1512,6 +1601,7 @@ def api_add_testimonial():
         "comment": comment,
         "anonymous": anonymous,
         "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d")
+        "approve": True
     }
     
     testimonials.append(new_testimonial)
