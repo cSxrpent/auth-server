@@ -1600,7 +1600,7 @@ def api_add_testimonial():
         "rating": rating,
         "comment": comment,
         "anonymous": anonymous,
-        "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d")
+        "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d"),
         "approve": True
     }
     
