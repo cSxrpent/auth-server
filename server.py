@@ -1,6 +1,7 @@
 import os
 import json
 import base64
+import bcrypt
 import requests
 import time
 import threading
@@ -20,6 +21,8 @@ from dotenv import load_dotenv
 import hmac
 import hashlib
 import base64
+from wolvesville_api import wolvesville_api
+from token_manager import token_manager
 
 load_dotenv()  # load .env file if it exists (for local development)
 
@@ -47,7 +50,6 @@ PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
 PAYPAL_TEST_MODE = os.getenv("PAYPAL_TEST_MODE", "false").lower() == "true"  # Skip actual PayPal calls for testing
 TESTIMONIALS_FILE = "testimonials.json"  # testimonials storage
 GITHUB_TESTIMONIALS_PATH = "testimonials.json"  # GitHub path
-
 
 paypalrestsdk.configure({
     "mode": PAYPAL_MODE,
@@ -365,6 +367,28 @@ def _github_put_file(new_users, sha=None):
     except Exception as e:
         return False, {"error": f"gh_put_exception:{e}"}
 
+def read_github_file(filename):
+    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{filename}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    params = {"ref": GITHUB_BRANCH}
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code == 200:
+        import base64
+        content = base64.b64decode(response.json()['content']).decode('utf-8')
+        return json.loads(content), response.json()['sha']
+    return {}, None
+
+def write_github_file(filename, data, sha=None):
+    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{filename}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    import base64
+    content = base64.b64encode(json.dumps(data, indent=2).encode()).decode()
+    payload = {"message": f"Update {filename}", "content": content, "branch": GITHUB_BRANCH}
+    if sha:
+        payload["sha"] = sha
+    response = requests.put(url, headers=headers, json=payload)
+    return response.status_code in [200, 201]
+
 # -----------------------
 # User storage helpers
 # -----------------------
@@ -447,6 +471,15 @@ def save_users(users):
 # -----------------------
 # Utilities
 # -----------------------
+
+def search_wolvesville_player(username):
+    """Search for player using managed tokens"""
+    return wolvesville_api.search_player(username)
+
+def get_wolvesville_player_profile(player_id):
+    """Get player profile using managed tokens"""
+    return wolvesville_api.get_player_profile(player_id)
+
 def find_user(users, username):
     for u in users:
         try:
@@ -1132,10 +1165,6 @@ def login():
             error = "Incorrect password."
     return render_template("login.html", error=error)
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
 
 @app.route("/")
 def index():
@@ -1650,10 +1679,253 @@ if PING_ADMIN_ENABLED:
 else:
     print("ℹ️ ping_admin is disabled (PING_ADMIN_ENABLED not set)")
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        # Load user credentials
+        credentials, sha = read_github_file('user-credentials.json')
+        
+        # Check if email already exists
+        if email in credentials:
+            return render_template('register.html', error="Email already exists")
+        
+        # Hash password
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        # Add new user
+        credentials[email] = {
+            "password": hashed_password,
+            "accounts": []
+        }
+        
+        # Save to GitHub
+        if write_github_file('user-credentials.json', credentials, sha):
+            session['user_email'] = email
+            return redirect(url_for('dashboard'))
+        else:
+            return render_template('register.html', error="Registration failed")
+    
+    return render_template('register.html')
+
+@app.route('/loginuser', methods=['GET', 'POST'])
+def loginuser():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        # Load user credentials
+        credentials, _ = read_github_file('user-credentials.json')
+        
+        # Check if user exists
+        if email not in credentials:
+            return render_template('loginuser.html', error="Invalid email or password")
+        
+        # Verify password
+        stored_password = credentials[email]['password']
+        if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
+            session['user_email'] = email
+            return redirect(url_for('dashboard'))
+        else:
+            return render_template('loginuser.html', error="Invalid email or password")
+    
+    return render_template('loginuser.html')
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user_email' not in session:
+        return redirect(url_for('loginuser'))
+    
+    email = session['user_email']
+    credentials, _ = read_github_file('user-credentials.json')
+    user_accounts = credentials.get(email, {}).get('accounts', [])
+    
+    # Get selected account or default to first
+    selected_account = request.args.get('account')
+    if not selected_account and user_accounts:
+        selected_account = user_accounts[0]
+    
+    account_data = None
+    if selected_account:
+        # Get account data from Wolvesville API
+        player = search_wolvesville_player(selected_account)
+        if player:
+            account_data = get_wolvesville_player_profile(player['id'])
+        
+        # Get XP data
+        xp_data, _ = read_github_file('user-XP.json')
+        account_xp = xp_data.get(selected_account, {})
+        
+        # Get license data
+        users_data, _ = read_github_file('users.json')
+        license_data = next((u for u in users_data if u['username'] == selected_account), None)
+    
+    return render_template('dashboard.html', 
+                         email=email, 
+                         accounts=user_accounts,
+                         selected_account=selected_account,
+                         account_data=account_data,
+                         account_xp=account_xp if selected_account else None,
+                         license_data=license_data if selected_account else None)
+
+@app.route('/add_account', methods=['GET', 'POST'])
+def add_account():
+    if 'user_email' not in session:
+        return redirect(url_for('loginuser'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        
+        # Search for player
+        player = search_wolvesville_player(username)
+        if not player:
+            return render_template('add_account.html', error="Player not found")
+        
+        # Generate verification code
+        code = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(6))
+        session['verification_code'] = code
+        session['verification_username'] = username
+        session['verification_player_id'] = player['id']
+        
+        return render_template('add_account.html', 
+                             verification_code=code, 
+                             username=username,
+                             step='verify')
+    
+    return render_template('add_account.html', step='username')
+
+@app.route('/verify_account', methods=['POST'])
+def verify_account():
+    if 'user_email' not in session:
+        return redirect(url_for('loginuser'))
+    
+    stored_code = session.get('verification_code')
+    username = session.get('verification_username')
+    player_id = session.get('verification_player_id')
+    
+    # Get player profile
+    profile = get_wolvesville_player_profile(player_id)
+    if not profile:
+        return jsonify({'success': False, 'error': 'Could not fetch player profile'})
+    
+    # Check if code is in biography
+    biography = profile.get('personalMsg', '')
+    if stored_code not in biography:
+        return jsonify({'success': False, 'error': 'Verification code not found in biography'})
+    
+    # Add account to user
+    email = session['user_email']
+    credentials, sha = read_github_file('user-credentials.json')
+    
+    if username not in credentials[email]['accounts']:
+        credentials[email]['accounts'].append(username)
+        write_github_file('user-credentials.json', credentials, sha)
+    
+    # Add to users.json with default expiry
+    users_data, users_sha = read_github_file('users.json')
+    if not any(u['username'] == username for u in users_data):
+        users_data.append({
+            "username": username,
+            "expires": (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+        })
+        write_github_file('users.json', users_data, users_sha)
+    
+    # Clear session verification data
+    session.pop('verification_code', None)
+    session.pop('verification_username', None)
+    session.pop('verification_player_id', None)
+    
+    return jsonify({'success': True})
+
+@app.route('/xp/add', methods=['POST'])
+def add_xp():
+    data = request.json
+    player_id = data.get('player_id')
+    xp_amount = data.get('xp_amount')
+    username = data.get('username')
+    
+    if not all([player_id, xp_amount, username]):
+        return jsonify({'success': False, 'error': 'Missing parameters'})
+    
+    # Load XP data
+    xp_data, sha = read_github_file('user-XP.json')
+    
+    if username not in xp_data:
+        xp_data[username] = {"daily": {}, "weekly": {}, "monthly": {}}
+    
+    # Get current date info
+    today = datetime.now().strftime('%Y-%m-%d')
+    week = datetime.now().strftime('%Y-W%U')
+    month = datetime.now().strftime('%Y-%m')
+    
+    # Update daily
+    xp_data[username]['daily'][today] = xp_data[username]['daily'].get(today, 0) + xp_amount
+    
+    # Update weekly
+    xp_data[username]['weekly'][week] = xp_data[username]['weekly'].get(week, 0) + xp_amount
+    
+    # Update monthly
+    xp_data[username]['monthly'][month] = xp_data[username]['monthly'].get(month, 0) + xp_amount
+    
+    # Save to GitHub
+    if write_github_file('user-XP.json', xp_data, sha):
+        return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'error': 'Failed to save XP data'})
+
+@app.route("/logout")
+def logout():
+    """Smart logout - handles both admin and user sessions"""
+    was_admin = session.get("logged_in", False)
+    was_user = 'user_email' in session
+    
+    session.clear()
+    
+    # Redirect based on who was logged in
+    if was_admin:
+        return redirect(url_for("login"))
+    elif was_user:
+        return redirect(url_for("loginuser"))
+    else:
+        return redirect(url_for("index"))
 
 # -----------------------
 # Run
 # -----------------------
+# Initialize token manager BEFORE starting Flask
+print("=" * 60)
+print("🔧 Initializing Wolvesville Token Manager...")
+print("=" * 60)
+try:
+    # Start automatic token refresh (this authenticates immediately)
+    token_manager.start_auto_refresh()
+    print("=" * 60)
+    print("✅ Token manager ready!")
+    print("=" * 60)
+except Exception as e:
+    print("=" * 60)
+    print(f"❌ CRITICAL: Token manager failed to initialize!")
+    print(f"   Error: {e}")
+    print("   Check your .env file for:")
+    print("   - WOLVESVILLE_EMAIL")
+    print("   - WOLVESVILLE_PASSWORD")
+    print("   - TWOCAPTCHA_API_KEY")
+    print("=" * 60)
+    import sys
+    sys.exit(1)  # Exit if token manager fails
+
+# Replace the old functions:
+def search_wolvesville_player(username):
+    """Search for player using managed tokens"""
+    return wolvesville_api.search_player(username)
+
+def get_wolvesville_player_profile(player_id):
+    """Get player profile using managed tokens"""
+    return wolvesville_api.get_player_profile(player_id)
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
     print(f"🚀 Starting server on port {port}")
