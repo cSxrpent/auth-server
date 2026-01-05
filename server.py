@@ -87,7 +87,27 @@ else:
             print("   ⚠️ Client ID looks like sandbox credentials (starts with 'AUNBEKK') but mode is LIVE!")
     elif PAYPAL_MODE == "sandbox":
         print("ℹ️ Using SANDBOX mode for testing")
+        
+        
+# Simple cache
+_cache = {}
+_cache_time = {}
 
+def get_cached_or_fetch(key, fetch_func, ttl=30):
+    """Cache data for TTL seconds"""
+    now = datetime.now()
+    
+    if key in _cache:
+        cache_age = (now - _cache_time[key]).total_seconds()
+        if cache_age < ttl:
+            print(f"✓ Cache hit: {key}")
+            return _cache[key]
+    
+    print(f"⟳ Fetching fresh: {key}")
+    data = fetch_func()
+    _cache[key] = data
+    _cache_time[key] = now
+    return data
 
 # ------------------------------------
 # Admin web UI (login + dashboard)
@@ -1754,23 +1774,36 @@ def dashboard():
     account_xp = None
     license_data = None
     total_bot_xp = 0
+    levels_gained = 0
     
     if selected_account:
-        # Get account data from Wolvesville API
-        player = search_wolvesville_player(selected_account)
-        if player:
-            account_data = get_wolvesville_player_profile(player['id'])
+        # CACHED Wolvesville API calls (30 seconds) - THIS IS THE ONLY CHANGE
+        player = get_cached_or_fetch(
+            f'player_{selected_account}',
+            lambda: search_wolvesville_player(selected_account),
+            ttl=30
+        )
         
-        # Get XP data
+        if player:
+            account_data = get_cached_or_fetch(
+                f'profile_{player["id"]}',
+                lambda: get_wolvesville_player_profile(player['id']),
+                ttl=30
+            )
+        
+        # Get XP data (fresh, not cached)
         xp_data, _ = read_github_file('user-XP.json')
         account_xp = xp_data.get(selected_account, {})
         
-        # Calculate total bot XP
+        # Calculate total bot XP and levels gained
         if account_xp:
             # Sum all daily XP
-            total_bot_xp += sum(account_xp.get('daily', {}).values())
+            total_bot_xp = sum(account_xp.get('daily', {}).values())
+            
+            # Calculate levels gained (2000 XP per level)
+            levels_gained = total_bot_xp // 2000
         
-        # Get license data
+        # Get license data (fresh, not cached)
         users_data, _ = read_github_file('users.json')
         license_data = next((u for u in users_data if u['username'] == selected_account), None)
     
@@ -1790,7 +1823,8 @@ def dashboard():
                          current_date=current_date,
                          current_week=current_week,
                          current_month=current_month,
-                         total_bot_xp=total_bot_xp)
+                         total_bot_xp=total_bot_xp,
+                         levels_gained=levels_gained)
 
 @app.route('/api/license/pause', methods=['POST'])
 def pause_license():

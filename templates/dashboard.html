@@ -506,11 +506,11 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">💎 Total XP</div>
-                        <div class="stat-value">{{ account_data.xpTotal if account_data else 'N/A' }}</div>
+                        <div class="stat-value">{{ account_data.xpTotal|default('N/A') if account_data else 'N/A' }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">📈 XP Until Next Level</div>
-                        <div class="stat-value">{{ account_data.xpUntilNextLevel if account_data else 'N/A' }}</div>
+                        <div class="stat-value">{{ account_data.xpUntilNextLevel|default('N/A') if account_data else 'N/A' }}</div>
                     </div>
                 </div>
             </div>
@@ -557,6 +557,13 @@
                         <div class="stat-card">
                             <div class="stat-label">🏆 Total Bot XP</div>
                             <div class="stat-value">{{ total_bot_xp if total_bot_xp else 0 }}</div>
+                        </div>
+                        <div class="stat-card" style="grid-column: span 2;">
+                            <div class="stat-label">⭐ Levels Gained by Bot</div>
+                            <div class="stat-value" style="font-size: 3rem;">{{ levels_gained if levels_gained else 0 }}</div>
+                            <div style="color: var(--muted); font-size: 0.9rem; margin-top: 10px;">
+                                ({{ total_bot_xp if total_bot_xp else 0 }} XP ÷ 2000 per level)
+                            </div>
                         </div>
                     </div>
                 </div>
