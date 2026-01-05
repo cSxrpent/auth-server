@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 import hmac
 import hashlib
 import base64
+import html
 from wolvesville_api import wolvesville_api
 from token_manager import token_manager
 
@@ -1097,11 +1098,11 @@ def debug():
     """Debug route to check configuration"""
     info = {
         "env_file_exists": os.path.exists('.env'),
-        "paypal_client_id_set": bool(PAYPAL_CLIENT_ID),
-        "paypal_client_id_prefix": PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else None,
-        "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
+#        "paypal_client_id_set": bool(PAYPAL_CLIENT_ID),
+#        "paypal_client_id_prefix": PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else None,
+#        "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
         "paypal_mode": PAYPAL_MODE,
-        "secret_key_set": bool(app.secret_key),
+#        "secret_key_set": bool(app.secret_key),
         "admin_password_set": bool(ADMIN_PASSWORD),
         "github_token_set": bool(GITHUB_TOKEN)
     }
@@ -1158,7 +1159,7 @@ def login():
     error = None
     if request.method == "POST":
         password = request.form.get("password", "")
-        if password == ADMIN_PASSWORD:
+        if hmac.compare_digest(password, ADMIN_PASSWORD):
             session["logged_in"] = True
             return redirect(url_for("admin_page"))
         else:
@@ -1534,6 +1535,8 @@ def api_add_testimonial():
     import uuid
     testimonial_id = str(uuid.uuid4())[:8]
     
+    comment = html.escape(comment.strip())
+    
     new_testimonial = {
         "id": testimonial_id,
         "username": username,
@@ -1748,6 +1751,10 @@ def dashboard():
         selected_account = user_accounts[0]
     
     account_data = None
+    account_xp = None
+    license_data = None
+    total_bot_xp = 0
+    
     if selected_account:
         # Get account data from Wolvesville API
         player = search_wolvesville_player(selected_account)
@@ -1758,18 +1765,134 @@ def dashboard():
         xp_data, _ = read_github_file('user-XP.json')
         account_xp = xp_data.get(selected_account, {})
         
+        # Calculate total bot XP
+        if account_xp:
+            # Sum all daily XP
+            total_bot_xp += sum(account_xp.get('daily', {}).values())
+        
         # Get license data
         users_data, _ = read_github_file('users.json')
         license_data = next((u for u in users_data if u['username'] == selected_account), None)
+    
+    # Get current date info for XP display
+    from datetime import datetime
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    current_week = datetime.now().strftime('%Y-W%U')
+    current_month = datetime.now().strftime('%Y-%m')
     
     return render_template('dashboard.html', 
                          email=email, 
                          accounts=user_accounts,
                          selected_account=selected_account,
                          account_data=account_data,
-                         account_xp=account_xp if selected_account else None,
-                         license_data=license_data if selected_account else None)
+                         account_xp=account_xp,
+                         license_data=license_data,
+                         current_date=current_date,
+                         current_week=current_week,
+                         current_month=current_month,
+                         total_bot_xp=total_bot_xp)
 
+@app.route('/api/license/pause', methods=['POST'])
+def pause_license():
+    """Pause license for an account"""
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+    
+    data = request.json
+    username = data.get('username')
+    
+    if not username:
+        return jsonify({'success': False, 'error': 'Username required'}), 400
+    
+    # Verify this user owns this account
+    email = session['user_email']
+    credentials, _ = read_github_file('user-credentials.json')
+    user_accounts = credentials.get(email, {}).get('accounts', [])
+    
+    if username not in user_accounts:
+        return jsonify({'success': False, 'error': 'Account not found'}), 403
+    
+    # Load users data
+    users_data, sha = read_github_file('users.json')
+    user = next((u for u in users_data if u['username'] == username), None)
+    
+    if not user:
+        return jsonify({'success': False, 'error': 'License not found'}), 404
+    
+    # Store current expiry date and mark as paused
+    if 'paused' not in user or not user['paused']:
+        user['paused'] = True
+        user['paused_at'] = datetime.now().strftime('%Y-%m-%d')
+        user['remaining_days'] = (datetime.strptime(user['expires'], '%Y-%m-%d') - datetime.now()).days
+        
+        # Write back to GitHub
+        if write_github_file('users.json', users_data, sha):
+            log_event(f"License paused: {username} ({user['remaining_days']} days remaining)")
+            return jsonify({'success': True, 'message': 'License paused'})
+    
+    return jsonify({'success': False, 'error': 'License already paused'}), 400
+
+@app.route('/api/license/resume', methods=['POST'])
+def resume_license():
+    """Resume paused license"""
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+    
+    data = request.json
+    username = data.get('username')
+    
+    if not username:
+        return jsonify({'success': False, 'error': 'Username required'}), 400
+    
+    # Verify this user owns this account
+    email = session['user_email']
+    credentials, _ = read_github_file('user-credentials.json')
+    user_accounts = credentials.get(email, {}).get('accounts', [])
+    
+    if username not in user_accounts:
+        return jsonify({'success': False, 'error': 'Account not found'}), 403
+    
+    # Load users data
+    users_data, sha = read_github_file('users.json')
+    user = next((u for u in users_data if u['username'] == username), None)
+    
+    if not user:
+        return jsonify({'success': False, 'error': 'License not found'}), 404
+    
+    # Resume license
+    if user.get('paused', False):
+        remaining_days = user.get('remaining_days', 0)
+        new_expiry = (datetime.now() + timedelta(days=remaining_days)).strftime('%Y-%m-%d')
+        
+        user['expires'] = new_expiry
+        user['paused'] = False
+        user.pop('paused_at', None)
+        user.pop('remaining_days', None)
+        
+        # Write back to GitHub
+        if write_github_file('users.json', users_data, sha):
+            log_event(f"License resumed: {username} (new expiry: {new_expiry})")
+            return jsonify({'success': True, 'message': 'License resumed', 'new_expiry': new_expiry})
+    
+    return jsonify({'success': False, 'error': 'License not paused'}), 400
+
+@app.route('/api/license/extend', methods=['POST'])
+def extend_license_user():
+    """Extend license - redirects to payment page"""
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+    
+    data = request.json
+    username = data.get('username')
+    
+    if not username:
+        return jsonify({'success': False, 'error': 'Username required'}), 400
+    
+    # Store username in session for payment flow
+    session['payment_username'] = username
+    
+    return jsonify({'success': True, 'redirect': '/buy/1month'})
+    
 @app.route('/add_account', methods=['GET', 'POST'])
 def add_account():
     if 'user_email' not in session:
@@ -1877,17 +2000,16 @@ def add_xp():
 
 @app.route("/logout")
 def logout():
-    """Smart logout - handles both admin and user sessions"""
-    was_admin = session.get("logged_in", False)
     was_user = 'user_email' in session
+    was_admin = session.get("logged_in", False)
     
     session.clear()
     
-    # Redirect based on who was logged in
-    if was_admin:
-        return redirect(url_for("login"))
-    elif was_user:
+    # Prioritize user logout over admin
+    if was_user:
         return redirect(url_for("loginuser"))
+    elif was_admin:
+        return redirect(url_for("login"))
     else:
         return redirect(url_for("index"))
 
@@ -1913,8 +2035,7 @@ except Exception as e:
     print("   - WOLVESVILLE_PASSWORD")
     print("   - TWOCAPTCHA_API_KEY")
     print("=" * 60)
-    import sys
-    sys.exit(1)  # Exit if token manager fails
+    print("   - Server will start but registering won't be available.")
 
 # Replace the old functions:
 def search_wolvesville_player(username):
