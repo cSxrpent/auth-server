@@ -1777,19 +1777,11 @@ def dashboard():
     levels_gained = 0
     
     if selected_account:
-        # CACHED Wolvesville API calls (30 seconds) - THIS IS THE ONLY CHANGE
-        player = get_cached_or_fetch(
-            f'player_{selected_account}',
-            lambda: search_wolvesville_player(selected_account),
-            ttl=30
-        )
+        # FRESH API calls - NO CACHING for account switch
+        player = search_wolvesville_player(selected_account)
         
         if player:
-            account_data = get_cached_or_fetch(
-                f'profile_{player["id"]}',
-                lambda: get_wolvesville_player_profile(player['id']),
-                ttl=30
-            )
+            account_data = get_wolvesville_player_profile(player['id'])
         
         # Get XP data (fresh, not cached)
         xp_data, _ = read_github_file('user-XP.json')

@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -438,6 +439,33 @@
             gap: 12px;
         }
         
+        .clan-info {
+            background: linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));
+            padding: 25px;
+            border-radius: 12px;
+            margin-top: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .clan-info h3 {
+            font-size: 1.3rem;
+            color: var(--accent);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .clan-info p {
+            color: var(--muted);
+            font-size: 1.05rem;
+            margin: 8px 0;
+        }
+        
+        .clan-info strong {
+            color: #fff;
+        }
+        
         /* Responsive */
         @media(max-width:968px){
             .container {
@@ -489,6 +517,7 @@
             {% else %}
             <div class="tabs">
                 <div class="tab active" onclick="switchTab('main')">📊 Main Menu</div>
+                <div class="tab" onclick="switchTab('account')">👤 Account</div>
                 <div class="tab" onclick="switchTab('xp')">⚡ XP Tracking</div>
                 <div class="tab" onclick="switchTab('license')">🎫 License</div>
                 <div class="tab" onclick="switchTab('support')">💬 Support</div>
@@ -506,13 +535,77 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">💎 Total XP</div>
-                        <div class="stat-value">{{ account_data.xpTotal|default('N/A') if account_data else 'N/A' }}</div>
+                        <div class="stat-value">{{ "{:,}".format(account_data.xpTotal) if account_data and account_data.xpTotal else 'N/A' }}</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">📈 XP Until Next Level</div>
-                        <div class="stat-value">{{ account_data.xpUntilNextLevel|default('N/A') if account_data else 'N/A' }}</div>
+                        <div class="stat-value">{{ "{:,}".format(account_data.xpUntilNextLevel) if account_data and account_data.xpUntilNextLevel else 'N/A' }}</div>
                     </div>
                 </div>
+            </div>
+
+            <div id="account-tab" class="tab-content">
+                <div class="account-header">
+                    <div class="account-username">{{ selected_account }}</div>
+                    <div class="account-level">⭐ Level {{ account_data.level if account_data else 'N/A' }}</div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">🏆 Games Won</div>
+                        <div class="stat-value">{{ "{:,}".format(account_data.gamesWon) if account_data and account_data.gamesWon else 'N/A' }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">💀 Games Lost</div>
+                        <div class="stat-value">{{ "{:,}".format(account_data.gamesLost) if account_data and account_data.gamesLost else 'N/A' }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">📊 Win Ratio</div>
+                        <div class="stat-value">
+                            {% if account_data and account_data.gamesWon and account_data.gamesLost %}
+                                {{ "%.1f"|format((account_data.gamesWon / (account_data.gamesWon + account_data.gamesLost) * 100)) }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">👥 Friends Count</div>
+                        <div class="stat-value">{{ account_data.friendsCount if account_data and account_data.friendsCount is not none else 'N/A' }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">🎮 Total Games</div>
+                        <div class="stat-value">
+                            {% if account_data and account_data.gamesWon and account_data.gamesLost %}
+                                {{ "{:,}".format(account_data.gamesWon + account_data.gamesLost) }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">⚔️ Ranked Games</div>
+                        <div class="stat-value">{{ "{:,}".format(account_data.rankedSeasonSkillRating) if account_data and account_data.rankedSeasonSkillRating else 'N/A' }}</div>
+                    </div>
+                </div>
+                
+                {% if account_data and account_data.clan %}
+                <div class="clan-info">
+                    <h3>🛡️ Clan Information</h3>
+                    <p>Name: <strong>{{ account_data.clan.name }}</strong></p>
+                    <p>Tag: <strong>{{ account_data.clan.tag }}</strong></p>
+                    <p>Level: <strong>{{ account_data.clan.level }}</strong></p>
+                    <p>Members: <strong>{{ account_data.clan.memberCount }}/{{ account_data.clan.maxMemberCount }}</strong></p>
+                    {% if account_data.clan.description %}
+                    <p style="margin-top: 15px;">Description: <strong>{{ account_data.clan.description }}</strong></p>
+                    {% endif %}
+                </div>
+                {% elif account_data %}
+                <div class="clan-info">
+                    <h3>🛡️ Clan Information</h3>
+                    <p style="text-align: center; color: var(--muted);">Not in a clan</p>
+                </div>
+                {% endif %}
             </div>
 
             <div id="xp-tab" class="tab-content">
@@ -528,7 +621,7 @@
                             <div class="stat-label">📅 XP Gained Today</div>
                             <div class="stat-value">
                                 {% if account_xp and account_xp.daily %}
-                                    {{ account_xp.daily.get(current_date, 0) }}
+                                    {{ "{:,}".format(account_xp.daily.get(current_date, 0)) }}
                                 {% else %}
                                     0
                                 {% endif %}
@@ -538,7 +631,7 @@
                             <div class="stat-label">📊 XP Gained This Week</div>
                             <div class="stat-value">
                                 {% if account_xp and account_xp.weekly %}
-                                    {{ account_xp.weekly.get(current_week, 0) }}
+                                    {{ "{:,}".format(account_xp.weekly.get(current_week, 0)) }}
                                 {% else %}
                                     0
                                 {% endif %}
@@ -548,7 +641,7 @@
                             <div class="stat-label">📈 XP Gained This Month</div>
                             <div class="stat-value">
                                 {% if account_xp and account_xp.monthly %}
-                                    {{ account_xp.monthly.get(current_month, 0) }}
+                                    {{ "{:,}".format(account_xp.monthly.get(current_month, 0)) }}
                                 {% else %}
                                     0
                                 {% endif %}
@@ -556,13 +649,13 @@
                         </div>
                         <div class="stat-card">
                             <div class="stat-label">🏆 Total Bot XP</div>
-                            <div class="stat-value">{{ total_bot_xp if total_bot_xp else 0 }}</div>
+                            <div class="stat-value">{{ "{:,}".format(total_bot_xp) if total_bot_xp else 0 }}</div>
                         </div>
                         <div class="stat-card" style="grid-column: span 2;">
                             <div class="stat-label">⭐ Levels Gained by Bot</div>
                             <div class="stat-value" style="font-size: 3rem;">{{ levels_gained if levels_gained else 0 }}</div>
                             <div style="color: var(--muted); font-size: 0.9rem; margin-top: 10px;">
-                                ({{ total_bot_xp if total_bot_xp else 0 }} XP ÷ 2000 per level)
+                                ({{ "{:,}".format(total_bot_xp) if total_bot_xp else 0 }} XP ÷ 2000 per level)
                             </div>
                         </div>
                     </div>
