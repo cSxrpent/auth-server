@@ -9,6 +9,16 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = scoped_session(sessionmaker(bind=engine))
 
+# Ensure unique index on user_credentials.email exists (idempotent)
+from sqlalchemy import text
+try:
+    with engine.connect() as conn:
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_credentials_email ON user_credentials (email);"))
+        conn.commit()
+except Exception:
+    # If DDL fails (e.g., older DB), ignore — uniqueness enforced by PK anyway
+    pass
+
 @contextmanager
 def get_db():
     """Context manager for database sessions"""
@@ -196,6 +206,122 @@ def read_storage_impl(filename):
             return load_users(), None
 
     return {}, None
+
+
+# ==================== NEW AUTH & DASHBOARD HELPERS ====================
+def get_user_by_email(email: str):
+    """Return user credential row for given email or None."""
+    with get_db() as db:
+        user = db.query(UserCredential).filter(UserCredential.email == email).first()
+        if not user:
+            return None
+        return {"email": user.email, "password": user.password, "accounts": user.accounts or []}
+
+def create_user(email: str, password_hash: str):
+    """Create a new user credential with empty accounts. Returns True on success, False if exists."""
+    with get_db() as db:
+        existing = db.query(UserCredential).filter(UserCredential.email == email).first()
+        if existing:
+            return False
+        new = UserCredential(email=email, password=password_hash, accounts=[])
+        db.add(new)
+        return True
+
+def verify_user_password(email: str, password_plain: str):
+    """Verify password; returns tuple (ok, email) where ok is bool.
+    Uses bcrypt.checkpw and queries DB only once.
+    """
+    import bcrypt as _bcrypt
+    with get_db() as db:
+        row = db.query(UserCredential.email, UserCredential.password).filter(UserCredential.email == email).first()
+        if not row:
+            return False, None
+        stored = row.password
+        try:
+            ok = _bcrypt.checkpw(password_plain.encode('utf-8'), stored.encode('utf-8'))
+        except Exception:
+            return False, None
+        return ok, row.email
+
+def get_user_accounts(user_identifier):
+    """Return list of accounts for the given user identifier (email)."""
+    # In this schema the user identifier is the email
+    with get_db() as db:
+        row = db.query(UserCredential).filter(UserCredential.email == user_identifier).first()
+        if not row:
+            return []
+        return row.accounts or []
+
+def add_account_to_user(email: str, username: str):
+    with get_db() as db:
+        row = db.query(UserCredential).filter(UserCredential.email == email).first()
+        if not row:
+            return False
+        accounts = row.accounts or []
+        if username in accounts:
+            return True
+        accounts.append(username)
+        row.accounts = accounts
+        return True
+
+def get_license(username: str):
+    """Return license row for username from users table or None"""
+    with get_db() as db:
+        u = db.query(User).filter(User.username == username).first()
+        if not u:
+            return None
+        return {
+            "username": u.username,
+            "expires": u.expires,
+            "paused": u.paused,
+            "paused_at": u.paused_at,
+            "remaining_days": u.remaining_days
+        }
+
+def pause_license(username: str):
+    with get_db() as db:
+        u = db.query(User).filter(User.username == username).first()
+        if not u:
+            return False
+        if getattr(u, 'paused', False):
+            return False
+        # compute remaining days safely
+        try:
+            from datetime import datetime
+            expires_dt = datetime.strptime(u.expires, '%Y-%m-%d')
+            remaining = (expires_dt - datetime.now()).days
+        except Exception:
+            remaining = None
+        u.paused = True
+        u.paused_at = datetime.now().strftime('%Y-%m-%d') if hasattr(__import__('datetime'), 'datetime') else None
+        u.remaining_days = remaining
+        return True
+
+def resume_license(username: str):
+    with get_db() as db:
+        u = db.query(User).filter(User.username == username).first()
+        if not u:
+            return False
+        if not getattr(u, 'paused', False):
+            return False
+        remaining = u.remaining_days or 0
+        try:
+            from datetime import datetime, timedelta
+            new_expiry = (datetime.now() + timedelta(days=remaining)).strftime('%Y-%m-%d')
+        except Exception:
+            new_expiry = u.expires
+        u.expires = new_expiry
+        u.paused = False
+        u.paused_at = None
+        u.remaining_days = None
+        return True
+
+def get_user_xp(username: str):
+    with get_db() as db:
+        xp = db.query(UserXP).filter(UserXP.username == username).first()
+        if not xp:
+            return {"daily": {}, "weekly": {}, "monthly": {}}
+        return {"daily": xp.daily or {}, "weekly": xp.weekly or {}, "monthly": xp.monthly or {}}
 
 def write_storage_impl(filename, data, sha=None):
     """Write user credentials or XP data to storage (DB-backed)."""

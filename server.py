@@ -115,7 +115,8 @@ def get_cached_or_fetch(key, fetch_func, ttl=30):
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("logged_in"):
+        # Allow either admin session or authenticated user session
+        if not (session.get("logged_in") or session.get("user_id")):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
@@ -159,11 +160,8 @@ def find_key(keys, key_code):
 # -----------------------
 # File/credential storage is DB-backed via `db_helper` and `read_storage`/`write_storage`.
 
-def read_storage(filename):
-    return db_helper.read_storage(filename)
-
-def write_storage(filename, data, sha=None):
-    return db_helper.write_storage(filename, data, sha=sha)
+# NOTE: direct read_storage/write_storage helpers removed from hot paths.
+# Use db_helper.* functions directly (DB-backed) for all hot operations.
 
 # -----------------------
 # User storage helpers
@@ -1222,25 +1220,18 @@ def register():
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
-        
-        # Load user credentials
-        credentials, sha = read_storage('user-credentials.json')
-        
-        # Check if email already exists
-        if email in credentials:
+        # Create user in DB-backed credentials
+        existing = db_helper.get_user_by_email(email)
+        if existing:
             return render_template('register.html', error="Email already exists")
-        
-        # Hash password
-        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        
-        # Add new user
-        credentials[email] = {
-            "password": hashed_password,
-            "accounts": []
-        }
-        
-        # Save to storage
-        if write_storage('user-credentials.json', credentials, sha):
+
+        # Hash password with bcrypt rounds=10
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt(rounds=10)).decode('utf-8')
+
+        ok = db_helper.create_user(email, hashed_password)
+        if ok:
+            # Initialize empty accounts relation handled by create_user()
+            session['user_id'] = email
             session['user_email'] = email
             return redirect(url_for('dashboard'))
         else:
@@ -1253,18 +1244,11 @@ def loginuser():
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
-        
-        # Load user credentials
-        credentials, _ = read_storage('user-credentials.json')
-        
-        # Check if user exists
-        if email not in credentials:
-            return render_template('loginuser.html', error="Invalid email or password")
-        
-        # Verify password
-        stored_password = credentials[email]['password']
-        if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
-            session['user_email'] = email
+        # Verify using DB-backed helper (single DB query + bcrypt check)
+        ok, user_email = db_helper.verify_user_password(email, password)
+        if ok:
+            session['user_id'] = user_email
+            session['user_email'] = user_email
             return redirect(url_for('dashboard'))
         else:
             return render_template('loginuser.html', error="Invalid email or password")
@@ -1273,148 +1257,69 @@ def loginuser():
 
 @app.route('/dashboard')
 def dashboard():
-    if 'user_email' not in session:
+    # Minimal, fast dashboard render. Heavy data is lazy-loaded via API endpoints.
+    if 'user_id' not in session:
         return redirect(url_for('loginuser'))
-    
-    email = session['user_email']
-    credentials, _ = read_storage('user-credentials.json')
-    user_accounts = credentials.get(email, {}).get('accounts', [])
-    
-    # Get selected account or default to first
-    selected_account = request.args.get('account')
-    if not selected_account and user_accounts:
-        selected_account = user_accounts[0]
-    
-    account_data = None
-    account_xp = None
-    license_data = None
-    total_bot_xp = 0
-    levels_gained = 0
-    
-    if selected_account:
-        # FRESH API calls - NO CACHING for account switch
-        player = search_wolvesville_player(selected_account)
-        
-        if player:
-            account_data = get_wolvesville_player_profile(player['id'])
-        
-        # Get XP data (fresh, not cached)
-        xp_data, _ = read_storage('user-XP.json')
-        account_xp = xp_data.get(selected_account, {})
-        
-        # Calculate total bot XP and levels gained
-        if account_xp:
-            # Sum all daily XP
-            total_bot_xp = sum(account_xp.get('daily', {}).values())
-            
-            # Calculate levels gained (2000 XP per level)
-            levels_gained = total_bot_xp // 2000
-        
-        # Get license data (fresh, not cached)
-        users_data, _ = read_storage('users.json')
-        license_data = next((u for u in users_data if u['username'] == selected_account), None)
-    
-    # Get current date info for XP display
-    from datetime import datetime
-    current_date = datetime.now().strftime('%Y-%m-%d')
-    current_week = datetime.now().strftime('%Y-W%U')
-    current_month = datetime.now().strftime('%Y-%m')
-    
-    return render_template('dashboard.html', 
-                         email=email, 
-                         accounts=user_accounts,
-                         selected_account=selected_account,
-                         account_data=account_data,
-                         account_xp=account_xp,
-                         license_data=license_data,
-                         current_date=current_date,
-                         current_week=current_week,
-                         current_month=current_month,
-                         total_bot_xp=total_bot_xp,
-                         levels_gained=levels_gained)
+
+    return render_template('dashboard.html', email=session.get('user_email'))
 
 @app.route('/api/license/pause', methods=['POST'])
 def pause_license():
     """Pause license for an account"""
-    if 'user_email' not in session:
+    if 'user_id' not in session:
         return jsonify({'success': False, 'error': 'Not logged in'}), 401
-    
+
     data = request.json
     username = data.get('username')
-    
     if not username:
         return jsonify({'success': False, 'error': 'Username required'}), 400
-    
-    # Verify this user owns this account
-    email = session['user_email']
-    credentials, _ = read_storage('user-credentials.json')
-    user_accounts = credentials.get(email, {}).get('accounts', [])
-    
+
+    # Verify ownership via DB
+    email = session['user_id']
+    user_accounts = db_helper.get_user_accounts(email)
     if username not in user_accounts:
         return jsonify({'success': False, 'error': 'Account not found'}), 403
-    
-    # Load users data
-    users_data, sha = read_storage('users.json')
-    user = next((u for u in users_data if u['username'] == username), None)
-    
-    if not user:
+
+    # Pause license via DB helper
+    license_row = db_helper.get_license(username)
+    if not license_row:
         return jsonify({'success': False, 'error': 'License not found'}), 404
-    
-    # Store current expiry date and mark as paused
-    if 'paused' not in user or not user['paused']:
-        user['paused'] = True
-        user['paused_at'] = datetime.now().strftime('%Y-%m-%d')
-        user['remaining_days'] = (datetime.strptime(user['expires'], '%Y-%m-%d') - datetime.now()).days
-        
-        # Write back to storage
-        if write_storage('users.json', users_data, sha):
-            log_event(f"License paused: {username} ({user['remaining_days']} days remaining)")
-            return jsonify({'success': True, 'message': 'License paused'})
-    
+
+    ok = db_helper.pause_license(username)
+    if ok:
+        log_event(f"License paused: {username}")
+        return jsonify({'success': True, 'message': 'License paused'})
+
     return jsonify({'success': False, 'error': 'License already paused'}), 400
 
 @app.route('/api/license/resume', methods=['POST'])
 def resume_license():
     """Resume paused license"""
-    if 'user_email' not in session:
+    if 'user_id' not in session:
         return jsonify({'success': False, 'error': 'Not logged in'}), 401
-    
+
     data = request.json
     username = data.get('username')
-    
     if not username:
         return jsonify({'success': False, 'error': 'Username required'}), 400
-    
-    # Verify this user owns this account
-    email = session['user_email']
-    credentials, _ = read_storage('user-credentials.json')
-    user_accounts = credentials.get(email, {}).get('accounts', [])
-    
+
+    # Verify ownership
+    email = session['user_id']
+    user_accounts = db_helper.get_user_accounts(email)
     if username not in user_accounts:
         return jsonify({'success': False, 'error': 'Account not found'}), 403
-    
-    # Load users data
-    users_data, sha = read_storage('users.json')
-    user = next((u for u in users_data if u['username'] == username), None)
-    
-    if not user:
+
+    license_row = db_helper.get_license(username)
+    if not license_row:
         return jsonify({'success': False, 'error': 'License not found'}), 404
-    
-    # Resume license
-    if user.get('paused', False):
-        remaining_days = user.get('remaining_days', 0)
-        new_expiry = (datetime.now() + timedelta(days=remaining_days)).strftime('%Y-%m-%d')
-        
-        user['expires'] = new_expiry
-        user['paused'] = False
-        user.pop('paused_at', None)
-        user.pop('remaining_days', None)
-        
-        # Write back to storage
-        if write_storage('users.json', users_data, sha):
-            log_event(f"License resumed: {username} (new expiry: {new_expiry})")
-            return jsonify({'success': True, 'message': 'License resumed', 'new_expiry': new_expiry})
-    
+
+    ok = db_helper.resume_license(username)
+    if ok:
+        new = db_helper.get_license(username)
+        new_expiry = new.get('expires') if new else None
+        log_event(f"License resumed: {username} (new expiry: {new_expiry})")
+        return jsonify({'success': True, 'message': 'License resumed', 'new_expiry': new_expiry})
+
     return jsonify({'success': False, 'error': 'License not paused'}), 400
 
 @app.route('/api/license/extend', methods=['POST'])
@@ -1462,7 +1367,7 @@ def add_account():
 
 @app.route('/verify_account', methods=['POST'])
 def verify_account():
-    if 'user_email' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('loginuser'))
     
     stored_code = session.get('verification_code')
@@ -1479,22 +1384,18 @@ def verify_account():
     if stored_code not in biography:
         return jsonify({'success': False, 'error': 'Verification code not found in biography'})
     
-    # Add account to user
-    email = session['user_email']
-    credentials, sha = read_storage('user-credentials.json')
-    
-    if username not in credentials[email]['accounts']:
-        credentials[email]['accounts'].append(username)
-        write_storage('user-credentials.json', credentials, sha)
-    
-    # Add to users.json with default expiry
-    users_data, users_sha = read_storage('users.json')
-    if not any(u['username'] == username for u in users_data):
-        users_data.append({
+    email = session['user_id']
+    # Add account mapping in DB
+    db_helper.add_account_to_user(email, username)
+
+    # Ensure license exists in users table
+    lic = db_helper.get_license(username)
+    if not lic:
+        # create via save_users helper
+        save_users([{
             "username": username,
             "expires": (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
-        })
-        write_storage('users.json', users_data, users_sha)
+        }])
     
     # Clear session verification data
     session.pop('verification_code', None)
@@ -1513,8 +1414,8 @@ def add_xp():
     if not all([player_id, xp_amount, username]):
         return jsonify({'success': False, 'error': 'Missing parameters'})
     
-    # Load XP data
-    xp_data, sha = read_storage('user-XP.json')
+    # Load XP data from DB
+    xp_data, sha = db_helper.read_storage('user-XP.json')
     
     if username not in xp_data:
         xp_data[username] = {"daily": {}, "weekly": {}, "monthly": {}}
@@ -1533,11 +1434,68 @@ def add_xp():
     # Update monthly
     xp_data[username]['monthly'][month] = xp_data[username]['monthly'].get(month, 0) + xp_amount
     
-    # Save to storage
-    if write_storage('user-XP.json', xp_data, sha):
+    # Save to storage (DB)
+    if db_helper.write_storage('user-XP.json', xp_data, sha):
         return jsonify({'success': True})
     
     return jsonify({'success': False, 'error': 'Failed to save XP data'})
+
+
+@app.route('/api/dashboard/accounts', methods=['GET'])
+@login_required
+def api_dashboard_accounts():
+    """Return accounts owned by the authenticated user (DB only)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    email = session['user_id']
+    accounts = db_helper.get_user_accounts(email)
+    return jsonify(accounts)
+
+
+@app.route('/api/dashboard/license/<username>', methods=['GET'])
+@login_required
+def api_dashboard_license(username):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    email = session['user_id']
+    accounts = db_helper.get_user_accounts(email)
+    if username not in accounts:
+        return jsonify({'error': 'Account not found'}), 403
+    lic = db_helper.get_license(username)
+    if not lic:
+        return jsonify({'error': 'License not found'}), 404
+    return jsonify(lic)
+
+
+@app.route('/api/dashboard/xp/<username>', methods=['GET'])
+@login_required
+def api_dashboard_xp(username):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    email = session['user_id']
+    accounts = db_helper.get_user_accounts(email)
+    if username not in accounts:
+        return jsonify({'error': 'Account not found'}), 403
+    xp = db_helper.get_user_xp(username)
+    return jsonify(xp)
+
+
+@app.route('/api/dashboard/profile/<username>', methods=['GET'])
+@login_required
+def api_dashboard_profile(username):
+    # This endpoint is the only one allowed to call Wolvesville API
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    email = session['user_id']
+    accounts = db_helper.get_user_accounts(email)
+    if username not in accounts:
+        return jsonify({'error': 'Account not found'}), 403
+
+    player = search_wolvesville_player(username)
+    if not player:
+        return jsonify({'error': 'Player not found'}), 404
+    profile = get_wolvesville_player_profile(player['id'])
+    return jsonify(profile or {})
 
 @app.route("/logout")
 def logout():
