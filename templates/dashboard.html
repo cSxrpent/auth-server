@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -511,11 +510,11 @@
             </div>
             <div id="account-area" style="display:none;">
             <div class="tabs">
-                <div class="tab active" onclick="switchTab('main')">📊 Main Menu</div>
-                <div class="tab" onclick="switchTab('account')">👤 Account</div>
-                <div class="tab" onclick="switchTab('xp')">⚡ XP Tracking</div>
-                <div class="tab" onclick="switchTab('license')">🎫 License</div>
-                <div class="tab" onclick="switchTab('support')">💬 Support</div>
+                <div class="tab active" onclick="switchTab('main', this)">📊 Main Menu</div>
+                <div class="tab" onclick="switchTab('account', this)">👤 Account</div>
+                <div class="tab" onclick="switchTab('xp', this)">⚡ XP Tracking</div>
+                <div class="tab" onclick="switchTab('license', this)">🎫 License</div>
+                <div class="tab" onclick="switchTab('support', this)">💬 Support</div>
             </div>
 
             <div id="main-tab" class="tab-content active">
@@ -556,13 +555,7 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">📊 Win Ratio</div>
-                        <div class="stat-value">
-                            {% if account_data and account_data.gamesWon and account_data.gamesLost %}
-                                <span id="win-ratio">N/A</span>
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </div>
+                        <div class="stat-value"><span id="win-ratio">N/A</span></div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">👥 Friends Count</div>
@@ -600,43 +593,25 @@
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-label">📅 XP Gained Today</div>
-                            <div class="stat-value">
-                                {% if account_xp and account_xp.daily %}
-                                    {{ "{:,}".format(account_xp.daily.get(current_date, 0)) }}
-                                {% else %}
-                                    0
-                                {% endif %}
-                            </div>
+                            <div class="stat-value"><span id="xp-daily">0</span></div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-label">📊 XP Gained This Week</div>
-                            <div class="stat-value">
-                                {% if account_xp and account_xp.weekly %}
-                                    {{ "{:,}".format(account_xp.weekly.get(current_week, 0)) }}
-                                {% else %}
-                                    0
-                                {% endif %}
-                            </div>
+                            <div class="stat-value"><span id="xp-weekly">0</span></div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-label">📈 XP Gained This Month</div>
-                            <div class="stat-value">
-                                {% if account_xp and account_xp.monthly %}
-                                    {{ "{:,}".format(account_xp.monthly.get(current_month, 0)) }}
-                                {% else %}
-                                    0
-                                {% endif %}
-                            </div>
+                            <div class="stat-value"><span id="xp-monthly">0</span></div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-label">🏆 Total Bot XP</div>
-                            <div class="stat-value">{{ "{:,}".format(total_bot_xp) if total_bot_xp else 0 }}</div>
+                            <div class="stat-value"><span id="xp-total-display">0</span></div>
                         </div>
                         <div class="stat-card" style="grid-column: span 2;">
                             <div class="stat-label">⭐ Levels Gained by Bot</div>
-                            <div class="stat-value" style="font-size: 3rem;">{{ levels_gained if levels_gained else 0 }}</div>
+                            <div class="stat-value" style="font-size: 3rem;" id="levels-gained">0</div>
                             <div style="color: var(--muted); font-size: 0.9rem; margin-top: 10px;">
-                                ({{ "{:,}".format(total_bot_xp) if total_bot_xp else 0 }} XP ÷ 2000 per level)
+                                (<span id="xp-total-dup">0</span> XP ÷ 2000 per level)
                             </div>
                         </div>
                     </div>
@@ -648,42 +623,19 @@
                     <div class="license-status">
                         <div>
                             <h3>🎫 License Status</h3>
-                            {% if license_data %}
-                                {% if license_data.get('paused', False) %}
-                                    <p style="margin-top: 10px;">Status: <strong style="color: #ffa500;">⏸️ Paused</strong></p>
-                                    <p style="margin-top: 5px;">Paused on: <strong>{{ license_data.paused_at }}</strong></p>
-                                    <p style="margin-top: 5px;">Days remaining: <strong>{{ license_data.remaining_days }}</strong></p>
-                                {% else %}
-                                    <p style="margin-top: 10px;">Expires: <strong>{{ license_data.expires }}</strong></p>
-                                {% endif %}
-                            {% else %}
-                            <p style="margin-top: 10px; color: var(--danger);">❌ No active license</p>
-                            {% endif %}
+                            <p id="license-message" style="margin-top:10px; color:var(--muted);">Loading...</p>
+                            <p id="license-details" style="margin-top:5px; color:var(--muted);"></p>
                         </div>
-                        {% if license_data %}
-                            {% if license_data.get('paused', False) %}
-                            <div class="license-badge paused">
-                                ⏸️ Paused
-                            </div>
-                            {% else %}
-                            <div class="license-badge active">
-                                ✓ Active
-                            </div>
-                            {% endif %}
-                        {% endif %}
+                        <div id="license-badge" class="license-badge" style="display:none;">
+                        </div>
                     </div>
                 </div>
                 
-                {% if license_data %}
-                <div class="license-actions">
-                    {% if license_data.get('paused', False) %}
-                    <button class="btn btn-resume" onclick="resumeLicense()">▶️ Resume License</button>
-                    {% else %}
-                    <button class="btn btn-pause" onclick="pauseLicense()">⏸️ Pause License</button>
-                    {% endif %}
-                    <button class="btn btn-extend" onclick="extendLicense()">➕ Extend License</button>
+                <div id="license-actions" class="license-actions" style="display:none;">
+                    <button id="btn-pause" class="btn btn-pause" onclick="pauseLicense()">⏸️ Pause License</button>
+                    <button id="btn-resume" class="btn btn-resume" onclick="resumeLicense()" style="display:none;">▶️ Resume License</button>
+                    <button id="btn-extend" class="btn btn-extend" onclick="extendLicense()">➕ Extend License</button>
                 </div>
-                {% endif %}
             </div>
 
             <div id="support-tab" class="tab-content">
@@ -771,13 +723,31 @@
                 ]);
 
                 if(profRes.ok){
-                    const prof = await profRes.json();
+                    const profRaw = await profRes.json();
+                    // map common Wolvesville API fields to expected names
+                    const prof = {
+                        id: profRaw.id || profRaw.playerId || null,
+                        username: profRaw.username || profRaw.name || username,
+                        level: profRaw.level || profRaw.playerLevel || 'N/A',
+                        xpTotal: profRaw.totalPlayTimeInMinutes || profRaw.xpTotal || 0,
+                        xpUntilNextLevel: profRaw.xpUntilNextLevel || null,
+                        gamesWon: profRaw.totalWinCount || profRaw.totalVillageWinCount || 0,
+                        gamesLost: profRaw.totalLoseCount || profRaw.totalVillageLoseCount || 0,
+                        friendsCount: profRaw.friendsCount != null ? profRaw.friendsCount : 'N/A',
+                        rankedSeasonSkillRating: profRaw.seasonSkill || profRaw.rankedSeasonSkillRating || 'N/A',
+                        clan: profRaw.clan || null
+                    };
                     document.getElementById('account-username').textContent = prof.username || username;
                     document.getElementById('account-username-2').textContent = prof.username || username;
+                    document.getElementById('account-username-3').textContent = prof.username || username;
                     document.getElementById('account-level').textContent = '⭐ Level ' + (prof.level || 'N/A');
                     document.getElementById('account-level-2').textContent = '⭐ Level ' + (prof.level || 'N/A');
+                    document.getElementById('account-level-3').textContent = '⭐ Level ' + (prof.level || 'N/A');
                     document.getElementById('player-id').textContent = prof.id || 'N/A';
-                    document.getElementById('xp-total').textContent = prof.xpTotal ? prof.xpTotal.toLocaleString() : 'N/A';
+                    const profTotal = prof.xpTotal ? prof.xpTotal : 0;
+                    document.getElementById('xp-total-display').textContent = profTotal.toLocaleString();
+                    document.getElementById('xp-total-dup').textContent = profTotal.toLocaleString();
+                    if(document.getElementById('xp-total')) document.getElementById('xp-total').textContent = profTotal.toLocaleString();
                     document.getElementById('xp-until').textContent = prof.xpUntilNextLevel ? prof.xpUntilNextLevel.toLocaleString() : 'N/A';
                     document.getElementById('games-won').textContent = prof.gamesWon ? prof.gamesWon.toLocaleString() : 'N/A';
                     document.getElementById('games-lost').textContent = prof.gamesLost ? prof.gamesLost.toLocaleString() : 'N/A';
@@ -790,7 +760,6 @@
                     if(prof.clan){
                         document.getElementById('clan-info-container').style.display='block';
                         document.getElementById('clan-none').style.display='none';
-                        // populate clan content if needed (left as text nodes)
                     } else {
                         document.getElementById('clan-info-container').style.display='none';
                         document.getElementById('clan-none').style.display='block';
@@ -799,21 +768,51 @@
 
                 if(xpRes.ok){
                     const xp = await xpRes.json();
-                    // Update XP sections
+                    // XP object: {daily: {}, weekly: {}, monthly: {}}
                     const today = new Date().toISOString().slice(0,10);
-                    const week = new Date().toISOString().slice(0,8); // simple
+                    const week = new Date().toISOString().slice(0,8); // approximate
                     const month = new Date().toISOString().slice(0,7);
-                    document.querySelectorAll('#xp-total').forEach(()=>{}); // noop
-                    // For brevity, only update totals displayed elsewhere
+                    document.getElementById('xp-daily').textContent = (xp.daily && xp.daily[today])?xp.daily[today].toLocaleString():0;
+                    document.getElementById('xp-weekly').textContent = (xp.weekly && xp.weekly[week])?xp.weekly[week].toLocaleString():0;
+                    document.getElementById('xp-monthly').textContent = (xp.monthly && xp.monthly[month])?xp.monthly[month].toLocaleString():0;
+                    // update total and levels if available
+                    const total = Object.values(xp.daily||{}).reduce((a,b)=>a+(b||0),0);
+                    document.getElementById('xp-total-display').textContent = total.toLocaleString();
+                    document.getElementById('xp-total-dup').textContent = total.toLocaleString();
+                    if(document.getElementById('xp-total')) document.getElementById('xp-total').textContent = total.toLocaleString();
+                    document.getElementById('levels-gained').textContent = Math.floor(total/2000);
                 }
 
                 if(licRes.ok){
                     const lic = await licRes.json();
-                    // update license UI
-                    // simple: show expiry or paused
-                    if(lic.paused){
-                        document.querySelectorAll('.license-badge').forEach(b=>b.classList.remove('active'));
+                    const msg = document.getElementById('license-message');
+                    const details = document.getElementById('license-details');
+                    const badge = document.getElementById('license-badge');
+                    const actions = document.getElementById('license-actions');
+                    const btnPause = document.getElementById('btn-pause');
+                    const btnResume = document.getElementById('btn-resume');
+                    if(!lic){
+                        msg.textContent = '❌ No active license';
+                        badge.style.display='none';
+                        actions.style.display='none';
+                    } else {
+                        actions.style.display='flex';
+                        if(lic.paused){
+                            msg.innerHTML = 'Status: <strong style="color:#ffa500;">⏸️ Paused</strong>';
+                            details.textContent = 'Paused on: ' + (lic.paused_at || 'N/A') + ' — Days remaining: ' + (lic.remaining_days != null ? lic.remaining_days : 'N/A');
+                            badge.style.display='inline-block'; badge.className='license-badge paused'; badge.textContent='⏸️ Paused';
+                            btnPause.style.display='none'; btnResume.style.display='inline-block';
+                        } else {
+                            msg.innerHTML = 'Expires: <strong>' + (lic.expires || 'N/A') + '</strong>';
+                            details.textContent = '';
+                            badge.style.display='inline-block'; badge.className='license-badge active'; badge.textContent='✓ Active';
+                            btnPause.style.display='inline-block'; btnResume.style.display='none';
+                        }
                     }
+                } else {
+                    // HTTP error
+                    document.getElementById('license-message').textContent = 'Unable to load license info';
+                    document.getElementById('license-actions').style.display='none';
                 }
             }catch(e){
                 console.error('Failed to load account data', e);
@@ -823,18 +822,14 @@
         // initial load
         loadAccounts();
         
-        function switchTab(tabName) {
+        function switchTab(tabName, el) {
             // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             // Show selected tab
-            document.getElementById(tabName + '-tab').classList.add('active');
-            event.target.classList.add('active');
+            const target = document.getElementById(tabName + '-tab');
+            if(target) target.classList.add('active');
+            if(el) el.classList.add('active');
         }
         
         async function pauseLicense() {

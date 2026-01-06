@@ -1386,7 +1386,9 @@ def verify_account():
     
     email = session['user_id']
     # Add account mapping in DB
-    db_helper.add_account_to_user(email, username)
+    added = db_helper.add_account_to_user(email, username)
+    if not added:
+        return jsonify({'success': False, 'error': 'Failed to add account (DB unavailable or permission denied)'}), 500
 
     # Ensure license exists in users table
     lic = db_helper.get_license(username)
