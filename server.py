@@ -24,6 +24,7 @@ import base64
 import html
 from wolvesville_api import wolvesville_api
 from token_manager import token_manager
+import db_helper
 
 load_dotenv()  # load .env file if it exists (for local development)
 
@@ -220,82 +221,12 @@ def _github_put_keys_file(new_keys, sha=None):
         return False, {"error": f"gh_put_exception:{e}"}
 
 def load_keys():
-    """Try GitHub first, then fallback to local keys.json. Overwrite local if different from GitHub."""
-    print("🔍 Loading keys...")
-    
-    # Try GitHub API first
-    keys = load_keys_from_github()
-    if keys is not None:
-        print(f"✅ Loaded keys from GitHub: {len(keys)} keys")
-        
-        # Check if local file exists and differs
-        try:
-            with open(KEYS_FILE, "r", encoding="utf-8") as f:
-                local_keys = json.load(f)
-            
-            # Normalize for comparison (sort by code)
-            def normalize(k_list):
-                return sorted(k_list, key=lambda x: x.get('code', '').lower())
-            
-            github_normalized = normalize(keys)
-            local_normalized = normalize(local_keys)
-            
-            if github_normalized != local_normalized:
-                print("🔄 Local keys file differs from GitHub, overwriting local with GitHub data")
-                with open(KEYS_FILE, "w", encoding="utf-8") as f:
-                    json.dump(keys, f, indent=2, ensure_ascii=False)
-                log_event("Overwrote local keys.json with GitHub data")
-            else:
-                print("✅ Local keys file matches GitHub")
-        
-        except FileNotFoundError:
-            print("📝 Local keys.json not found, creating it with GitHub data")
-            with open(KEYS_FILE, "w", encoding="utf-8") as f:
-                json.dump(keys, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"⚠️ Error checking/comparing local keys file: {e}")
-        
-        return keys
-    
-    # Fallback to local file
-    print("⚠️ GitHub failed for keys, falling back to local file")
-    try:
-        with open(KEYS_FILE, "r", encoding="utf-8") as f:
-            local_keys = json.load(f)
-            print(f"✅ Loaded keys from local: {len(local_keys)} keys")
-            return local_keys
-    except FileNotFoundError:
-        print("⚠ Local keys.json not found")
-        return []
-    except Exception as e:
-        print(f"⚠ Error loading local keys.json: {e}")
-        return []
+    """Delegate keys loading to DB-backed helper."""
+    return db_helper.load_keys()
 
 def save_keys(keys):
-    """
-    Write local file then try to push to GitHub if token is present.
-    Returns dict describing results.
-    """
-    result = {"saved_local": False, "github": None}
-    # write local
-    try:
-        with open(KEYS_FILE, "w", encoding="utf-8") as f:
-            json.dump(keys, f, indent=2, ensure_ascii=False)
-        result["saved_local"] = True
-    except Exception as e:
-        result["saved_local"] = False
-        result["local_error"] = str(e)
-    
-    # try pushing to GitHub
-    if GITHUB_TOKEN:
-        ok, info = _github_get_keys_file()
-        sha = info.get("sha") if ok else None
-        ok2, put_res = _github_put_keys_file(keys, sha=sha)
-        result["github"] = {"ok": ok2, "detail": put_res}
-    else:
-        result["github"] = {"ok": False, "detail": "no_github_token"}
-    
-    return result
+    """Delegate keys saving to DB-backed helper."""
+    return db_helper.save_keys(keys)
 
 def generate_key():
     """Generate a random 6-character key with uppercase, lowercase, and numbers."""
@@ -389,96 +320,24 @@ def _github_put_file(new_users, sha=None):
         return False, {"error": f"gh_put_exception:{e}"}
 
 def read_github_file(filename):
-    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{filename}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    params = {"ref": GITHUB_BRANCH}
-    response = requests.get(url, headers=headers, params=params)
-    if response.status_code == 200:
-        import base64
-        content = base64.b64decode(response.json()['content']).decode('utf-8')
-        return json.loads(content), response.json()['sha']
-    return {}, None
+    return db_helper.read_github_file(filename)
 
 def write_github_file(filename, data, sha=None):
-    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{filename}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    import base64
-    content = base64.b64encode(json.dumps(data, indent=2).encode()).decode()
-    payload = {"message": f"Update {filename}", "content": content, "branch": GITHUB_BRANCH}
-    if sha:
-        payload["sha"] = sha
-    response = requests.put(url, headers=headers, json=payload)
-    return response.status_code in [200, 201]
+    return db_helper.write_github_file(filename, data, sha=sha)
 
 # -----------------------
 # User storage helpers
 # -----------------------
 def load_users():
-    """Try GitHub first, then fallback to local users.json. Overwrite local if different from GitHub."""
-    print("🔍 Loading users...")
-    
-    # Try GitHub API first
-    users = load_users_from_github()
-    if users is not None:
-        print(f"✅ Loaded from GitHub: {len(users)} users")
-        
-        # Check if local file exists and differs
-        try:
-            with open(USERS_FILE, "r", encoding="utf-8") as f:
-                local_users = json.load(f)
-            
-            # Normalize for comparison (sort by username)
-            def normalize(u_list):
-                return sorted(u_list, key=lambda x: x.get('username', '').lower())
-            
-            github_normalized = normalize(users)
-            local_normalized = normalize(local_users)
-            
-            if github_normalized != local_normalized:
-                print("🔄 Local file differs from GitHub, overwriting local with GitHub data")
-                with open(USERS_FILE, "w", encoding="utf-8") as f:
-                    json.dump(users, f, indent=2, ensure_ascii=False)
-                log_event("Overwrote local users.json with GitHub data")
-            else:
-                print("✅ Local file matches GitHub")
-        
-        except FileNotFoundError:
-            print("📝 Local users.json not found, creating it with GitHub data")
-            with open(USERS_FILE, "w", encoding="utf-8") as f:
-                json.dump(users, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"⚠️ Error checking/comparing local file: {e}")
-        
-        return users
-    
-    # Fallback to local file
-    print("⚠️ GitHub failed, falling back to local file")
-    try:
-        with open(USERS_FILE, "r", encoding="utf-8") as f:
-            local_users = json.load(f)
-            print(f"✅ Loaded from local: {len(local_users)} users")
-            return local_users
-    except FileNotFoundError:
-        print("⚠ Local users.json not found")
-        return []
-    except Exception as e:
-        print(f"⚠ Error loading local users.json: {e}")
-        return []
+    """Delegate users loading to DB-backed helper."""
+    return db_helper.load_users()
 
 def save_users(users):
     """
     Write local file then try to push to GitHub if token is present.
     Returns dict describing results.
     """
-    result = {"saved_local": False, "github": None}
-    # write local
-    try:
-        with open(USERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(users, f, indent=2, ensure_ascii=False)
-        result["saved_local"] = True
-    except Exception as e:
-        result["saved_local"] = False
-        result["local_error"] = str(e)
+    return db_helper.save_users(users)
     # try pushing to GitHub
     if GITHUB_TOKEN:
         ok, info = _github_get_file()
@@ -514,206 +373,32 @@ def parse_date(s):
     return datetime.strptime(s, "%Y-%m-%d")
 
 def load_stats():
-    """Load stats from local file."""
-    try:
-        with open(STATS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-    except Exception as e:
-        print(f"⚠ Error loading stats: {e}")
-        return {}
+    """Load stats from DB-backed helper."""
+    return db_helper.load_stats()
 
 def save_stats(stats):
-    """Save stats to local file."""
-    try:
-        with open(STATS_FILE, "w", encoding="utf-8") as f:
-            json.dump(stats, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"⚠ Error saving stats: {e}")
+    """Save stats via DB-backed helper."""
+    return db_helper.save_stats(stats)
 
 def load_last_connected():
-    """Load last connected times from local file."""
-    try:
-        with open(LAST_CONNECTED_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-    except Exception as e:
-        print(f"⚠ Error loading last_connected: {e}")
-        return {}
+    """Load last connected times via DB-backed helper."""
+    return db_helper.load_last_connected()
 
 def save_last_connected(last_conn):
-    """Save last connected to local file."""
-    try:
-        with open(LAST_CONNECTED_FILE, "w", encoding="utf-8") as f:
-            json.dump(last_conn, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"⚠ Error saving last_connected: {e}")
+    """Save last connected via DB-backed helper."""
+    return db_helper.save_last_connected(last_conn)
 
-def load_testimonials_from_github():
-    """Fetch testimonials.json from GitHub API (no cache). Returns list or None on failure."""
-    try:
-        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_TESTIMONIALS_PATH}"
-        headers = {"Accept": "application/vnd.github.v3+json"}
-        
-        if GITHUB_TOKEN:
-            headers["Authorization"] = f"token {GITHUB_TOKEN}"
-        
-        params = {"ref": GITHUB_BRANCH, "t": int(time.time())}
-        
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            content_b64 = data.get("content", "")
-            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
-            testimonials = json.loads(decoded)
-            print(f"✓ Loaded {len(testimonials)} testimonials from GitHub API")
-            return testimonials
-        elif response.status_code == 404:
-            print("ℹ️ testimonials.json not found on GitHub, will create on first save")
-            return []
-        else:
-            print(f"✗ GitHub API fetch failed for testimonials: {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"✗ Error fetching testimonials from GitHub API: {e}")
-        return None
 
-def _github_get_testimonials_file():
-    """Return (ok, info). If ok True: info={'content': <python obj list>, 'sha': <sha>}"""
-    if not GITHUB_TOKEN:
-        return False, {"error": "no_github_token"}
-    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_TESTIMONIALS_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    params = {"ref": GITHUB_BRANCH}
-    try:
-        r = requests.get(url, headers=headers, params=params, timeout=10)
-        if r.status_code == 200:
-            j = r.json()
-            content_b64 = j.get("content", "")
-            sha = j.get("sha")
-            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
-            try:
-                data = json.loads(decoded)
-            except Exception as e:
-                return False, {"error": f"invalid_json_in_github:{e}"}
-            return True, {"content": data, "sha": sha}
-        elif r.status_code == 404:
-            return True, {"content": [], "sha": None}
-        else:
-            return False, {"error": f"gh_get_status_{r.status_code}", "detail": r.text}
-    except Exception as e:
-        return False, {"error": f"gh_get_exception:{e}"}
-
-def _github_put_testimonials_file(new_testimonials, sha=None):
-    """Create/Update testimonials.json on GitHub. Return (ok, detail)."""
-    if not GITHUB_TOKEN:
-        return False, {"error": "no_github_token"}
-    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_TESTIMONIALS_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    content_b64 = base64.b64encode(json.dumps(new_testimonials, ensure_ascii=False, indent=2).encode("utf-8")).decode("utf-8")
-    payload = {
-        "message": f"Update testimonials.json via server at {(datetime.utcnow() + CET_OFFSET).isoformat()}Z",
-        "content": content_b64,
-        "branch": GITHUB_BRANCH
-    }
-    if sha:
-        payload["sha"] = sha
-    try:
-        r = requests.put(url, headers=headers, json=payload, timeout=15)
-        if r.status_code in (200, 201):
-            return True, r.json()
-        else:
-            return False, {"error": f"gh_put_status_{r.status_code}", "detail": r.text}
-    except Exception as e:
-        return False, {"error": f"gh_put_exception:{e}"}
 
 def load_testimonials():
-    """Try GitHub first, then fallback to local testimonials.json. Overwrite local if different from GitHub."""
-    print("🔍 Loading testimonials...")
-    
-    # Try GitHub API first
-    testimonials = load_testimonials_from_github()
-    if testimonials is not None:
-        print(f"✅ Loaded testimonials from GitHub: {len(testimonials)} testimonials")
-        
-        # Check if local file exists and differs
-        try:
-            with open(TESTIMONIALS_FILE, "r", encoding="utf-8") as f:
-                local_testimonials = json.load(f)
-            
-            # Normalize for comparison (sort by id)
-            def normalize(t_list):
-                return sorted(t_list, key=lambda x: x.get('id', '').lower())
-            
-            github_normalized = normalize(testimonials)
-            local_normalized = normalize(local_testimonials)
-            
-            if github_normalized != local_normalized:
-                print("🔄 Local testimonials file differs from GitHub, overwriting local with GitHub data")
-                with open(TESTIMONIALS_FILE, "w", encoding="utf-8") as f:
-                    json.dump(testimonials, f, indent=2, ensure_ascii=False)
-                log_event("Overwrote local testimonials.json with GitHub data")
-            else:
-                print("✅ Local testimonials file matches GitHub")
-        
-        except FileNotFoundError:
-            print("📝 Local testimonials.json not found, creating it with GitHub data")
-            with open(TESTIMONIALS_FILE, "w", encoding="utf-8") as f:
-                json.dump(testimonials, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"⚠️ Error checking/comparing local testimonials file: {e}")
-        
-        return testimonials
-    
-    # Fallback to local file
-    print("⚠️ GitHub failed for testimonials, falling back to local file")
-    try:
-        with open(TESTIMONIALS_FILE, "r", encoding="utf-8") as f:
-            local_testimonials = json.load(f)
-            print(f"✅ Loaded testimonials from local: {len(local_testimonials)} testimonials")
-            return local_testimonials
-    except FileNotFoundError:
-        print("⚠ Local testimonials.json not found")
-        return []
-    except Exception as e:
-        print(f"⚠ Error loading local testimonials.json: {e}")
-        return []
+    """Load testimonials via DB-backed helper."""
+    return db_helper.load_testimonials()
 
 def save_testimonials(testimonials):
-    """
-    Write local file then try to push to GitHub if token is present.
-    Returns dict describing results.
-    """
-    result = {"saved_local": False, "github": None}
-    # write local
-    try:
-        with open(TESTIMONIALS_FILE, "w", encoding="utf-8") as f:
-            json.dump(testimonials, f, indent=2, ensure_ascii=False)
-        result["saved_local"] = True
-        print(f"✅ Saved {len(testimonials)} testimonials to local file")
-    except Exception as e:
-        result["saved_local"] = False
-        result["local_error"] = str(e)
-        print(f"❌ Error saving local testimonials: {e}")
+    """Save testimonials via DB-backed helper."""
+    return db_helper.save_testimonials(testimonials)
+
     
-    # try pushing to GitHub
-    if GITHUB_TOKEN:
-        ok, info = _github_get_testimonials_file()
-        sha = info.get("sha") if ok else None
-        ok2, put_res = _github_put_testimonials_file(testimonials, sha=sha)
-        result["github"] = {"ok": ok2, "detail": put_res}
-        if ok2:
-            print(f"✅ Pushed {len(testimonials)} testimonials to GitHub")
-        else:
-            print(f"❌ Failed to push testimonials to GitHub: {put_res}")
-    else:
-        result["github"] = {"ok": False, "detail": "no_github_token"}
-        print("⚠️ No GitHub token, testimonials only saved locally")
-    
-    return result
         
 # -----------------------
 # Key redemption routes
