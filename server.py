@@ -41,7 +41,7 @@ else:
 app = Flask(__name__, static_folder="static", template_folder="templates")
 CORS(app)  # allow cross-origin for simple API access
 
-# Secrets & GitHub config from env (safer)
+# Secrets & storage config from env (safer)
 app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key_replace_in_prod")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change_me_locally")
 DOWNLOAD_SECRET = app.secret_key
@@ -51,7 +51,6 @@ PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
 PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
 PAYPAL_TEST_MODE = os.getenv("PAYPAL_TEST_MODE", "false").lower() == "true"  # Skip actual PayPal calls for testing
 TESTIMONIALS_FILE = "testimonials.json"  # testimonials storage
-GITHUB_TESTIMONIALS_PATH = "testimonials.json"  # GitHub path
 
 paypalrestsdk.configure({
     "mode": PAYPAL_MODE,
@@ -121,15 +120,7 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-GITHUB_OWNER = "cSxrpent"
-GITHUB_REPO = "auth-users"
-GITHUB_BRANCH = "main"
-GITHUB_PATH = "users.json"
-GITHUB_KEYS_PATH = "keys.json"  # Add keys file path
-
-# GitHub raw URL (public access, no token needed if repo is public)
-GITHUB_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_PATH}"
+# Storage integration — runtime storage is DB-backed via `db_helper`
 
 USERS_FILE = "users.json"  # local fallback file
 KEYS_FILE = "keys.json"  # activation keys storage
@@ -141,84 +132,7 @@ CET_OFFSET = timedelta(hours=1)  # CET = UTC+1 in winter
 # -----------------------
 # Keys management helpers
 # -----------------------
-def load_keys_from_github():
-    """Fetch keys.json from GitHub API (no cache). Returns list of keys or None on failure."""
-    try:
-        # Use GitHub API instead of raw URL to avoid cache
-        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_KEYS_PATH}"
-        headers = {"Accept": "application/vnd.github.v3+json"}
-        
-        if GITHUB_TOKEN:
-            headers["Authorization"] = f"token {GITHUB_TOKEN}"
-        
-        # Add cache-busting parameter
-        params = {"ref": GITHUB_BRANCH, "t": int(time.time())}
-        
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            content_b64 = data.get("content", "")
-            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
-            keys = json.loads(decoded)
-            print(f"✓ Loaded {len(keys)} keys from GitHub API")
-            return keys
-        else:
-            print(f"✗ GitHub API fetch failed for keys: {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"✗ Error fetching keys from GitHub API: {e}")
-        return None
-
-def _github_get_keys_file():
-    """Return (ok, info). If ok True: info={'content': <python obj list>, 'sha': <sha>}"""
-    if not GITHUB_TOKEN:
-        return False, {"error": "no_github_token"}
-    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_KEYS_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    params = {"ref": GITHUB_BRANCH}
-    try:
-        r = requests.get(url, headers=headers, params=params, timeout=10)
-        if r.status_code == 200:
-            j = r.json()
-            content_b64 = j.get("content", "")
-            sha = j.get("sha")
-            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
-            try:
-                data = json.loads(decoded)
-            except Exception as e:
-                return False, {"error": f"invalid_json_in_github:{e}"}
-            return True, {"content": data, "sha": sha}
-        elif r.status_code == 404:
-            # File doesn't exist yet, that's ok
-            return True, {"content": [], "sha": None}
-        else:
-            return False, {"error": f"gh_get_status_{r.status_code}", "detail": r.text}
-    except Exception as e:
-        return False, {"error": f"gh_get_exception:{e}"}
-
-def _github_put_keys_file(new_keys, sha=None):
-    """Create/Update keys.json on GitHub. Return (ok, detail)."""
-    if not GITHUB_TOKEN:
-        return False, {"error": "no_github_token"}
-    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_KEYS_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    content_b64 = base64.b64encode(json.dumps(new_keys, ensure_ascii=False, indent=2).encode("utf-8")).decode("utf-8")
-    payload = {
-        "message": f"Update keys.json via server at {(datetime.utcnow() + CET_OFFSET).isoformat()}Z",
-        "content": content_b64,
-        "branch": GITHUB_BRANCH
-    }
-    if sha:
-        payload["sha"] = sha
-    try:
-        r = requests.put(url, headers=headers, json=payload, timeout=15)
-        if r.status_code in (200, 201):
-            return True, r.json()
-        else:
-            return False, {"error": f"gh_put_status_{r.status_code}", "detail": r.text}
-    except Exception as e:
-        return False, {"error": f"gh_put_exception:{e}"}
+# Storage helper functions — use DB-backed `db_helper` instead.
 
 def load_keys():
     """Delegate keys loading to DB-backed helper."""
@@ -241,89 +155,15 @@ def find_key(keys, key_code):
     return None
 
 # -----------------------
-# GitHub helpers
+# Storage helpers
 # -----------------------
-def load_users_from_github():
-    """Fetch users.json from GitHub API (no cache). Returns list of users or None on failure."""
-    try:
-        # Use GitHub API instead of raw URL to avoid cache
-        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_PATH}"
-        headers = {"Accept": "application/vnd.github.v3+json"}
-        
-        if GITHUB_TOKEN:
-            headers["Authorization"] = f"token {GITHUB_TOKEN}"
-        
-        # Add cache-busting parameter
-        params = {"ref": GITHUB_BRANCH, "t": int(time.time())}
-        
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            content_b64 = data.get("content", "")
-            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
-            users = json.loads(decoded)
-            print(f"✓ Loaded {len(users)} users from GitHub API")
-            return users
-        else:
-            print(f"✗ GitHub API fetch failed: {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"✗ Error fetching from GitHub API: {e}")
-        return None
+# File/credential storage is DB-backed via `db_helper` and `read_storage`/`write_storage`.
 
-def _github_get_file():
-    """Return (ok, info). If ok True: info={'content': <python obj list>, 'sha': <sha>}"""
-    if not GITHUB_TOKEN:
-        return False, {"error": "no_github_token"}
-    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    params = {"ref": GITHUB_BRANCH}
-    try:
-        r = requests.get(url, headers=headers, params=params, timeout=10)
-        if r.status_code == 200:
-            j = r.json()
-            content_b64 = j.get("content", "")
-            sha = j.get("sha")
-            decoded = base64.b64decode(content_b64.encode()).decode("utf-8")
-            try:
-                data = json.loads(decoded)
-            except Exception as e:
-                return False, {"error": f"invalid_json_in_github:{e}"}
-            return True, {"content": data, "sha": sha}
-        else:
-            return False, {"error": f"gh_get_status_{r.status_code}", "detail": r.text}
-    except Exception as e:
-        return False, {"error": f"gh_get_exception:{e}"}
+def read_storage(filename):
+    return db_helper.read_storage(filename)
 
-def _github_put_file(new_users, sha=None):
-    """Create/Update users.json on GitHub. Return (ok, detail)."""
-    if not GITHUB_TOKEN:
-        return False, {"error": "no_github_token"}
-    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    content_b64 = base64.b64encode(json.dumps(new_users, ensure_ascii=False, indent=2).encode("utf-8")).decode("utf-8")
-    payload = {
-        "message": f"Update users.json via server at {(datetime.utcnow() + CET_OFFSET).isoformat()}Z",
-        "content": content_b64,
-        "branch": GITHUB_BRANCH
-    }
-    if sha:
-        payload["sha"] = sha
-    try:
-        r = requests.put(url, headers=headers, json=payload, timeout=15)
-        if r.status_code in (200, 201):
-            return True, r.json()
-        else:
-            return False, {"error": f"gh_put_status_{r.status_code}", "detail": r.text}
-    except Exception as e:
-        return False, {"error": f"gh_put_exception:{e}"}
-
-def read_github_file(filename):
-    return db_helper.read_github_file(filename)
-
-def write_github_file(filename, data, sha=None):
-    return db_helper.write_github_file(filename, data, sha=sha)
+def write_storage(filename, data, sha=None):
+    return db_helper.write_storage(filename, data, sha=sha)
 
 # -----------------------
 # User storage helpers
@@ -334,19 +174,10 @@ def load_users():
 
 def save_users(users):
     """
-    Write local file then try to push to GitHub if token is present.
+    Write local file then persist to storage (DB-backed).
     Returns dict describing results.
     """
     return db_helper.save_users(users)
-    # try pushing to GitHub
-    if GITHUB_TOKEN:
-        ok, info = _github_get_file()
-        sha = info.get("sha") if ok else None
-        ok2, put_res = _github_put_file(users, sha=sha)
-        result["github"] = {"ok": ok2, "detail": put_res}
-    else:
-        result["github"] = {"ok": False, "detail": "no_github_token"}
-    return result
 
 # -----------------------
 # Utilities
@@ -808,8 +639,7 @@ def debug():
 #        "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
         "paypal_mode": PAYPAL_MODE,
 #        "secret_key_set": bool(app.secret_key),
-        "admin_password_set": bool(ADMIN_PASSWORD),
-        "github_token_set": bool(GITHUB_TOKEN)
+        "admin_password_set": bool(ADMIN_PASSWORD)
     }
     return jsonify(info)
 
@@ -1019,7 +849,7 @@ def api_extend():
         # Update the user
         user["expires"] = new_expiry_str
         
-        # Save to GitHub
+        # Persist changes to storage
         save_res = save_users(users)
         
         print(f"✅ Extended '{username}' by {days} days. New expiry: {new_expiry_str}")
@@ -1394,7 +1224,7 @@ def register():
         password = request.form.get('password')
         
         # Load user credentials
-        credentials, sha = read_github_file('user-credentials.json')
+        credentials, sha = read_storage('user-credentials.json')
         
         # Check if email already exists
         if email in credentials:
@@ -1409,8 +1239,8 @@ def register():
             "accounts": []
         }
         
-        # Save to GitHub
-        if write_github_file('user-credentials.json', credentials, sha):
+        # Save to storage
+        if write_storage('user-credentials.json', credentials, sha):
             session['user_email'] = email
             return redirect(url_for('dashboard'))
         else:
@@ -1425,7 +1255,7 @@ def loginuser():
         password = request.form.get('password')
         
         # Load user credentials
-        credentials, _ = read_github_file('user-credentials.json')
+        credentials, _ = read_storage('user-credentials.json')
         
         # Check if user exists
         if email not in credentials:
@@ -1447,7 +1277,7 @@ def dashboard():
         return redirect(url_for('loginuser'))
     
     email = session['user_email']
-    credentials, _ = read_github_file('user-credentials.json')
+    credentials, _ = read_storage('user-credentials.json')
     user_accounts = credentials.get(email, {}).get('accounts', [])
     
     # Get selected account or default to first
@@ -1469,7 +1299,7 @@ def dashboard():
             account_data = get_wolvesville_player_profile(player['id'])
         
         # Get XP data (fresh, not cached)
-        xp_data, _ = read_github_file('user-XP.json')
+        xp_data, _ = read_storage('user-XP.json')
         account_xp = xp_data.get(selected_account, {})
         
         # Calculate total bot XP and levels gained
@@ -1481,7 +1311,7 @@ def dashboard():
             levels_gained = total_bot_xp // 2000
         
         # Get license data (fresh, not cached)
-        users_data, _ = read_github_file('users.json')
+        users_data, _ = read_storage('users.json')
         license_data = next((u for u in users_data if u['username'] == selected_account), None)
     
     # Get current date info for XP display
@@ -1517,14 +1347,14 @@ def pause_license():
     
     # Verify this user owns this account
     email = session['user_email']
-    credentials, _ = read_github_file('user-credentials.json')
+    credentials, _ = read_storage('user-credentials.json')
     user_accounts = credentials.get(email, {}).get('accounts', [])
     
     if username not in user_accounts:
         return jsonify({'success': False, 'error': 'Account not found'}), 403
     
     # Load users data
-    users_data, sha = read_github_file('users.json')
+    users_data, sha = read_storage('users.json')
     user = next((u for u in users_data if u['username'] == username), None)
     
     if not user:
@@ -1536,8 +1366,8 @@ def pause_license():
         user['paused_at'] = datetime.now().strftime('%Y-%m-%d')
         user['remaining_days'] = (datetime.strptime(user['expires'], '%Y-%m-%d') - datetime.now()).days
         
-        # Write back to GitHub
-        if write_github_file('users.json', users_data, sha):
+        # Write back to storage
+        if write_storage('users.json', users_data, sha):
             log_event(f"License paused: {username} ({user['remaining_days']} days remaining)")
             return jsonify({'success': True, 'message': 'License paused'})
     
@@ -1557,14 +1387,14 @@ def resume_license():
     
     # Verify this user owns this account
     email = session['user_email']
-    credentials, _ = read_github_file('user-credentials.json')
+    credentials, _ = read_storage('user-credentials.json')
     user_accounts = credentials.get(email, {}).get('accounts', [])
     
     if username not in user_accounts:
         return jsonify({'success': False, 'error': 'Account not found'}), 403
     
     # Load users data
-    users_data, sha = read_github_file('users.json')
+    users_data, sha = read_storage('users.json')
     user = next((u for u in users_data if u['username'] == username), None)
     
     if not user:
@@ -1580,8 +1410,8 @@ def resume_license():
         user.pop('paused_at', None)
         user.pop('remaining_days', None)
         
-        # Write back to GitHub
-        if write_github_file('users.json', users_data, sha):
+        # Write back to storage
+        if write_storage('users.json', users_data, sha):
             log_event(f"License resumed: {username} (new expiry: {new_expiry})")
             return jsonify({'success': True, 'message': 'License resumed', 'new_expiry': new_expiry})
     
@@ -1651,20 +1481,20 @@ def verify_account():
     
     # Add account to user
     email = session['user_email']
-    credentials, sha = read_github_file('user-credentials.json')
+    credentials, sha = read_storage('user-credentials.json')
     
     if username not in credentials[email]['accounts']:
         credentials[email]['accounts'].append(username)
-        write_github_file('user-credentials.json', credentials, sha)
+        write_storage('user-credentials.json', credentials, sha)
     
     # Add to users.json with default expiry
-    users_data, users_sha = read_github_file('users.json')
+    users_data, users_sha = read_storage('users.json')
     if not any(u['username'] == username for u in users_data):
         users_data.append({
             "username": username,
             "expires": (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
         })
-        write_github_file('users.json', users_data, users_sha)
+        write_storage('users.json', users_data, users_sha)
     
     # Clear session verification data
     session.pop('verification_code', None)
@@ -1684,7 +1514,7 @@ def add_xp():
         return jsonify({'success': False, 'error': 'Missing parameters'})
     
     # Load XP data
-    xp_data, sha = read_github_file('user-XP.json')
+    xp_data, sha = read_storage('user-XP.json')
     
     if username not in xp_data:
         xp_data[username] = {"daily": {}, "weekly": {}, "monthly": {}}
@@ -1703,8 +1533,8 @@ def add_xp():
     # Update monthly
     xp_data[username]['monthly'][month] = xp_data[username]['monthly'].get(month, 0) + xp_amount
     
-    # Save to GitHub
-    if write_github_file('user-XP.json', xp_data, sha):
+    # Save to storage
+    if write_storage('user-XP.json', xp_data, sha):
         return jsonify({'success': True})
     
     return jsonify({'success': False, 'error': 'Failed to save XP data'})
@@ -1761,7 +1591,4 @@ def get_wolvesville_player_profile(player_id):
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
     print(f"🚀 Starting server on port {port}")
-    print(f"📁 GitHub repo: {GITHUB_OWNER}/{GITHUB_REPO}")
-    print(f"📄 GitHub users file: {GITHUB_PATH}")
-    print(f"🎁 GitHub keys file: {GITHUB_KEYS_PATH}")
     app.run(host="0.0.0.0", port=port, debug=True)
