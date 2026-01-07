@@ -347,25 +347,26 @@
         <pre id="debugInfo" style="background:rgba(0,0,0,0.3);padding:16px;border-radius:8px;font-size:12px;overflow-x:auto">Loading...</pre>
         <button onclick="loadDebug()" style="margin-top:10px;background:var(--accent);border:none;padding:8px 16px;border-radius:6px;color:#000;font-weight:600;cursor:pointer">Refresh</button>
       </div>
+      
+      <!-- Custom Message Section -->
+      <div class="card" style="margin-top:20px">
+        <h2 style="margin-top:0;color:var(--accent)">📢 Custom Authentication Message</h2>
+        <p class="small muted" style="margin-bottom:16px">Set a custom message that will be shown to all users when they authenticate</p>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <textarea 
+            id="customMessageInput" 
+            rows="3" 
+            style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:linear-gradient(90deg,var(--glass),rgba(255,255,255,0.01));color:inherit;font-size:14px;font-family:inherit;resize:vertical"
+            placeholder="Enter your custom message here..."></textarea>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="primary" onclick="saveCustomMessage()">💾 Save Message</button>
+            <button class="del" onclick="clearCustomMessage()">🗑️ Clear Message</button>
+            <button class="primary" onclick="loadCustomMessage()" style="background:linear-gradient(90deg,var(--muted),#7b7b7b)">🔄 Refresh</button>
+          </div>
+          <div id="customMessageStatus" style="margin-top:8px;font-weight:600;color:var(--muted)"></div>
+        </div>
+      </div>
     </div>
-  </div>
-
-  <!-- Custom Message Section -->
-<div class="section" style="margin-top: 2rem; padding: 1rem; border: 1px solid #414243; border-radius: 8px;">
-  <h2 style="margin-bottom: 1rem;">📢 Custom Authentication Message</h2>
-  <p style="margin-bottom: 1rem; color: #999;">Set a custom message that will be shown to all users when they authenticate:</p>
-  <div class="form-group" style="margin-bottom: 1rem;">
-    <textarea 
-      id="customMessageInput" 
-      rows="3" 
-      style="width: 100%; max-width: 600px; padding: 0.5rem; background: #181818; color: #fafafa; border: 1px solid #414243; border-radius: 4px; font-family: inherit;"
-      placeholder="Enter your custom message here..."></textarea>
-  </div>
-  <div style="display: flex; gap: 0.5rem;">
-    <button onclick="saveCustomMessage()" style="padding: 0.5rem 1rem; cursor: pointer;">💾 Save Message</button>
-    <button onclick="clearCustomMessage()" style="padding: 0.5rem 1rem; cursor: pointer;">🗑️ Clear Message</button>
-  </div>
-  <div id="customMessageStatus" style="margin-top: 10px; font-weight: bold;"></div>
 
   <div id="toast" style="display:none" class="toast">Message</div>
 
@@ -405,6 +406,18 @@
       keys: '/api/keys',
       generateKey: '/api/keys/generate',
       deleteKey: '/api/keys/delete'
+    };
+
+    const testimonialsApi = {
+      list: '/api/testimonials',
+      add: '/api/testimonials/add',
+      delete: '/api/testimonials/delete'
+    };
+    
+    const customMessageApi = {
+      get: '/api/custom-message',
+      set: '/api/custom-message/set',
+      clear: '/api/custom-message/clear'
     };
 
     function toast(msg, t=3000){
@@ -846,12 +859,6 @@
     }
 
     // Testimonials management
-    const testimonialsApi = {
-      list: '/api/testimonials',
-      add: '/api/testimonials/add',
-      delete: '/api/testimonials/delete'
-    };
-    
     async function fetchTestimonials(){
       try{
         const res = await fetch(testimonialsApi.list, {credentials:'same-origin'});
@@ -1000,6 +1007,88 @@
       }
     }
 
+    // Custom Message functions
+    async function loadCustomMessage(){
+      try{
+        const res = await fetch(customMessageApi.get, {credentials:'same-origin'});
+        if(!res.ok){ 
+          document.getElementById('customMessageStatus').textContent = 'No custom message set';
+          document.getElementById('customMessageInput').value = '';
+          return; 
+        }
+        const data = await res.json();
+        document.getElementById('customMessageInput').value = data.message || '';
+        document.getElementById('customMessageStatus').textContent = data.message ? '✅ Message loaded' : 'No custom message set';
+        document.getElementById('customMessageStatus').style.color = 'var(--success)';
+      }catch(e){
+        console.error(e);
+        document.getElementById('customMessageStatus').textContent = 'Error loading message';
+        document.getElementById('customMessageStatus').style.color = 'var(--danger)';
+      }
+    }
+    
+    async function saveCustomMessage(){
+      const message = document.getElementById('customMessageInput').value.trim();
+      
+      if(!message){
+        toast('❌ Message cannot be empty');
+        return;
+      }
+      
+      try{
+        const res = await fetch(customMessageApi.set, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({message}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          toast('✅ Custom message saved');
+          document.getElementById('customMessageStatus').textContent = '✅ Message saved successfully';
+          document.getElementById('customMessageStatus').style.color = 'var(--success)';
+        } else {
+          const j = await res.json().catch(()=>({}));
+          toast('❌ ' + (j.error || 'Error'));
+          document.getElementById('customMessageStatus').textContent = '❌ Failed to save message';
+          document.getElementById('customMessageStatus').style.color = 'var(--danger)';
+        }
+      }catch(e){
+        console.error(e);
+        toast('Error saving message');
+        document.getElementById('customMessageStatus').textContent = '❌ Error saving message';
+        document.getElementById('customMessageStatus').style.color = 'var(--danger)';
+      }
+    }
+    
+    async function clearCustomMessage(){
+      if(!confirm('Clear the custom message?')) return;
+      
+      try{
+        const res = await fetch(customMessageApi.clear, {
+          method:'POST',
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          toast('✅ Custom message cleared');
+          document.getElementById('customMessageInput').value = '';
+          document.getElementById('customMessageStatus').textContent = '✅ Message cleared';
+          document.getElementById('customMessageStatus').style.color = 'var(--muted)';
+        } else {
+          const j = await res.json().catch(()=>({}));
+          toast('❌ ' + (j.error || 'Error'));
+          document.getElementById('customMessageStatus').textContent = '❌ Failed to clear message';
+          document.getElementById('customMessageStatus').style.color = 'var(--danger)';
+        }
+      }catch(e){
+        console.error(e);
+        toast('Error clearing message');
+        document.getElementById('customMessageStatus').textContent = '❌ Error clearing message';
+        document.getElementById('customMessageStatus').style.color = 'var(--danger)';
+      }
+    }
+
     // Initial loads
     fetchUsers();
     fetchPingStatus();
@@ -1008,6 +1097,7 @@
     fetchStats();
     loadDebug();
     fetchTestimonials();
+    loadCustomMessage();
   </script>
 </body>
 </html>
