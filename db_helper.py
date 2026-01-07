@@ -535,3 +535,173 @@ def get_stats_summary():
             "total_testimonials": total_testimonials,
             "approved_testimonials": approved_testimonials
         }
+
+# ==================== PLAYER ID & NICKNAME TRACKING ====================
+
+def get_user_by_player_id(player_id: str):
+    """Get user by player_id"""
+    try:
+        with get_db() as db:
+            user = db.query(User).filter(User.player_id == player_id).first()
+            if not user:
+                return None
+            return {
+                "username": user.username,
+                "player_id": user.player_id,
+                "expires": user.expires,
+                "paused": user.paused,
+                "paused_at": user.paused_at,
+                "remaining_days": user.remaining_days,
+                "last_nickname": user.last_nickname,
+                "first_connection_date": user.first_connection_date
+            }
+    except OperationalError as e:
+        print(f"DB connection error in get_user_by_player_id: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error in get_user_by_player_id: {e}")
+        return None
+
+def update_user_player_id(username: str, player_id: str):
+    """Update user's player_id on first connection"""
+    try:
+        with get_db() as db:
+            from datetime import datetime
+            user = db.query(User).filter(User.username == username).first()
+            if not user:
+                return False
+            user.player_id = player_id
+            if not user.first_connection_date:
+                user.first_connection_date = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            return True
+    except OperationalError as e:
+        print(f"DB connection error in update_user_player_id: {e}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error in update_user_player_id: {e}")
+        return False
+
+def update_user_nickname(player_id: str, new_nickname: str, old_nickname: str):
+    """Update user's nickname when it changes"""
+    try:
+        with get_db() as db:
+            user = db.query(User).filter(User.player_id == player_id).first()
+            if not user:
+                return False
+            user.last_nickname = old_nickname
+            user.username = new_nickname
+            return True
+    except OperationalError as e:
+        print(f"DB connection error in update_user_nickname: {e}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error in update_user_nickname: {e}")
+        return False
+
+# ==================== CUSTOM MESSAGE FUNCTIONS ====================
+
+def get_custom_message():
+    """Get the global custom message"""
+    try:
+        with get_db() as db:
+            from init_database import CustomMessage
+            msg = db.query(CustomMessage).first()
+            if not msg:
+                return ""
+            return msg.message or ""
+    except Exception as e:
+        print(f"Error in get_custom_message: {e}")
+        return ""
+
+def set_custom_message(message: str):
+    """Set the global custom message"""
+    try:
+        with get_db() as db:
+            from init_database import CustomMessage
+            msg = db.query(CustomMessage).first()
+            if msg:
+                msg.message = message
+            else:
+                new_msg = CustomMessage(message=message)
+                db.add(new_msg)
+            return True
+    except Exception as e:
+        print(f"Error in set_custom_message: {e}")
+        return False
+
+# Update load_users to include new fields
+def load_users():
+    """Load all users from database"""
+    with get_db() as db:
+        users = db.query(User).all()
+        return [
+            {
+                "username": u.username,
+                "player_id": getattr(u, 'player_id', None),
+                "expires": u.expires,
+                "paused": u.paused,
+                "paused_at": u.paused_at,
+                "remaining_days": u.remaining_days,
+                "last_nickname": getattr(u, 'last_nickname', None),
+                "first_connection_date": getattr(u, 'first_connection_date', None)
+            } 
+            for u in users
+        ]
+
+# Update save_users to handle new fields
+def save_users(users_list):
+    """Save/update multiple users"""
+    with get_db() as db:
+        for user_data in users_list:
+            user = db.query(User).filter_by(username=user_data['username']).first()
+            if user:
+                # Update existing
+                user.expires = user_data['expires']
+                user.paused = user_data.get('paused', False)
+                user.paused_at = user_data.get('paused_at')
+                user.remaining_days = user_data.get('remaining_days')
+                if 'player_id' in user_data:
+                    user.player_id = user_data['player_id']
+                if 'last_nickname' in user_data:
+                    user.last_nickname = user_data['last_nickname']
+                if 'first_connection_date' in user_data:
+                    user.first_connection_date = user_data['first_connection_date']
+            else:
+                # Create new
+                new_user = User(
+                    username=user_data['username'],
+                    player_id=user_data.get('player_id'),
+                    expires=user_data['expires'],
+                    paused=user_data.get('paused', False),
+                    paused_at=user_data.get('paused_at'),
+                    remaining_days=user_data.get('remaining_days'),
+                    last_nickname=user_data.get('last_nickname'),
+                    first_connection_date=user_data.get('first_connection_date')
+                )
+                db.add(new_user)
+        return {"saved_local": True, "storage": {"ok": True, "detail": "saved to database"}}
+
+# Update get_license to include new fields
+def get_license(username: str):
+    """Return license row for username from users table or None"""
+    try:
+        with get_db() as db:
+            u = db.query(User).filter(User.username == username).first()
+            if not u:
+                return None
+            return {
+                "username": u.username,
+                "player_id": getattr(u, 'player_id', None),
+                "expires": u.expires,
+                "paused": u.paused,
+                "paused_at": u.paused_at,
+                "remaining_days": u.remaining_days,
+                "last_nickname": getattr(u, 'last_nickname', None),
+                "first_connection_date": getattr(u, 'first_connection_date', None)
+            }
+    except OperationalError as e:
+        print(f"DB connection error in get_license: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error in get_license: {e}")
+        return None

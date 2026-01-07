@@ -875,7 +875,7 @@ def static_files(path):
 # -----------------------
 # Background ping to admin (enhanced)
 # -----------------------
-PING_ADMIN_URL = os.getenv("PING_ADMIN_URL", "http://auth-server-aj8k.onrender.com/admin")
+PING_ADMIN_URL = os.getenv("PING_ADMIN_URL", "https://rxzbot.com/admin")
 try:
     PING_ADMIN_INTERVAL = int(os.getenv("PING_ADMIN_INTERVAL", "300"))
 except Exception:
@@ -1514,6 +1514,153 @@ def logout():
     else:
         return redirect(url_for("index"))
 
+@app.route("/authv2", methods=["GET"])
+def authv2():
+    """
+    Enhanced authentication with player ID verification
+    GET /authv2?username=XXX&player_id=YYY
+    Returns:
+      - 200 + {"message":"authorized","expires":"YYYY-MM-DD","nickname":"XXX","custom_message":"..."}
+      - 403 + {"message":"unauthorized"/"expired","nickname":"XXX"}
+      - 400 + {"message":"missing parameters"}
+    
+    Authentication flow:
+    1. Check player_id first (primary verification)
+    2. If ID matches: verify, update nickname if changed
+    3. If no ID match but nickname exists without ID: first connection, bind ID
+    4. If neither: unauthorized
+    """
+    username = request.args.get("username")
+    player_id = request.args.get("player_id")
+    
+    if not username or not player_id:
+        return jsonify({"message": "missing parameters"}), 400
+
+    # Get client IP
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+
+    # STEP 1: Try to find by player_id first (primary verification)
+    user_by_id = db_helper.get_user_by_player_id(player_id)
+    
+    # STEP 2: If no ID match, try nickname
+    user_by_nickname = None
+    if not user_by_id:
+        users = load_users()
+        user_by_nickname = find_user(users, username)
+    
+    # SCENARIO 1: Player ID matches an existing account
+    if user_by_id:
+        try:
+            expiry = parse_date(user_by_id["expires"])
+        except Exception:
+            log_event(f"authv2 fail: invalid expiry date for ID (nickname: '{username}')", level="error")
+            record_connection(username, ip, "unauthorized")
+            return jsonify({"message": "unauthorized", "nickname": username}), 403
+
+        if expiry >= datetime.now():
+            # Check if nickname changed
+            old_nickname = user_by_id.get("username", "")
+            custom_msg = ""
+            
+            if old_nickname != username:
+                log_event(f"authv2: nickname changed: '{old_nickname}' → '{username}'")
+                db_helper.update_user_nickname(player_id, username, old_nickname)
+                custom_msg = f"🔄 Your nickname has been updated from '{old_nickname}' to '{username}'"
+            
+            # Get global custom message if set
+            global_msg = db_helper.get_custom_message()
+            if global_msg:
+                custom_msg = global_msg + ("\n\n" + custom_msg if custom_msg else "")
+            
+            log_event(f"authv2 success: '{username}' valid until {user_by_id['expires']}", level="info")
+            record_connection(username, ip, "authorized")
+            
+            return jsonify({
+                "message": "authorized",
+                "expires": user_by_id["expires"],
+                "nickname": username,
+                "custom_message": custom_msg if custom_msg else None
+            }), 200
+        else:
+            log_event(f"authv2 expired: '{username}' expired on {user_by_id['expires']}", level="warn")
+            record_connection(username, ip, "expired")
+            return jsonify({
+                "message": "expired",
+                "expires": user_by_id["expires"],
+                "nickname": username
+            }), 403
+    
+    # SCENARIO 2: No ID match, but nickname exists without ID (first connection)
+    elif user_by_nickname:
+        if user_by_nickname.get("player_id") is None:
+            try:
+                expiry = parse_date(user_by_nickname["expires"])
+            except Exception:
+                log_event(f"authv2 fail: invalid expiry date for '{username}'", level="error")
+                record_connection(username, ip, "unauthorized")
+                return jsonify({"message": "unauthorized", "nickname": username}), 403
+
+            if expiry >= datetime.now():
+                # First connection - bind player_id to this account
+                db_helper.update_user_player_id(username, player_id)
+                
+                custom_msg = f"🎉 Welcome! This is your first connection. Your account is now linked."
+                
+                # Get global custom message if set
+                global_msg = db_helper.get_custom_message()
+                if global_msg:
+                    custom_msg = global_msg + "\n\n" + custom_msg
+                
+                log_event(f"authv2 first connection: '{username}' linked to ID")
+                record_connection(username, ip, "authorized")
+                
+                return jsonify({
+                    "message": "authorized",
+                    "expires": user_by_nickname["expires"],
+                    "nickname": username,
+                    "custom_message": custom_msg
+                }), 200
+            else:
+                log_event(f"authv2 expired: '{username}' expired on {user_by_nickname['expires']}", level="warn")
+                record_connection(username, ip, "expired")
+                return jsonify({
+                    "message": "expired",
+                    "expires": user_by_nickname["expires"],
+                    "nickname": username
+                }), 403
+        else:
+            # Nickname exists but already has different player_id
+            log_event(f"authv2 fail: nickname '{username}' already linked to different ID", level="warn")
+            record_connection(username, ip, "unauthorized")
+            return jsonify({"message": "unauthorized", "nickname": username}), 403
+    
+    # SCENARIO 3: Neither ID nor nickname found
+    else:
+        log_event(f"authv2 fail: no account found for nickname '{username}'", level="warn")
+        record_connection(username, ip, "unauthorized")
+        return jsonify({"message": "unauthorized", "nickname": username}), 403
+
+
+@app.route("/api/custom-message", methods=["GET", "POST"])
+@login_required
+def api_custom_message():
+    """Get or set the global custom message"""
+    if request.method == "GET":
+        msg = db_helper.get_custom_message()
+        return jsonify({"message": msg}), 200
+    
+    elif request.method == "POST":
+        body = request.get_json() or {}
+        new_message = body.get("message", "").strip()
+        
+        # Save to database
+        if db_helper.set_custom_message(new_message):
+            log_event(f"Custom message updated: '{new_message}'")
+            return jsonify({"message": "ok", "custom_message": new_message}), 200
+        else:
+            log_event(f"Failed to update custom message", level="error")
+            return jsonify({"error": "Failed to save message"}), 500
+            
 # -----------------------
 # Run
 # -----------------------
