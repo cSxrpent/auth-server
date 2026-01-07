@@ -14,10 +14,13 @@ class User(Base):
     __tablename__ = 'users'
     
     username = Column(String(255), primary_key=True)
+    player_id = Column(String(255), nullable=True, index=True)  # ✅ ADDED - matches your ALTER TABLE command
     expires = Column(String(10), nullable=False)  # YYYY-MM-DD format
     paused = Column(Boolean, default=False)
     paused_at = Column(String(10), nullable=True)
     remaining_days = Column(Integer, nullable=True)
+    last_nickname = Column(String(255), nullable=True)  # ✅ ADDED - matches your ALTER TABLE command
+    first_connection_date = Column(String(30), nullable=True)  # ✅ ADDED - matches your ALTER TABLE command
 
 class Key(Base):
     __tablename__ = 'keys'
@@ -83,6 +86,12 @@ class RecentConnection(Base):
     username = Column(String(255), nullable=False)
     ip = Column(String(50), nullable=False)
     status = Column(String(20), nullable=False)
+
+class CustomMessage(Base):
+    __tablename__ = 'custom_messages'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    message = Column(Text, nullable=True)
 
 def init_database():
     """Initialize database with all tables"""
