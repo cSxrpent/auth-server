@@ -282,22 +282,42 @@ def get_user_accounts(user_identifier):
         return []
 
 def add_account_to_user(email: str, username: str):
+    """Add account to user's account list"""
     try:
         with get_db() as db:
+            from sqlalchemy.orm.attributes import flag_modified
+            
             row = db.query(UserCredential).filter(UserCredential.email == email).first()
             if not row:
+                print(f"❌ User not found: {email}")
                 return False
+            
             accounts = row.accounts or []
+            
             if username in accounts:
+                print(f"⚠️ Account '{username}' already linked to {email}")
                 return True
+            
             accounts.append(username)
             row.accounts = accounts
+            
+            # CRITICAL: Tell SQLAlchemy this column was modified
+            flag_modified(row, 'accounts')
+            
+            db.flush()  # Force write to DB
+            
+            print(f"✅ Added account '{username}' to user {email}")
+            print(f"📋 New accounts list: {row.accounts}")
+            
             return True
+            
     except OperationalError as e:
-        print(f"DB connection error in add_account_to_user: {e}")
+        print(f"❌ DB connection error in add_account_to_user: {e}")
         return False
     except Exception as e:
-        print(f"Unexpected error in add_account_to_user: {e}")
+        print(f"❌ Unexpected error in add_account_to_user: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def get_license(username: str):
