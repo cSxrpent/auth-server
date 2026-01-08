@@ -1344,13 +1344,13 @@ def add_account():
     user_email = session['user_email']
     
     if request.method == 'GET':
-        # Check if there's an active verification session
-        if user_email in verification_sessions:
-            session_data = verification_sessions[user_email]
+        # Check if there's an active verification session IN FLASK SESSION
+        if 'verification_data' in session:
+            verification_data = session['verification_data']
             return render_template('add_account.html', 
                                  step='verify',
-                                 verification_code=session_data['code'],
-                                 username=session_data['username'])
+                                 verification_code=verification_data['code'],
+                                 username=verification_data['username'])
         
         # Show initial form
         return render_template('add_account.html', step='username')
@@ -1393,8 +1393,8 @@ def add_account():
     # Generate verification code
     verification_code = secrets.token_hex(3).upper()  # 6-character code
     
-    # Store verification session
-    verification_sessions[user_email] = {
+    # Store verification session IN FLASK SESSION (not in-memory dict)
+    session['verification_data'] = {
         'username': username,
         'code': verification_code
     }
@@ -1411,45 +1411,51 @@ def verify_account():
     
     user_email = session['user_email']
     
-    if user_email not in verification_sessions:
+    # Get verification data from FLASK SESSION
+    if 'verification_data' not in session:
         return jsonify({'success': False, 'error': 'No verification session found. Please start over.'}), 400
     
-    session_data = verification_sessions[user_email]
-    username = session_data['username']
-    expected_code = session_data['code']
+    verification_data = session['verification_data']
+    username = verification_data['username']
+    expected_code = verification_data['code']
     
     try:
-        # Fetch user profile from Wolvesville API
-        api_url = f"https://api.wolvesville.com/players/search?username={username}"
-        response = requests.get(api_url, timeout=10)
+        # Import the API helper
+        from wolvesville_api import wolvesville_api
         
-        if response.status_code != 200:
-            return jsonify({'success': False, 'error': 'Failed to fetch profile from Wolvesville API'}), 400
+        # Search for player using authenticated API
+        player_data = wolvesville_api.search_player(username)
         
-        data = response.json()
-        
-        if not data or len(data) == 0:
+        if not player_data:
             return jsonify({'success': False, 'error': 'Username not found on Wolvesville'}), 404
         
-        player = data[0]
-        bio = player.get('profileDescription', '') or player.get('bio', '')
+        # Get full profile with bio
+        player_id = player_data.get('id')
+        profile = wolvesville_api.get_player_profile(player_id)
+        
+        if not profile:
+            return jsonify({'success': False, 'error': 'Failed to fetch profile from Wolvesville API'}), 400
+        
+        # Check bio for verification code
+        bio = profile.get('personalMsg', '') or profile.get('profileDescription', '')
         
         if expected_code not in bio:
             return jsonify({'success': False, 'error': 'Verification code not found in your bio. Please add it and try again.'}), 400
         
-        # FIX: Use db_helper prefix
+        # Add account to user's dashboard
         success = db_helper.add_account_to_user(user_email, username)
         
         if not success:
             return jsonify({'success': False, 'error': 'Failed to add account to dashboard'}), 500
         
-        del verification_sessions[user_email]
+        # Clear verification data from session
+        session.pop('verification_data', None)
         
         return jsonify({'success': True, 'message': 'Account verified and added successfully!'})
         
-    except requests.RequestException as e:
-        return jsonify({'success': False, 'error': f'API request failed: {str(e)}'}), 500
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': f'An error occurred: {str(e)}'}), 500
 
 @app.route('/xp/add', methods=['POST'])
