@@ -1399,54 +1399,73 @@ def add_account():
                          username=username)
 
 
-@app.route('/verify_account', methods=['POST'])
-def verify_account():
-    """Verify account ownership by checking bio"""
+@app.route('/add_account', methods=['GET', 'POST'])
+def add_account():
+    """Route to add a Wolvesville account to user's dashboard"""
+    # Check if user is logged in
     if 'user_email' not in session:
-        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+        return redirect(url_for('loginuser'))
     
     user_email = session['user_email']
     
-    if user_email not in verification_sessions:
-        return jsonify({'success': False, 'error': 'No verification session found. Please start over.'}), 400
+    if request.method == 'GET':
+        # Check if there's an active verification session
+        if user_email in verification_sessions:
+            session_data = verification_sessions[user_email]
+            return render_template('add_account.html', 
+                                 step='verify',
+                                 verification_code=session_data['code'],
+                                 username=session_data['username'])
+        
+        # Show initial form
+        return render_template('add_account.html', step='username')
     
-    session_data = verification_sessions[user_email]
-    username = session_data['username']
-    expected_code = session_data['code']
+    # POST request - username submission
+    username = request.form.get('username', '').strip()
     
+    if not username:
+        return render_template('add_account.html', 
+                             step='username',
+                             error='Please enter a username.')
+    
+    # Check if username exists in database with active license
+    license_data = db_helper.get_license(username)
+    
+    if not license_data:
+        return render_template('add_account.html',
+                             step='username',
+                             error='This username does not have an active license. Please activate a license key first.')
+    
+    # Check if license is expired
+    from datetime import datetime
     try:
-        # Fetch user profile from Wolvesville API
-        api_url = f"https://api.wolvesville.com/players/search?username={username}"
-        response = requests.get(api_url, timeout=10)
-        
-        if response.status_code != 200:
-            return jsonify({'success': False, 'error': 'Failed to fetch profile from Wolvesville API'}), 400
-        
-        data = response.json()
-        
-        if not data or len(data) == 0:
-            return jsonify({'success': False, 'error': 'Username not found on Wolvesville'}), 404
-        
-        player = data[0]
-        bio = player.get('profileDescription', '') or player.get('bio', '')
-        
-        if expected_code not in bio:
-            return jsonify({'success': False, 'error': 'Verification code not found in your bio. Please add it and try again.'}), 400
-        
-        # FIX: Use db_helper prefix
-        success = db_helper.add_account_to_user(user_email, username)
-        
-        if not success:
-            return jsonify({'success': False, 'error': 'Failed to add account to dashboard'}), 500
-        
-        del verification_sessions[user_email]
-        
-        return jsonify({'success': True, 'message': 'Account verified and added successfully!'})
-        
-    except requests.RequestException as e:
-        return jsonify({'success': False, 'error': f'API request failed: {str(e)}'}), 500
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'An error occurred: {str(e)}'}), 500
+        expires_date = datetime.strptime(license_data['expires'], '%Y-%m-%d')
+        if expires_date < datetime.now() and not license_data.get('paused', False):
+            return render_template('add_account.html',
+                                 step='username',
+                                 error='This license has expired. Please renew your license first.')
+    except Exception:
+        pass
+    
+    # Check if account is already linked to this user
+    existing_accounts = db_helper.get_user_accounts(user_email)
+    
+    if username in existing_accounts:
+        return render_template('add_account.html',
+                             step='username',
+                             error='This account is already linked to your dashboard.')
+    
+    # Generate verification code
+    verification_code = secrets.token_hex(3).upper()  # 6-character code
+    
+    # Store verification session
+    verification_sessions[user_email] = {
+        'username': username,
+        'code': verification_code
+    }
+    
+    # Redirect to the same route with GET to show verification step
+    return redirect(url_for('add_account'))
 
 @app.route('/xp/add', methods=['POST'])
 def add_xp():
