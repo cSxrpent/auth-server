@@ -1463,6 +1463,35 @@ def add_xp():
         if not all([player_id, xp_amount, username]):
             return jsonify({'success': False, 'error': 'Missing parameters'}), 400
         
+        # ✅ VERIFY USER HAS VALID LICENSE BEFORE ALLOWING XP TRACKING
+        license_data = db_helper.get_license(username)
+        
+        if not license_data:
+            log_event(f"XP add rejected: username '{username}' not found in database", level="warn")
+            return jsonify({'success': False, 'error': 'User not registered'}), 403
+        
+        # Check if license is expired or paused
+        try:
+            from datetime import datetime
+            expires_date = datetime.strptime(license_data['expires'], '%Y-%m-%d')
+            
+            if license_data.get('paused', False):
+                log_event(f"XP add rejected: username '{username}' license is paused", level="warn")
+                return jsonify({'success': False, 'error': 'License is paused'}), 403
+            
+            if expires_date < datetime.now():
+                log_event(f"XP add rejected: username '{username}' license expired on {license_data['expires']}", level="warn")
+                return jsonify({'success': False, 'error': 'License expired'}), 403
+                
+        except Exception as e:
+            log_event(f"XP add error: failed to parse license date for '{username}': {e}", level="error")
+            return jsonify({'success': False, 'error': 'Invalid license data'}), 500
+        
+        # ✅ OPTIONAL: Verify player_id matches the registered one (if you use authv2)
+        if license_data.get('player_id') and license_data['player_id'] != player_id:
+            log_event(f"XP add rejected: player_id mismatch for '{username}'", level="warn")
+            return jsonify({'success': False, 'error': 'Player ID mismatch'}), 403
+        
         # Load XP data from DB
         xp_data, sha = db_helper.read_storage('user-XP.json')
         
@@ -1485,6 +1514,7 @@ def add_xp():
         
         # Save to storage (DB)
         if db_helper.write_storage('user-XP.json', xp_data, sha):
+            log_event(f"XP added: {username} +{xp_amount} XP", level="info")
             return jsonify({'success': True})
         
         return jsonify({'success': False, 'error': 'Failed to save XP data'}), 500
