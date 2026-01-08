@@ -598,6 +598,31 @@ def update_user_nickname(player_id: str, new_nickname: str, old_nickname: str):
         print(f"Unexpected error in update_user_nickname: {e}")
         return False
 
+def save_log(timestamp, message, level='info'):
+    """Save a log entry to database"""
+    try:
+        with get_db() as db:
+            log = Log(timestamp=timestamp, message=message, level=level)
+            db.add(log)
+            db.commit()
+    except Exception as e:
+        print(f"Error saving log: {e}")
+
+def save_recent_connection(timestamp, username, ip, status):
+    """Save a recent connection to database"""
+    try:
+        with get_db() as db:
+            conn = RecentConnection(
+                timestamp=timestamp,
+                username=username,
+                ip=ip,
+                status=status
+            )
+            db.add(conn)
+            db.commit()
+    except Exception as e:
+        print(f"Error saving recent connection: {e}")
+
 # ==================== CUSTOM MESSAGE FUNCTIONS ====================
 
 def get_custom_message():
@@ -705,3 +730,41 @@ def get_license(username: str):
     except Exception as e:
         print(f"Unexpected error in get_license: {e}")
         return None
+
+__all__ = [
+    'load_users',
+    'save_users',
+    'find_user',
+    'load_keys',
+    'save_keys',
+    'find_key',
+    'load_testimonials',
+    'save_testimonials',
+    'read_storage_impl',
+    'read_storage',
+    'write_storage_impl',
+    'write_storage',
+    'get_user_by_email',
+    'create_user',
+    'verify_user_password',
+    'get_user_accounts',
+    'add_account_to_user',
+    'get_license',
+    'pause_license',
+    'resume_license',
+    'get_user_xp',
+    'load_stats',
+    'save_stats',
+    'load_last_connected',
+    'save_last_connected',
+    'save_log',
+    'get_recent_logs',
+    'save_recent_connection',
+    'get_recent_connections',
+    'get_stats_summary',
+    'get_user_by_player_id',
+    'update_user_player_id',
+    'update_user_nickname',
+    'get_custom_message',
+    'set_custom_message'
+]

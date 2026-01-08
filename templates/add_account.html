@@ -67,9 +67,21 @@
         button:hover {
             background: #5568d3;
         }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
         .error {
             background: #fee;
             color: #c33;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .success {
+            background: #efe;
+            color: #3c3;
             padding: 10px;
             border-radius: 5px;
             margin-bottom: 20px;
@@ -125,6 +137,18 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .info-box {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #1976d2;
+        }
+        .info-box strong {
+            display: block;
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
@@ -135,13 +159,22 @@
         <div class="error">{{ error }}</div>
         {% endif %}
 
+        {% if success %}
+        <div class="success">{{ success }}</div>
+        {% endif %}
+
+        <div class="info-box">
+            <strong>Important:</strong>
+            Only accounts with an active RXZBot license can be added to your dashboard. Make sure you have activated a license key for your Wolvesville username before attempting to add it here.
+        </div>
+
         {% if step == 'username' %}
         <form method="POST">
             <div class="form-group">
                 <label for="username">Wolvesville Username</label>
                 <input type="text" id="username" name="username" required placeholder="Enter your username">
             </div>
-            <button type="submit">Next</button>
+            <button type="submit">Check & Continue</button>
         </form>
         {% elif step == 'verify' %}
         <div class="verification-box">
@@ -159,7 +192,7 @@
             </ol>
         </div>
 
-        <button onclick="verifyAccount()">Verify Account</button>
+        <button onclick="verifyAccount()" id="verifyBtn">Verify Account</button>
         
         <div class="loading" id="loading">
             <div class="spinner"></div>
@@ -174,8 +207,11 @@
 
     <script>
         async function verifyAccount() {
-            document.getElementById('loading').style.display = 'block';
-            document.querySelector('button').style.display = 'none';
+            const btn = document.getElementById('verifyBtn');
+            const loading = document.getElementById('loading');
+            
+            btn.style.display = 'none';
+            loading.style.display = 'block';
             
             try {
                 const response = await fetch('/verify_account', {
@@ -188,17 +224,17 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('Account verified successfully!');
+                    alert('Account verified and added successfully!');
                     window.location.href = '/dashboard';
                 } else {
                     alert('Verification failed: ' + data.error);
-                    document.getElementById('loading').style.display = 'none';
-                    document.querySelector('button').style.display = 'block';
+                    loading.style.display = 'none';
+                    btn.style.display = 'block';
                 }
             } catch (error) {
                 alert('An error occurred. Please try again.');
-                document.getElementById('loading').style.display = 'none';
-                document.querySelector('button').style.display = 'block';
+                loading.style.display = 'none';
+                btn.style.display = 'block';
             }
         }
     </script>

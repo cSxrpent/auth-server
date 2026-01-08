@@ -892,6 +892,12 @@ def log_event(msg, level="info"):
     entry = {"ts": ts, "msg": str(msg), "level": level}
     LOGS.appendleft(entry)
     print(f"[{ts}] [{level.upper()}] {msg}")
+    
+    # Save to database
+    try:
+        db_helper.save_log(ts, str(msg), level)
+    except Exception as e:
+        print(f"Failed to save log to database: {e}")
 
 def record_connection(username, ip, status):
     """Record a recent connection attempt."""
@@ -900,6 +906,12 @@ def record_connection(username, ip, status):
     RECENT_CONN.appendleft(entry)
     lvl = "info" if status == "authorized" else "warn"
     log_event(f"conn {status}: {username} @{ip}", level=lvl)
+    
+    # Save to database
+    try:
+        db_helper.save_recent_connection(ts, username, ip, status)
+    except Exception as e:
+        print(f"Failed to save connection to database: {e}")
     
     if status == "authorized":
         stats = load_stats()
@@ -1009,13 +1021,24 @@ def api_ping_toggle():
 @app.route("/api/logs", methods=["GET"])
 @login_required
 def api_logs():
-    return jsonify(list(LOGS))
+    """Get recent logs from database"""
+    try:
+        logs = db_helper.get_recent_logs(limit=500)
+        return jsonify(logs)
+    except Exception as e:
+        print(f"Error fetching logs: {e}")
+        return jsonify([])
 
 @app.route("/api/recent", methods=["GET"])
 @login_required
 def api_recent():
-    """Recent connection attempts"""
-    return jsonify(list(RECENT_CONN))
+    """Recent connection attempts from database"""
+    try:
+        connections = db_helper.get_recent_connections(limit=300)
+        return jsonify(connections)
+    except Exception as e:
+        print(f"Error fetching recent connections: {e}")
+        return jsonify([])
 
 @app.route("/api/stats", methods=["GET"])
 @login_required
@@ -1339,72 +1362,133 @@ def extend_license_user():
     
     return jsonify({'success': True, 'redirect': '/buy/1month'})
     
+from flask import render_template, request, session, redirect, url_for, jsonify
+import secrets
+import requests
+import db_helper
+
+# Store verification codes temporarily (in production, use Redis or database)
+verification_sessions = {}
+
 @app.route('/add_account', methods=['GET', 'POST'])
 def add_account():
+    """Route to add a Wolvesville account to user's dashboard"""
+    # Check if user is logged in
     if 'user_email' not in session:
-        return redirect(url_for('loginuser'))
+        return redirect(url_for('login'))
     
-    if request.method == 'POST':
-        username = request.form.get('username')
-        
-        # Search for player
-        player = search_wolvesville_player(username)
-        if not player:
-            return render_template('add_account.html', error="Player not found")
-        
-        # Generate verification code
-        code = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(6))
-        session['verification_code'] = code
-        session['verification_username'] = username
-        session['verification_player_id'] = player['id']
-        
+    user_email = session['user_email']
+    
+    if request.method == 'GET':
+        # Show initial form
+        return render_template('add_account.html', step='username')
+    
+    # POST request - username submission
+    username = request.form.get('username', '').strip()
+    
+    if not username:
         return render_template('add_account.html', 
-                             verification_code=code, 
-                             username=username,
-                             step='verify')
+                             step='username',
+                             error='Please enter a username.')
     
-    return render_template('add_account.html', step='username')
+    # Check if username exists in database with active license
+    license_data = get_license(username)
+    
+    if not license_data:
+        return render_template('add_account.html',
+                             step='username',
+                             error='This username does not have an active license. Please activate a license key first.')
+    
+    # Check if license is expired
+    from datetime import datetime
+    try:
+        expires_date = datetime.strptime(license_data['expires'], '%Y-%m-%d')
+        if expires_date < datetime.now() and not license_data.get('paused', False):
+            return render_template('add_account.html',
+                                 step='username',
+                                 error='This license has expired. Please renew your license first.')
+    except Exception:
+        pass
+    
+    # Check if account is already linked to this user
+    import db_helper
+    existing_accounts = get_user_accounts(user_email)
+    
+    if username in existing_accounts:
+        return render_template('add_account.html',
+                             step='username',
+                             error='This account is already linked to your dashboard.')
+    
+    # Generate verification code
+    verification_code = secrets.token_hex(3).upper()  # 6-character code
+    
+    # Store verification session
+    verification_sessions[user_email] = {
+        'username': username,
+        'code': verification_code
+    }
+    
+    # Show verification step
+    return render_template('add_account.html',
+                         step='verify',
+                         verification_code=verification_code,
+                         username=username)
+
 
 @app.route('/verify_account', methods=['POST'])
 def verify_account():
-    if 'user_id' not in session:
-        return redirect(url_for('loginuser'))
+    """Verify account ownership by checking bio"""
+    # Check if user is logged in
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
     
-    stored_code = session.get('verification_code')
-    username = session.get('verification_username')
-    player_id = session.get('verification_player_id')
+    user_email = session['user_email']
     
-    # Get player profile
-    profile = get_wolvesville_player_profile(player_id)
-    if not profile:
-        return jsonify({'success': False, 'error': 'Could not fetch player profile'})
+    # Get verification session
+    if user_email not in verification_sessions:
+        return jsonify({'success': False, 'error': 'No verification session found. Please start over.'}), 400
     
-    # Check if code is in biography
-    biography = profile.get('personalMsg', '')
-    if stored_code not in biography:
-        return jsonify({'success': False, 'error': 'Verification code not found in biography'})
+    session_data = verification_sessions[user_email]
+    username = session_data['username']
+    expected_code = session_data['code']
     
-    email = session['user_id']
-    # Add account mapping in DB
-    added = db_helper.add_account_to_user(email, username)
-    if not added:
-        return jsonify({'success': False, 'error': 'Failed to add account (DB unavailable or permission denied)'}), 500
-
-    # Ensure license exists in users table
-    lic = db_helper.get_license(username)
-    if not lic:
-        # create via save_users helper
-        save_users([{
-            "username": username,
-            "expires": (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
-        }])
-    
-    # Clear session verification data
-    session.pop('verification_code', None)
-    session.pop('verification_username', None)
-    session.pop('verification_player_id', None)
-    
-    return jsonify({'success': True})
+    try:
+        # Fetch user profile from Wolvesville API
+        # Replace with actual API endpoint
+        api_url = f"https://api.wolvesville.com/players/search?username={username}"
+        response = requests.get(api_url, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({'success': False, 'error': 'Failed to fetch profile from Wolvesville API'}), 400
+        
+        data = response.json()
+        
+        # Extract bio (adjust based on actual API response structure)
+        if not data or len(data) == 0:
+            return jsonify({'success': False, 'error': 'Username not found on Wolvesville'}), 404
+        
+        player = data[0]
+        bio = player.get('profileDescription', '') or player.get('bio', '')
+        
+        # Check if verification code is in bio
+        if expected_code not in bio:
+            return jsonify({'success': False, 'error': 'Verification code not found in your bio. Please add it and try again.'}), 400
+        
+        # Add account to user's dashboard
+        success = add_account_to_user(user_email, username)
+        
+        if not success:
+            return jsonify({'success': False, 'error': 'Failed to add account to dashboard'}), 500
+        
+        # Clean up verification session
+        del verification_sessions[user_email]
+        
+        return jsonify({'success': True, 'message': 'Account verified and added successfully!'})
+        
+    except requests.RequestException as e:
+        return jsonify({'success': False, 'error': f'API request failed: {str(e)}'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'An error occurred: {str(e)}'}), 500
 
 @app.route('/xp/add', methods=['POST'])
 def add_xp():
@@ -1521,12 +1605,12 @@ def authv2():
     GET /authv2?username=XXX&player_id=YYY
     Returns:
       - 200 + {"message":"authorized","expires":"YYYY-MM-DD","nickname":"XXX","custom_message":"..."}
-      - 403 + {"message":"unauthorized"/"expired","nickname":"XXX"}
+      - 403 + {"message":"unauthorized"/"expired"/"paused","nickname":"XXX"}
       - 400 + {"message":"missing parameters"}
     
     Authentication flow:
     1. Check player_id first (primary verification)
-    2. If ID matches: verify, update nickname if changed
+    2. If ID matches: verify, check if paused, update nickname if changed
     3. If no ID match but nickname exists without ID: first connection, bind ID
     4. If neither: unauthorized
     """
@@ -1550,6 +1634,15 @@ def authv2():
     
     # SCENARIO 1: Player ID matches an existing account
     if user_by_id:
+        # CHECK IF LICENSE IS PAUSED
+        if user_by_id.get("paused", False):
+            log_event(f"authv2 paused: '{username}' license is paused", level="warn")
+            record_connection(username, ip, "paused")
+            return jsonify({
+                "message": "paused",
+                "nickname": username
+            }), 403
+
         try:
             expiry = parse_date(user_by_id["expires"])
         except Exception:
@@ -1593,6 +1686,15 @@ def authv2():
     # SCENARIO 2: No ID match, but nickname exists without ID (first connection)
     elif user_by_nickname:
         if user_by_nickname.get("player_id") is None:
+            # CHECK IF LICENSE IS PAUSED
+            if user_by_nickname.get("paused", False):
+                log_event(f"authv2 paused: '{username}' license is paused", level="warn")
+                record_connection(username, ip, "paused")
+                return jsonify({
+                    "message": "paused",
+                    "nickname": username
+                }), 403
+
             try:
                 expiry = parse_date(user_by_nickname["expires"])
             except Exception:
