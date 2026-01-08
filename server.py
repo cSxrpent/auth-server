@@ -25,6 +25,22 @@ import html
 from wolvesville_api import wolvesville_api
 from token_manager import token_manager
 import db_helper
+from db_helper import (
+    load_users, save_users, find_user,
+    load_keys, save_keys, find_key,
+    load_testimonials, save_testimonials,
+    get_user_by_email, create_user, verify_user_password,
+    get_user_accounts, add_account_to_user,
+    get_license,  # ← ADD THIS LINE
+    pause_license, resume_license,
+    get_user_xp,
+    load_stats, save_stats,
+    load_last_connected, save_last_connected,
+    save_log, get_recent_logs,
+    save_recent_connection, get_recent_connections,
+    get_user_by_player_id, update_user_player_id, update_user_nickname,
+    get_custom_message, set_custom_message
+)
 
 load_dotenv()  # load .env file if it exists (for local development)
 
@@ -135,14 +151,6 @@ CET_OFFSET = timedelta(hours=1)  # CET = UTC+1 in winter
 # -----------------------
 # Storage helper functions — use DB-backed `db_helper` instead.
 
-def load_keys():
-    """Delegate keys loading to DB-backed helper."""
-    return db_helper.load_keys()
-
-def save_keys(keys):
-    """Delegate keys saving to DB-backed helper."""
-    return db_helper.save_keys(keys)
-
 def generate_key():
     """Generate a random 6-character key with uppercase, lowercase, and numbers."""
     characters = string.ascii_uppercase + string.ascii_lowercase + string.digits
@@ -155,27 +163,6 @@ def find_key(keys, key_code):
             return k
     return None
 
-# -----------------------
-# Storage helpers
-# -----------------------
-# File/credential storage is DB-backed via `db_helper` and `read_storage`/`write_storage`.
-
-# NOTE: direct read_storage/write_storage helpers removed from hot paths.
-# Use db_helper.* functions directly (DB-backed) for all hot operations.
-
-# -----------------------
-# User storage helpers
-# -----------------------
-def load_users():
-    """Delegate users loading to DB-backed helper."""
-    return db_helper.load_users()
-
-def save_users(users):
-    """
-    Write local file then persist to storage (DB-backed).
-    Returns dict describing results.
-    """
-    return db_helper.save_users(users)
 
 # -----------------------
 # Utilities
@@ -189,45 +176,9 @@ def get_wolvesville_player_profile(player_id):
     """Get player profile using managed tokens"""
     return wolvesville_api.get_player_profile(player_id)
 
-def find_user(users, username):
-    for u in users:
-        try:
-            if u["username"].lower() == username.lower():
-                return u
-        except Exception:
-            continue
-    return None
 
 def parse_date(s):
     return datetime.strptime(s, "%Y-%m-%d")
-
-def load_stats():
-    """Load stats from DB-backed helper."""
-    return db_helper.load_stats()
-
-def save_stats(stats):
-    """Save stats via DB-backed helper."""
-    return db_helper.save_stats(stats)
-
-def load_last_connected():
-    """Load last connected times via DB-backed helper."""
-    return db_helper.load_last_connected()
-
-def save_last_connected(last_conn):
-    """Save last connected via DB-backed helper."""
-    return db_helper.save_last_connected(last_conn)
-
-
-
-def load_testimonials():
-    """Load testimonials via DB-backed helper."""
-    return db_helper.load_testimonials()
-
-def save_testimonials(testimonials):
-    """Save testimonials via DB-backed helper."""
-    return db_helper.save_testimonials(testimonials)
-
-    
         
 # -----------------------
 # Key redemption routes
@@ -800,10 +751,23 @@ def api_delete():
     username = (body.get("username") or "").strip()
     if not username:
         return jsonify({"error": "username missing"}), 400
-    users = [u for u in load_users() if u["username"].lower() != username.lower()]
-    save_res = save_users(users)
-    log_event(f"api_delete: {username}")
-    return jsonify({"message": "deleted", "username": username, "save_result": save_res}), 200
+    
+    try:
+        with db_helper.get_db() as db:
+            from init_database import User
+            from sqlalchemy import func
+            # Case-insensitive search
+            user = db.query(User).filter(func.lower(User.username) == username.lower()).first()
+            if user:
+                db.delete(user)
+                db.commit()
+                log_event(f"api_delete: {username}")
+                return jsonify({"message": "deleted", "username": username}), 200
+            else:
+                return jsonify({"error": "user not found"}), 404
+    except Exception as e:
+        log_event(f"api_delete error: {username} - {e}", level="error")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/extend", methods=["POST"])
 @login_required
@@ -1375,7 +1339,7 @@ def add_account():
     """Route to add a Wolvesville account to user's dashboard"""
     # Check if user is logged in
     if 'user_email' not in session:
-        return redirect(url_for('login'))
+        return redirect(url_for('loginuser'))
     
     user_email = session['user_email']
     
@@ -1392,7 +1356,8 @@ def add_account():
                              error='Please enter a username.')
     
     # Check if username exists in database with active license
-    license_data = get_license(username)
+    # FIX: Use db_helper.get_license instead of bare get_license
+    license_data = db_helper.get_license(username)
     
     if not license_data:
         return render_template('add_account.html',
@@ -1411,8 +1376,7 @@ def add_account():
         pass
     
     # Check if account is already linked to this user
-    import db_helper
-    existing_accounts = get_user_accounts(user_email)
+    existing_accounts = db_helper.get_user_accounts(user_email)
     
     if username in existing_accounts:
         return render_template('add_account.html',
@@ -1438,13 +1402,11 @@ def add_account():
 @app.route('/verify_account', methods=['POST'])
 def verify_account():
     """Verify account ownership by checking bio"""
-    # Check if user is logged in
     if 'user_email' not in session:
         return jsonify({'success': False, 'error': 'Not logged in'}), 401
     
     user_email = session['user_email']
     
-    # Get verification session
     if user_email not in verification_sessions:
         return jsonify({'success': False, 'error': 'No verification session found. Please start over.'}), 400
     
@@ -1454,7 +1416,6 @@ def verify_account():
     
     try:
         # Fetch user profile from Wolvesville API
-        # Replace with actual API endpoint
         api_url = f"https://api.wolvesville.com/players/search?username={username}"
         response = requests.get(api_url, timeout=10)
         
@@ -1463,24 +1424,21 @@ def verify_account():
         
         data = response.json()
         
-        # Extract bio (adjust based on actual API response structure)
         if not data or len(data) == 0:
             return jsonify({'success': False, 'error': 'Username not found on Wolvesville'}), 404
         
         player = data[0]
         bio = player.get('profileDescription', '') or player.get('bio', '')
         
-        # Check if verification code is in bio
         if expected_code not in bio:
             return jsonify({'success': False, 'error': 'Verification code not found in your bio. Please add it and try again.'}), 400
         
-        # Add account to user's dashboard
-        success = add_account_to_user(user_email, username)
+        # FIX: Use db_helper prefix
+        success = db_helper.add_account_to_user(user_email, username)
         
         if not success:
             return jsonify({'success': False, 'error': 'Failed to add account to dashboard'}), 500
         
-        # Clean up verification session
         del verification_sessions[user_email]
         
         return jsonify({'success': True, 'message': 'Account verified and added successfully!'})
@@ -1492,39 +1450,44 @@ def verify_account():
 
 @app.route('/xp/add', methods=['POST'])
 def add_xp():
-    data = request.json
-    player_id = data.get('player_id')
-    xp_amount = data.get('xp_amount')
-    username = data.get('username')
-    
-    if not all([player_id, xp_amount, username]):
-        return jsonify({'success': False, 'error': 'Missing parameters'})
-    
-    # Load XP data from DB
-    xp_data, sha = db_helper.read_storage('user-XP.json')
-    
-    if username not in xp_data:
-        xp_data[username] = {"daily": {}, "weekly": {}, "monthly": {}}
-    
-    # Get current date info
-    today = datetime.now().strftime('%Y-%m-%d')
-    week = datetime.now().strftime('%Y-W%U')
-    month = datetime.now().strftime('%Y-%m')
-    
-    # Update daily
-    xp_data[username]['daily'][today] = xp_data[username]['daily'].get(today, 0) + xp_amount
-    
-    # Update weekly
-    xp_data[username]['weekly'][week] = xp_data[username]['weekly'].get(week, 0) + xp_amount
-    
-    # Update monthly
-    xp_data[username]['monthly'][month] = xp_data[username]['monthly'].get(month, 0) + xp_amount
-    
-    # Save to storage (DB)
-    if db_helper.write_storage('user-XP.json', xp_data, sha):
-        return jsonify({'success': True})
-    
-    return jsonify({'success': False, 'error': 'Failed to save XP data'})
+    try:
+        data = request.json
+        player_id = data.get('player_id')
+        xp_amount = data.get('xp_amount')
+        username = data.get('username')
+        
+        if not all([player_id, xp_amount, username]):
+            return jsonify({'success': False, 'error': 'Missing parameters'}), 400
+        
+        # Load XP data from DB
+        xp_data, sha = db_helper.read_storage('user-XP.json')
+        
+        if username not in xp_data:
+            xp_data[username] = {"daily": {}, "weekly": {}, "monthly": {}}
+        
+        # Get current date info
+        today = datetime.now().strftime('%Y-%m-%d')
+        week = datetime.now().strftime('%Y-W%U')
+        month = datetime.now().strftime('%Y-%m')
+        
+        # Update daily
+        xp_data[username]['daily'][today] = xp_data[username]['daily'].get(today, 0) + xp_amount
+        
+        # Update weekly
+        xp_data[username]['weekly'][week] = xp_data[username]['weekly'].get(week, 0) + xp_amount
+        
+        # Update monthly
+        xp_data[username]['monthly'][month] = xp_data[username]['monthly'].get(month, 0) + xp_amount
+        
+        # Save to storage (DB)
+        if db_helper.write_storage('user-XP.json', xp_data, sha):
+            return jsonify({'success': True})
+        
+        return jsonify({'success': False, 'error': 'Failed to save XP data'}), 500
+        
+    except Exception as e:
+        log_event(f"Error in add_xp: {e}", level="error")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/dashboard/accounts', methods=['GET'])
