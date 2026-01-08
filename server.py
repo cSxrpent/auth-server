@@ -1641,25 +1641,38 @@ def authv2():
         return jsonify({"message": "unauthorized", "nickname": username}), 403
 
 
-@app.route("/api/custom-message", methods=["GET", "POST"])
+@app.route("/api/custom-message", methods=["GET"])
 @login_required
-def api_custom_message():
-    """Get or set the global custom message"""
-    if request.method == "GET":
-        msg = db_helper.get_custom_message()
-        return jsonify({"message": msg}), 200
+def api_custom_message_get():
+    """Get the global custom message"""
+    msg = db_helper.get_custom_message()
+    return jsonify({"message": msg}), 200
+
+@app.route("/api/custom-message/set", methods=["POST"])
+@login_required
+def api_custom_message_set():
+    """Set the global custom message"""
+    body = request.get_json() or {}
+    new_message = body.get("message", "").strip()
     
-    elif request.method == "POST":
-        body = request.get_json() or {}
-        new_message = body.get("message", "").strip()
-        
-        # Save to database
-        if db_helper.set_custom_message(new_message):
-            log_event(f"Custom message updated: '{new_message}'")
-            return jsonify({"message": "ok", "custom_message": new_message}), 200
-        else:
-            log_event(f"Failed to update custom message", level="error")
-            return jsonify({"error": "Failed to save message"}), 500
+    # Save to database
+    if db_helper.set_custom_message(new_message):
+        log_event(f"Custom message updated: '{new_message}'")
+        return jsonify({"message": "ok", "custom_message": new_message}), 200
+    else:
+        log_event(f"Failed to update custom message", level="error")
+        return jsonify({"error": "Failed to save message"}), 500
+
+@app.route("/api/custom-message/clear", methods=["POST"])
+@login_required
+def api_custom_message_clear():
+    """Clear the global custom message"""
+    if db_helper.set_custom_message(""):
+        log_event(f"Custom message cleared")
+        return jsonify({"message": "ok"}), 200
+    else:
+        log_event(f"Failed to clear custom message", level="error")
+        return jsonify({"error": "Failed to clear message"}), 500
             
 # -----------------------
 # Run
