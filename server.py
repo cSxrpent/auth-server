@@ -30,8 +30,8 @@ from db_helper import (
     load_keys, save_keys, find_key,
     load_testimonials, save_testimonials,
     get_user_by_email, create_user, verify_user_password,
-    get_user_accounts, add_account_to_user,
-    get_license,  # ← ADD THIS LINE
+    get_user_accounts, add_account_to_user, remove_account_from_user,
+    get_license,
     pause_license, resume_license,
     get_user_xp,
     load_stats, save_stats,
@@ -1540,6 +1540,33 @@ def api_dashboard_accounts():
     accounts = db_helper.get_user_accounts(email)
     return jsonify(accounts)
 
+@app.route('/api/dashboard/unlink', methods=['POST'])
+def api_dashboard_unlink():
+    """Unlink account from user's dashboard"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+    
+    data = request.json
+    username = data.get('username')
+    
+    if not username:
+        return jsonify({'success': False, 'error': 'Username required'}), 400
+    
+    email = session['user_id']
+    
+    try:
+        # Remove account from user's accounts list
+        success = db_helper.remove_account_from_user(email, username)
+        
+        if success:
+            log_event(f"Account unlinked: {username} from {email}")
+            return jsonify({'success': True, 'message': 'Account unlinked successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Account not found or already unlinked'}), 404
+            
+    except Exception as e:
+        log_event(f"Error unlinking account: {e}", level="error")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/dashboard/license/<username>', methods=['GET'])
 @login_required

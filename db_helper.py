@@ -751,6 +751,45 @@ def get_license(username: str):
         print(f"Unexpected error in get_license: {e}")
         return None
 
+def remove_account_from_user(email: str, username: str):
+    """Remove account from user's account list"""
+    try:
+        with get_db() as db:
+            from sqlalchemy.orm.attributes import flag_modified
+            
+            row = db.query(UserCredential).filter(UserCredential.email == email).first()
+            if not row:
+                print(f"❌ User not found: {email}")
+                return False
+            
+            accounts = row.accounts or []
+            
+            if username not in accounts:
+                print(f"⚠️ Account '{username}' not found in {email}'s accounts")
+                return False
+            
+            accounts.remove(username)
+            row.accounts = accounts
+            
+            # CRITICAL: Tell SQLAlchemy this column was modified
+            flag_modified(row, 'accounts')
+            
+            db.flush()  # Force write to DB
+            
+            print(f"✅ Removed account '{username}' from user {email}")
+            print(f"📋 New accounts list: {row.accounts}")
+            
+            return True
+            
+    except OperationalError as e:
+        print(f"❌ DB connection error in remove_account_from_user: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Unexpected error in remove_account_from_user: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 __all__ = [
     'load_users',
     'save_users',
@@ -786,5 +825,6 @@ __all__ = [
     'update_user_player_id',
     'update_user_nickname',
     'get_custom_message',
-    'set_custom_message'
+    'set_custom_message',
+    'remove_account_from_user'
 ]

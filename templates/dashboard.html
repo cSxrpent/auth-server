@@ -86,6 +86,46 @@
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(255,71,87,0.4);
         }
+        .unlink-btn {
+            background: linear-gradient(90deg,var(--danger),#ee5a6f);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: all 0.3s;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            font-size: 0.9rem;
+        }
+        .unlink-btn::before{
+            content:'';
+            position:absolute;
+            top:50%;
+            left:50%;
+            width:0;
+            height:0;
+            border-radius:50%;
+            background:rgba(255,255,255,0.2);
+            transition:width 0.6s,height 0.6s,top 0.6s,left 0.6s;
+            pointer-events:none;
+        }
+        .unlink-btn:hover::before{
+            width:300px;
+            height:300px;
+            top:-150px;
+            left:-150px;
+        }
+        .unlink-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255,71,87,0.4);
+        }
+        .unlink-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         .container {
             max-width: 1400px;
             margin: 30px auto;
@@ -467,6 +507,18 @@
         
         /* Responsive */
         @media(max-width:968px){
+            .header-content {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 15px;
+            }
+            .header-content > div:last-child {
+                align-items: stretch !important;
+            }
+            .logout-btn, .unlink-btn {
+                width: 100%;
+                text-align: center;
+            }
             .container {
                 flex-direction: column;
             }
@@ -492,7 +544,10 @@
     <div class="header">
         <div class="header-content">
             <div class="welcome">⚡ {{ email }}</div>
-            <a href="/logout" class="logout-btn">Logout</a>
+            <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
+                <a href="/logout" class="logout-btn">Logout</a>
+                <button onclick="unlinkAccount()" class="unlink-btn" id="unlinkBtn" style="display:none;">🔗 Unlink Account</button>
+            </div>
         </div>
     </div>
 
@@ -706,6 +761,43 @@
             }
         }
 
+        async function unlinkAccount() {
+            if (!currentSelected) {
+                alert('❌ Please select an account first');
+                return;
+            }
+            
+            if (!confirm(`⚠️ Are you sure you want to unlink "${currentSelected}"?\n\nThis will remove the account from your dashboard. You can add it back later if needed.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/dashboard/unlink', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username: currentSelected })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    alert('✅ Account unlinked successfully!');
+                    currentSelected = null;
+                    document.getElementById('unlinkBtn').style.display = 'none';
+                    document.getElementById('account-area').style.display = 'none';
+                    document.getElementById('empty-state').style.display = '';
+                    loadAccounts(); // Reload the accounts list
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Failed to unlink account'));
+                }
+            } catch (error) {
+                console.error('Unlink error:', error);
+                alert('❌ An error occurred. Please try again.');
+            }
+        }
+
         async function selectAccount(username, anchorEl){
             currentSelected = username;
             // mark active
@@ -817,6 +909,7 @@
             }catch(e){
                 console.error('Failed to load account data', e);
             }
+            document.getElementById('unlinkBtn').style.display = 'inline-block';
         }
 
         // initial load
