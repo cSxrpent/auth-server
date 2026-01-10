@@ -1,5 +1,3 @@
-// static/shop.js - Save this in your static folder
-
 const ITEMS = [
     // GOLD
     { type: "GOLDV2_1", cost: 450, category: "coins", price: 2.99, name: "Gold Package 1" },
@@ -17,12 +15,12 @@ const ITEMS = [
     { type: "EMOJI_3", cost: 520, category: "emote", price: 3.49, name: "Emoji Pack 3" },
 
     // PREMIUM
-    { type: "BATTLE_PASS", cost: 620, category: "premium", price: 4.99, name: "Battle Pass" },
+    { type: "BATTLE_PASS", cost: 620, category: "premium", price: 4.49, name: "Battle Pass" },
     { type: "BATTLE_PASS_BUNDLE", cost: 1280, category: "premium", price: 8.99, name: "Battle Pass Bundle" },
     { type: "CUSTOM_GAMES_PREMIUM", cost: 3100, category: "premium", price: 19.99, name: "Custom Games Premium" },
-    { type: "PROFILE_CUSTOMIZATION", cost: 3100, category: "premium", price: 14.99, name: "Profile Customization" },
-    { type: "AUTO_DOUBLE_XP", cost: 3100, category: "premium", price: 14.99, name: "Auto Double XP" },
-    { type: "TALISMANS_PREMIUM", cost: 3100, category: "premium", price: 14.99, name: "Talismans Premium" },
+    { type: "PROFILE_CUSTOMIZATION", cost: 3100, category: "premium", price: 19.99, name: "Profile Customization" },
+    { type: "AUTO_DOUBLE_XP", cost: 3100, category: "premium", price: 17.99, name: "Auto Double XP" },
+    { type: "TALISMANS_PREMIUM", cost: 3100, category: "premium", price: 19.99, name: "Talismans Premium" },
 
     // LOOT BOXES
     { type: "LOOT_BOX_1", cost: 320, category: "lootbox", price: 2.49, name: "Loot Box Small" },
@@ -62,6 +60,23 @@ const CALENDARS = [
 ];
 
 const BUNDLES = [
+    { type: "BUNDLE_ANGELXMAS", cost: 450, price: 2.99, name: "Angel Xmas Bundle", image: "bundle-angelxmas" },
+    { type: "BUNDLE_BLACKFIREDAY", cost: 450, price: 2.99, name: "Black Fire Day Bundle", image: "bundle-blackfireday" },
+    { type: "BUNDLE_BDAY_24", cost: 450, price: 2.99, name: "Birthday 24 Bundle", image: "bundle-bday-24" },
+    { type: "BUNDLE_BIRTHDAYCAKE", cost: 450, price: 2.99, name: "Birthday Cake Bundle", image: "bundle-birthdaycake" },
+    { type: "BUNDLE_BLACKFRIDAYWOLF", cost: 450, price: 2.99, name: "Black Friday Wolf Bundle", image: "bundle-blackfridaywolf" },
+    { type: "BUNDLE_NEWYEAR25", cost: 450, price: 2.99, name: "New Year 2025 Bundle", image: "bundle-newyear25" },
+    { type: "BUNDLE_ROYALXMAS", cost: 450, price: 2.99, name: "Royal Xmas Bundle", image: "bundle-royalxmas" },
+    { type: "BUNDLE_ALITTLEMATCHWOLF", cost: 450, price: 2.99, name: "A Little Match Wolf Bundle", image: "bundle-alittlematchwolf" },
+    { type: "BUNDLE_DRAWOLF", cost: 450, price: 2.99, name: "Drawolf Bundle", image: "bundle-drawolf" },
+    { type: "BUNDLE_SLEEPINBUNNY", cost: 450, price: 2.99, name: "Sleepin Bunny Bundle", image: "bundle-sleepinbunny" },
+    { type: "BUNDLE_PIGKABOO", cost: 450, price: 2.99, name: "Pigkaboo Bundle", image: "bundle-pigkaboo" },
+    { type: "BUNDLE_POOLPARTYROSE", cost: 450, price: 2.99, name: "Pool Party Rose Bundle", image: "bundle-poolpartyrose" },
+    { type: "BUNDLE_PROUDTOBEME", cost: 450, price: 2.99, name: "Proud To Be Me Bundle", image: "bundle-proudtobeme" },
+    { type: "BUNDLE_ROLE_ICONS_EASTER", cost: 450, price: 2.99, name: "Easter Role Icons Bundle", image: "bundle-role-icons-easter" },
+    { type: "BUNDLE_ROLE_ICONS_EASTER_2024", cost: 450, price: 2.99, name: "Easter 2024 Role Icons Bundle", image: "bundle-role-icons-easter-2024" },
+    { type: "BUNDLE_CHOCOLATEBOX", cost: 450, price: 2.99, name: "Chocolate Box Bundle", image: "bundle-chocolatebox" },
+    { type: "BUNDLE_SQUID", cost: 450, price: 2.99, name: "Squid Bundle", image: "bundle-squid" },
     { type: "BUNDLE_DARK_CUPID", cost: 800, price: 4.99, name: "Dark Cupid Bundle", image: "bundle-dark-cupid" },
     { type: "BUNDLE_EASTER_24", cost: 800, price: 4.99, name: "Easter 24 Bundle", image: "bundle-easter-24" },
     { type: "BUNDLE_WATERMELON", cost: 800, price: 4.99, name: "Watermelon Bundle", image: "bundle-watermelon" },
@@ -109,6 +124,7 @@ const BUNDLES = [
     { type: "BUNDLE_LEOPARD", cost: 800, price: 4.99, name: "Leopard Bundle", image: "bundle-leopard" },
     { type: "BUNDLE_YEEHAW", cost: 800, price: 4.99, name: "Yeehaw Bundle", image: "bundle-yeehaw" }
 ];
+
 
 const CATEGORY_EMOJIS = {
     coins: '🪙',
