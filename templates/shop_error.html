@@ -1,55 +1,130 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Purchase Error</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Error - RXZBot</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
+        :root{
+            --bg:#0a0e1a; --card:#0f1724; --muted:#9aa4b2; --accent:#00d4ff; --danger:#ff4757; --glass: rgba(255,255,255,0.02);
+            --radius:16px; --glow:0 0 20px rgba(0,212,255,0.3);
         }
-        .error-box {
-            background: white;
-            padding: 40px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            text-align: center;
-            max-width: 500px;
+        *{box-sizing:border-box; margin:0; padding:0;}
+        body{
+            font-family:'Segoe UI',system-ui,Arial;
+            background:linear-gradient(135deg,#071026,#0d1526,#1a1f35);
+            color:#eaf1ff;
+            min-height:100vh;
+            overflow-x:hidden;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            padding:20px;
         }
-        .error-icon {
-            font-size: 4em;
-            color: #f44336;
-            margin-bottom: 20px;
+        
+        /* Particles */
+        .particles{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+        .particle{position:absolute;background:var(--accent);border-radius:50%;opacity:0.1;animation:float 10s infinite linear}
+        @keyframes float{from{transform:translateY(100vh) rotate(0deg)}to{transform:translateY(-100px) rotate(360deg)}}
+        
+        .error-container{
+            background:linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));
+            border-radius:var(--radius);
+            padding:50px 40px;
+            border:2px solid rgba(255,255,255,0.1);
+            max-width:600px;
+            width:100%;
+            text-align:center;
+            position:relative;
+            z-index:1;
+            backdrop-filter:blur(10px);
+            box-shadow:0 20px 60px rgba(0,0,0,0.5);
+            animation:slideUp 0.5s ease;
         }
-        h1 { color: #333; margin-bottom: 20px; }
-        p { color: #666; margin-bottom: 15px; line-height: 1.6; }
-        .error-message {
-            background: #ffebee;
-            color: #c62828;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            border-left: 4px solid #f44336;
+        @keyframes slideUp{from{opacity:0;transform:translateY(50px)}to{opacity:1;transform:translateY(0)}}
+        
+        .error-icon{
+            font-size:5rem;
+            margin-bottom:25px;
+            animation:shake 0.5s ease;
+            filter:drop-shadow(0 0 20px rgba(255,71,87,0.5));
         }
-        .btn {
-            display: inline-block;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 30px;
-            border-radius: 8px;
-            text-decoration: none;
-            margin-top: 20px;
-            transition: all 0.3s;
+        @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+        
+        h1{
+            font-size:2.5rem;
+            background:linear-gradient(90deg,var(--danger),#ff6b81);
+            background-clip:text;
+            -webkit-background-clip:text;
+            color:transparent;
+            margin-bottom:20px;
+            font-weight:700;
         }
-        .btn:hover { transform: scale(1.05); }
+        
+        .error-message{
+            background:linear-gradient(135deg,rgba(255,71,87,0.15),rgba(255,71,87,0.05));
+            border:2px solid rgba(255,71,87,0.3);
+            border-radius:12px;
+            padding:20px;
+            margin:30px 0;
+            color:#fff;
+            font-size:1.1rem;
+            border-left:4px solid var(--danger);
+            animation:pulse 2s infinite;
+        }
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.85}}
+        
+        p{
+            color:var(--muted);
+            font-size:1.1rem;
+            line-height:1.6;
+            margin-bottom:30px;
+        }
+        
+        .btn{
+            background:linear-gradient(90deg,var(--accent),#7b4bff);
+            color:#fff;
+            border:none;
+            padding:16px 40px;
+            border-radius:12px;
+            cursor:pointer;
+            font-size:1.1rem;
+            font-weight:700;
+            text-decoration:none;
+            display:inline-block;
+            transition:all 0.3s;
+            position:relative;
+            overflow:hidden;
+        }
+        .btn::before{
+            content:'';
+            position:absolute;
+            top:50%;
+            left:50%;
+            width:0;
+            height:0;
+            border-radius:50%;
+            background:rgba(255,255,255,0.2);
+            transition:width 0.6s,height 0.6s,top 0.6s,left 0.6s;
+            pointer-events:none;
+        }
+        .btn:hover::before{width:500px;height:500px;top:-250px;left:-250px}
+        .btn:hover{
+            transform:scale(1.05);
+            box-shadow:0 8px 30px rgba(0,212,255,0.5);
+        }
+        
+        @media(max-width:768px){
+            .error-container{padding:40px 25px}
+            h1{font-size:2rem}
+            .error-icon{font-size:4rem}
+        }
     </style>
 </head>
 <body>
-    <div class="error-box">
+    <div class="particles" id="particles"></div>
+    
+    <div class="error-container">
         <div class="error-icon">✗</div>
         <h1>Purchase Failed</h1>
         <div class="error-message">
@@ -58,5 +133,20 @@
         <p>Please try again or contact support if the problem persists.</p>
         <a href="{{ url_for('shop') }}" class="btn">Return to Shop</a>
     </div>
+
+    <script>
+        function createParticles(){
+            const container = document.getElementById('particles');
+            for(let i=0;i<50;i++){
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.left = Math.random()*100 + '%';
+                p.style.width = p.style.height = Math.random()*4 + 2 + 'px';
+                p.style.animationDelay = Math.random()*10 + 's';
+                container.appendChild(p);
+            }
+        }
+        createParticles();
+    </script>
 </body>
 </html>
