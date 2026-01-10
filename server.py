@@ -942,6 +942,79 @@ def stop_ping_thread():
             return True
         return False
 
+def send_wolvesville_gift(username, product, message):
+    """
+    Send a gift to a Wolvesville user
+    
+    Args:
+        username: Wolvesville username
+        product: Product dict with 'type', 'name', 'price', etc.
+        message: Gift message
+    
+    Returns:
+        dict: API response from Wolvesville
+    """
+    try:
+        # Search for player
+        player = wolvesville_api.search_player(username)
+        
+        if not player:
+            raise Exception(f"Player '{username}' not found")
+        
+        player_id = player.get('id')
+        
+        # Prepare gift data
+        gift_type = product.get('type')
+        gift_message = message or f"Gift from Wolvesville Shop!"
+        
+        # Build request body
+        body = {
+            'type': gift_type,
+            'giftRecipientId': player_id,
+            'giftMessage': gift_message
+        }
+        
+        # Add calendar ID if it's a calendar
+        if gift_type == 'CALENDAR':
+            calendar_id = product.get('id')
+            if calendar_id:
+                body['calendarId'] = calendar_id
+        
+        # Get current tokens
+        tokens = token_manager.get_tokens()
+        
+        if not tokens.get('id_token'):
+            raise Exception("No valid authentication token")
+        
+        # Send gift via API
+        headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': f"Bearer {tokens['id_token']}",
+            'Cf-JWT': tokens.get('cf_jwt', ''),
+            'ids': '1'
+        }
+        
+        response = requests.post(
+            'https://core.api-wolvesville.com/gemOffers/purchases',
+            json=body,
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            log_event(f"Gift sent successfully: {gift_type} to {username}")
+            return result
+        else:
+            error_msg = f"API error {response.status_code}: {response.text}"
+            log_event(f"Gift send failed: {error_msg}", level="error")
+            raise Exception(error_msg)
+            
+    except Exception as e:
+        log_event(f"send_wolvesville_gift error: {e}", level="error")
+        raise
+
 @app.route("/api/ping", methods=["POST"])
 @login_required
 def api_ping():
@@ -1805,7 +1878,139 @@ def api_custom_message_clear():
     else:
         log_event(f"Failed to clear custom message", level="error")
         return jsonify({"error": "Failed to clear message"}), 500
+
+@app.route('/shop')
+def shop():
+    """Main shop page"""
+    return render_template('shop.html')
+
+@app.route('/api/shop/create-order', methods=['POST'])
+def create_shop_order():
+    """Create PayPal order for shop purchase"""
+    if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+        return jsonify({'error': 'PayPal not configured'}), 500
+    
+    try:
+        data = request.json
+        product = data.get('product')
+        username = data.get('username')
+        message = data.get('message', '')
+        
+        if not product or not username:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Store purchase info in session
+        session['shop_purchase'] = {
+            'product': product,
+            'username': username,
+            'message': message,
+            'timestamp': time.time()
+        }
+        
+        # Create PayPal payment
+        payment = paypalrestsdk.Payment({
+            "intent": "sale",
+            "payer": {"payment_method": "paypal"},
+            "redirect_urls": {
+                "return_url": url_for("shop_payment_success", _external=True),
+                "cancel_url": url_for("shop_payment_cancel", _external=True)
+            },
+            "transactions": [{
+                "item_list": {
+                    "items": [{
+                        "name": product.get('name'),
+                        "sku": product.get('type'),
+                        "price": str(product.get('price')),
+                        "currency": "EUR",
+                        "quantity": 1
+                    }]
+                },
+                "amount": {
+                    "total": str(product.get('price')),
+                    "currency": "EUR"
+                },
+                "description": f"{product.get('name')} for {username}"
+            }]
+        })
+        
+        if payment.create():
+            # Find approval URL
+            for link in payment.links:
+                if link.rel == "approval_url":
+                    return jsonify({'approval_url': link.href})
+            return jsonify({'error': 'No approval URL found'}), 500
+        else:
+            log_event(f"PayPal shop order creation failed: {payment.error}", level="error")
+            return jsonify({'error': 'Payment creation failed'}), 500
             
+    except Exception as e:
+        log_event(f"Error creating shop order: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/shop/payment/success')
+def shop_payment_success():
+    """Handle successful shop payment"""
+    payment_id = request.args.get("paymentId")
+    payer_id = request.args.get("PayerID")
+    
+    if not payment_id or not payer_id:
+        return render_template('shop_error.html', error='Invalid payment parameters'), 400
+    
+    try:
+        # Execute payment
+        payment = paypalrestsdk.Payment.find(payment_id)
+        
+        if payment.execute({"payer_id": payer_id}):
+            if payment.state != "approved":
+                return render_template('shop_error.html', error='Payment not approved'), 400
+            
+            # Get purchase info from session
+            purchase_info = session.get('shop_purchase')
+            
+            if not purchase_info:
+                return render_template('shop_error.html', error='Purchase session expired'), 400
+            
+            # Check session timeout (30 minutes)
+            if time.time() - purchase_info.get('timestamp', 0) > 1800:
+                session.pop('shop_purchase', None)
+                return render_template('shop_error.html', error='Purchase session expired'), 400
+            
+            product = purchase_info['product']
+            username = purchase_info['username']
+            message = purchase_info['message']
+            
+            # Send gift to user
+            try:
+                result = send_wolvesville_gift(username, product, message)
+                
+                # Clear session
+                session.pop('shop_purchase', None)
+                
+                log_event(f"Shop gift sent: {product.get('name')} to {username}")
+                
+                return render_template('shop_success.html', 
+                                     username=username,
+                                     product=product,
+                                     result=result)
+                
+            except Exception as e:
+                log_event(f"Failed to send gift: {e}", level="error")
+                return render_template('shop_error.html', 
+                                     error=f'Payment succeeded but gift delivery failed: {str(e)}'), 500
+        else:
+            log_event(f"PayPal execution failed: {payment.error}", level="error")
+            return render_template('shop_error.html', error='Payment execution failed'), 500
+            
+    except Exception as e:
+        log_event(f"Shop payment error: {e}", level="error")
+        return render_template('shop_error.html', error=str(e)), 500
+
+@app.route('/shop/payment/cancel')
+def shop_payment_cancel():
+    """Handle cancelled shop payment"""
+    session.pop('shop_purchase', None)
+    return render_template('shop_cancel.html')
+
 # -----------------------
 # Run
 # -----------------------
