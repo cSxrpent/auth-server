@@ -93,6 +93,19 @@ class CustomMessage(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     message = Column(Text, nullable=True)
 
+class GemAccount(Base):
+    __tablename__ = 'gem_accounts'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account_number = Column(Integer, unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=False)
+    password = Column(String(255), nullable=False)
+    current_nickname = Column(String(255), nullable=False)  # Current username (RXZBOT or bugsbot{N})
+    gems_remaining = Column(Integer, default=5000)
+    is_active = Column(Boolean, default=True)
+    last_used = Column(String(30), nullable=True)  # Last time this account was used
+    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+    
 def init_database():
     """Initialize database with all tables"""
     DATABASE_URL = os.getenv("DATABASE_URL")

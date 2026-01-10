@@ -790,6 +790,104 @@ def remove_account_from_user(email: str, username: str):
         traceback.print_exc()
         return False
 
+def get_all_gem_accounts():
+    """Get all gem accounts"""
+    try:
+        with get_db() as db:
+            from init_database import GemAccount
+            accounts = db.query(GemAccount).order_by(GemAccount.account_number).all()
+            return [
+                {
+                    'id': acc.id,
+                    'account_number': acc.account_number,
+                    'email': acc.email,
+                    'current_nickname': acc.current_nickname,
+                    'gems_remaining': acc.gems_remaining,
+                    'is_active': acc.is_active,
+                    'last_used': acc.last_used
+                }
+                for acc in accounts
+            ]
+    except Exception as e:
+        print(f"Error getting gem accounts: {e}")
+        return []
+
+def add_gem_account(account_number, email, password):
+    """Add a new gem account"""
+    try:
+        with get_db() as db:
+            from init_database import GemAccount
+            
+            existing = db.query(GemAccount).filter_by(email=email).first()
+            if existing:
+                return False
+            
+            new_account = GemAccount(
+                account_number=account_number,
+                email=email,
+                password=password,
+                current_nickname=f"bugsbot{account_number}",
+                gems_remaining=5000,
+                is_active=True
+            )
+            
+            db.add(new_account)
+            return True
+    except Exception as e:
+        print(f"Error adding gem account: {e}")
+        return False
+
+def update_gem_account_nickname(account_id, new_nickname):
+    """Update account's current nickname"""
+    try:
+        with get_db() as db:
+            from init_database import GemAccount
+            
+            account = db.query(GemAccount).filter_by(id=account_id).first()
+            if not account:
+                return False
+            
+            account.current_nickname = new_nickname
+            return True
+    except Exception as e:
+        print(f"Error updating nickname: {e}")
+        return False
+
+def deduct_account_gems(account_id, gems_spent):
+    """Deduct gems from account"""
+    try:
+        with get_db() as db:
+            from init_database import GemAccount
+            from datetime import datetime
+            
+            account = db.query(GemAccount).filter_by(id=account_id).first()
+            if not account:
+                return False
+            
+            account.gems_remaining -= gems_spent
+            account.last_used = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            
+            return True
+    except Exception as e:
+        print(f"Error deducting gems: {e}")
+        return False
+
+def recharge_account_gems(account_id, gems_amount=5000):
+    """Recharge account gems"""
+    try:
+        with get_db() as db:
+            from init_database import GemAccount
+            
+            account = db.query(GemAccount).filter_by(id=account_id).first()
+            if not account:
+                return False
+            
+            account.gems_remaining = gems_amount
+            return True
+    except Exception as e:
+        print(f"Error recharging gems: {e}")
+        return False
+        
 __all__ = [
     'load_users',
     'save_users',

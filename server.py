@@ -41,6 +41,8 @@ from db_helper import (
     get_user_by_player_id, update_user_player_id, update_user_nickname,
     get_custom_message, set_custom_message
 )
+from gem_account_manager import gem_account_manager
+
 
 load_dotenv()  # load .env file if it exists (for local development)
 
@@ -944,77 +946,157 @@ def stop_ping_thread():
 
 def send_wolvesville_gift(username, product, message):
     """
-    Send a gift to a Wolvesville user
+    Send a gift to a Wolvesville user using the gem account manager
     
     Args:
         username: Wolvesville username
-        product: Product dict with 'type', 'name', 'price', etc.
+        product: Product dict with 'type', 'name', 'price', 'cost', etc.
         message: Gift message
     
     Returns:
         dict: API response from Wolvesville
     """
     try:
-        # Search for player
-        player = wolvesville_api.search_player(username)
+        # Use the gem account manager with automatic account switching
+        result = gem_account_manager.send_gift_with_auto_switch(username, product, message)
         
-        if not player:
-            raise Exception(f"Player '{username}' not found")
+        log_event(f"Gift sent: {product['name']} to {username} ({product['cost']} gems)")
         
-        player_id = player.get('id')
-        
-        # Prepare gift data
-        gift_type = product.get('type')
-        gift_message = message or f"Gift from Wolvesville Shop!"
-        
-        # Build request body
-        body = {
-            'type': gift_type,
-            'giftRecipientId': player_id,
-            'giftMessage': gift_message
-        }
-        
-        # Add calendar ID if it's a calendar
-        if gift_type == 'CALENDAR':
-            calendar_id = product.get('id')
-            if calendar_id:
-                body['calendarId'] = calendar_id
-        
-        # Get current tokens
-        tokens = token_manager.get_tokens()
-        
-        if not tokens.get('id_token'):
-            raise Exception("No valid authentication token")
-        
-        # Send gift via API
-        headers = {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Authorization': f"Bearer {tokens['id_token']}",
-            'Cf-JWT': tokens.get('cf_jwt', ''),
-            'ids': '1'
-        }
-        
-        response = requests.post(
-            'https://core.api-wolvesville.com/gemOffers/purchases',
-            json=body,
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            log_event(f"Gift sent successfully: {gift_type} to {username}")
-            return result
-        else:
-            error_msg = f"API error {response.status_code}: {response.text}"
-            log_event(f"Gift send failed: {error_msg}", level="error")
-            raise Exception(error_msg)
+        return result
             
     except Exception as e:
         log_event(f"send_wolvesville_gift error: {e}", level="error")
         raise
 
+@app.route('/admin/gem-accounts')
+@login_required
+def admin_gem_accounts():
+    """Admin page for managing gem accounts"""
+    return render_template('admin_gem_accounts.html')
+
+@app.route('/api/gem-accounts', methods=['GET'])
+@login_required
+def api_get_gem_accounts():
+    """Get all gem accounts"""
+    accounts = gem_account_manager.get_all_gem_accounts()
+    # Don't send passwords to frontend
+    for acc in accounts:
+        acc.pop('password', None)
+    return jsonify(accounts)
+
+@app.route('/api/gem-accounts/add', methods=['POST'])
+@login_required
+def api_add_gem_account():
+    """Add a new gem account"""
+    body = request.get_json() or {}
+    account_number = body.get('account_number')
+    email = body.get('email')
+    password = body.get('password')
+    
+    if not all([account_number, email, password]):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    if gem_account_manager.add_gem_account(account_number, email, password):
+        log_event(f"Gem account added: #{account_number} ({email})")
+        return jsonify({'success': True, 'message': 'Account added successfully'})
+    else:
+        return jsonify({'error': 'Failed to add account (may already exist)'}), 400
+
+@app.route('/api/gem-accounts/recharge', methods=['POST'])
+@login_required
+def api_recharge_gem_account():
+    """Recharge an account's gems"""
+    body = request.get_json() or {}
+    account_id = body.get('account_id')
+    gems_amount = body.get('gems_amount', 5000)
+    
+    if not account_id:
+        return jsonify({'error': 'Account ID required'}), 400
+    
+    if gem_account_manager.recharge_account(account_id, gems_amount):
+        log_event(f"Gem account #{account_id} recharged to {gems_amount} gems")
+        return jsonify({'success': True, 'message': 'Account recharged'})
+    else:
+        return jsonify({'error': 'Failed to recharge account'}), 400
+
+@app.route('/api/gem-accounts/toggle', methods=['POST'])
+@login_required
+def api_toggle_gem_account():
+    """Enable/disable a gem account"""
+    body = request.get_json() or {}
+    account_id = body.get('account_id')
+    is_active = body.get('is_active')
+    
+    if not account_id or is_active is None:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    try:
+        with db_helper.get_db() as db:
+            from init_database import GemAccount
+            
+            account = db.query(GemAccount).filter_by(id=account_id).first()
+            if not account:
+                return jsonify({'error': 'Account not found'}), 404
+            
+            account.is_active = is_active
+            db.commit()
+            
+            status = 'enabled' if is_active else 'disabled'
+            log_event(f"Gem account #{account.account_number} {status}")
+            
+            return jsonify({'success': True, 'message': f'Account {status}'})
+            
+    except Exception as e:
+        log_event(f"Error toggling gem account: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/gem-accounts/delete', methods=['POST'])
+@login_required
+def api_delete_gem_account():
+    """Delete a gem account"""
+    body = request.get_json() or {}
+    account_id = body.get('account_id')
+    
+    if not account_id:
+        return jsonify({'error': 'Account ID required'}), 400
+    
+    try:
+        with db_helper.get_db() as db:
+            from init_database import GemAccount
+            
+            account = db.query(GemAccount).filter_by(id=account_id).first()
+            if not account:
+                return jsonify({'error': 'Account not found'}), 404
+            
+            account_number = account.account_number
+            db.delete(account)
+            db.commit()
+            
+            log_event(f"Gem account #{account_number} deleted")
+            
+            return jsonify({'success': True, 'message': 'Account deleted'})
+            
+    except Exception as e:
+        log_event(f"Error deleting gem account: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/gem-accounts/stats', methods=['GET'])
+@login_required
+def api_gem_accounts_stats():
+    """Get gem accounts statistics"""
+    accounts = gem_account_manager.get_all_gem_accounts()
+    
+    total_gems = sum(acc['gems_remaining'] for acc in accounts)
+    active_accounts = len([acc for acc in accounts if acc['is_active']])
+    total_accounts = len(accounts)
+    
+    return jsonify({
+        'total_accounts': total_accounts,
+        'active_accounts': active_accounts,
+        'total_gems': total_gems,
+        'average_gems': total_gems // total_accounts if total_accounts > 0 else 0
+    })
+    
 @app.route("/api/ping", methods=["POST"])
 @login_required
 def api_ping():
