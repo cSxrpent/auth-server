@@ -2132,21 +2132,22 @@ def create_cart_order():
         username = data.get('username')
         message = data.get('message', '')
         coupon = data.get('coupon')
-        total = data.get('total')
+        breakdown = data.get('breakdown', {})
         
         if not cart or not username:
             return jsonify({'error': 'Missing required fields'}), 400
         
-        # Calculate subtotal
-        subtotal = sum(item['price'] * item['quantity'] for item in cart)
+        # Helper function to format currency (CRITICAL FOR PAYPAL)
+        def format_price(amount):
+            """Format price to exactly 2 decimal places as string"""
+            return f"{float(amount):.2f}"
         
-        # Apply discount if coupon provided
-        discount = 0
-        if coupon:
-            discount = subtotal * (coupon['discount_percent'] / 100)
-            total = subtotal - discount
-        else:
-            total = subtotal
+        # Use breakdown from frontend (already calculated with proper rounding)
+        subtotal = breakdown.get('subtotal', 0)
+        loyalty_discount = breakdown.get('loyaltyDiscount', 0)
+        promo_discount = breakdown.get('promoDiscount', 0)
+        coupon_discount = breakdown.get('couponDiscount', 0)
+        total = data.get('total', 0)
         
         # Store purchase info in session
         session['cart_purchase'] = {
@@ -2158,26 +2159,23 @@ def create_cart_order():
             'timestamp': time.time()
         }
         
-        # Create PayPal payment items
+        # Create PayPal payment items - MUST format each price properly
         items = []
         for item in cart:
             items.append({
                 "name": item.get('name'),
                 "sku": item.get('type'),
-                "price": str(item.get('price')),
+                "price": format_price(item.get('price')),  # ✅ Format price
                 "currency": "EUR",
                 "quantity": item.get('quantity', 1)
             })
         
-        # Add discount as negative item if applicable
-        if discount > 0:
-            items.append({
-                "name": f"Discount ({coupon['discount_percent']}%)",
-                "sku": "DISCOUNT",
-                "price": str(-discount),
-                "currency": "EUR",
-                "quantity": 1
-            })
+        # PayPal doesn't support negative line items for discounts
+        # We need to calculate the final amount and NOT include discount items
+        # Just send the items at their regular prices and adjust the total
+        
+        # Calculate what PayPal will compute as subtotal
+        paypal_subtotal = sum(float(format_price(item['price'])) * item['quantity'] for item in cart)
         
         # Create PayPal payment
         payment = paypalrestsdk.Payment({
@@ -2190,8 +2188,12 @@ def create_cart_order():
             "transactions": [{
                 "item_list": {"items": items},
                 "amount": {
-                    "total": f"{total:.2f}",
-                    "currency": "EUR"
+                    "total": format_price(total),  # ✅ Format total
+                    "currency": "EUR",
+                    "details": {
+                        "subtotal": format_price(paypal_subtotal),  # ✅ Format subtotal
+                        "discount": format_price(paypal_subtotal - total) if total < paypal_subtotal else "0.00"  # ✅ Format discount
+                    }
                 },
                 "description": f"Cart purchase for {username}"
             }]
@@ -2208,6 +2210,8 @@ def create_cart_order():
             
     except Exception as e:
         log_event(f"Error creating cart order: {e}", level="error")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
