@@ -816,33 +816,28 @@ def deduct_account_gems(account_id, gems_spent):
             from init_database import GemAccount
             from datetime import datetime
 
-<invoke name="artifacts">
-<parameter name="command">update</parameter>
-<parameter name="id">db_helper_fix</parameter>
-<parameter name="old_str">def deduct_account_gems(account_id, gems_spent):
-    """Deduct gems from account"""
-    try:
-        with get_db() as db:
-            from init_database import GemAccount
-            from datetime import datetime</parameter>
-<parameter name="new_str">def deduct_account_gems(account_id, gems_spent):
+def deduct_account_gems(account_id, gems_spent):
     """Deduct gems from account"""
     try:
         with get_db() as db:
             from init_database import GemAccount
             from datetime import datetime
-            
+
             account = db.query(GemAccount).filter_by(id=account_id).first()
             if not account:
                 return False
-            
+
+            if account.gems_remaining < gems_spent:
+                return False
+
             account.gems_remaining -= gems_spent
             account.last_used = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            
+
             return True
     except Exception as e:
         print(f"⚠️ Error deducting gems: {e}")
         return False
+
 
 def recharge_account_gems(account_id, gems_amount=5000):
     """Recharge account gems"""
