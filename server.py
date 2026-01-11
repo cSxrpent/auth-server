@@ -42,6 +42,7 @@ from db_helper import (
     get_custom_message, set_custom_message
 )
 from gem_account_manager import gem_account_manager
+from coupon_manager import coupon_manager
 
 
 load_dotenv()  # load .env file if it exists (for local development)
@@ -2093,6 +2094,312 @@ def shop_payment_cancel():
     session.pop('shop_purchase', None)
     return render_template('shop_cancel.html')
 
+# --------- COUPON ROUTES ------------
+# ==================== COUPON & CART ROUTES ====================
+
+@app.route('/api/shop/validate-coupon', methods=['POST'])
+def validate_coupon():
+    """Validate a coupon code"""
+    try:
+        data = request.json
+        code = data.get('code', '').strip().upper()
+        
+        if not code:
+            return jsonify({'valid': False, 'message': 'Please enter a coupon code'}), 400
+        
+        valid, message, discount = coupon_manager.validate_coupon(code)
+        
+        return jsonify({
+            'valid': valid,
+            'message': message,
+            'discount_percent': discount
+        })
+        
+    except Exception as e:
+        log_event(f"Error validating coupon: {e}", level="error")
+        return jsonify({'valid': False, 'message': 'An error occurred'}), 500
+
+
+@app.route('/api/shop/create-cart-order', methods=['POST'])
+def create_cart_order():
+    """Create PayPal order for shopping cart"""
+    if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+        return jsonify({'error': 'PayPal not configured'}), 500
+    
+    try:
+        data = request.json
+        cart = data.get('cart', [])
+        username = data.get('username')
+        message = data.get('message', '')
+        coupon = data.get('coupon')
+        total = data.get('total')
+        
+        if not cart or not username:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Calculate subtotal
+        subtotal = sum(item['price'] * item['quantity'] for item in cart)
+        
+        # Apply discount if coupon provided
+        discount = 0
+        if coupon:
+            discount = subtotal * (coupon['discount_percent'] / 100)
+            total = subtotal - discount
+        else:
+            total = subtotal
+        
+        # Store purchase info in session
+        session['cart_purchase'] = {
+            'cart': cart,
+            'username': username,
+            'message': message,
+            'coupon': coupon,
+            'total': total,
+            'timestamp': time.time()
+        }
+        
+        # Create PayPal payment items
+        items = []
+        for item in cart:
+            items.append({
+                "name": item.get('name'),
+                "sku": item.get('type'),
+                "price": str(item.get('price')),
+                "currency": "EUR",
+                "quantity": item.get('quantity', 1)
+            })
+        
+        # Add discount as negative item if applicable
+        if discount > 0:
+            items.append({
+                "name": f"Discount ({coupon['discount_percent']}%)",
+                "sku": "DISCOUNT",
+                "price": str(-discount),
+                "currency": "EUR",
+                "quantity": 1
+            })
+        
+        # Create PayPal payment
+        payment = paypalrestsdk.Payment({
+            "intent": "sale",
+            "payer": {"payment_method": "paypal"},
+            "redirect_urls": {
+                "return_url": url_for("cart_payment_success", _external=True),
+                "cancel_url": url_for("cart_payment_cancel", _external=True)
+            },
+            "transactions": [{
+                "item_list": {"items": items},
+                "amount": {
+                    "total": f"{total:.2f}",
+                    "currency": "EUR"
+                },
+                "description": f"Cart purchase for {username}"
+            }]
+        })
+        
+        if payment.create():
+            for link in payment.links:
+                if link.rel == "approval_url":
+                    return jsonify({'approval_url': link.href})
+            return jsonify({'error': 'No approval URL found'}), 500
+        else:
+            log_event(f"PayPal cart order creation failed: {payment.error}", level="error")
+            return jsonify({'error': 'Payment creation failed'}), 500
+            
+    except Exception as e:
+        log_event(f"Error creating cart order: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/cart/payment/success')
+def cart_payment_success():
+    """Handle successful cart payment with 2-second delays between gifts"""
+    payment_id = request.args.get("paymentId")
+    payer_id = request.args.get("PayerID")
+    
+    if not payment_id or not payer_id:
+        return render_template('shop_error.html', error='Invalid payment parameters'), 400
+    
+    try:
+        # Execute payment
+        payment = paypalrestsdk.Payment.find(payment_id)
+        
+        if payment.execute({"payer_id": payer_id}):
+            if payment.state != "approved":
+                return render_template('shop_error.html', error='Payment not approved'), 400
+            
+            # Get purchase info from session
+            purchase_info = session.get('cart_purchase')
+            
+            if not purchase_info:
+                return render_template('shop_error.html', error='Purchase session expired'), 400
+            
+            # Check session timeout (30 minutes)
+            if time.time() - purchase_info.get('timestamp', 0) > 1800:
+                session.pop('cart_purchase', None)
+                return render_template('shop_error.html', error='Purchase session expired'), 400
+            
+            cart = purchase_info['cart']
+            username = purchase_info['username']
+            message = purchase_info['message']
+            coupon = purchase_info.get('coupon')
+            
+            # Mark coupon as used if applicable
+            if coupon:
+                coupon_manager.use_coupon(coupon['code'])
+            
+            # Send gifts with 2-second delays
+            results = []
+            failed_items = []
+            
+            for item in cart:
+                for i in range(item['quantity']):
+                    try:
+                        # Send gift
+                        result = send_wolvesville_gift(username, item, message)
+                        results.append({
+                            'item': item['name'],
+                            'success': True
+                        })
+                        
+                        # Wait 2 seconds before next gift (except for last one)
+                        if not (item == cart[-1] and i == item['quantity'] - 1):
+                            time.sleep(2)
+                            
+                    except Exception as e:
+                        log_event(f"Failed to send gift {item['name']}: {e}", level="error")
+                        failed_items.append(item['name'])
+                        results.append({
+                            'item': item['name'],
+                            'success': False,
+                            'error': str(e)
+                        })
+            
+            # Clear session
+            session.pop('cart_purchase', None)
+            
+            total_items = sum(item['quantity'] for item in cart)
+            successful = len([r for r in results if r['success']])
+            
+            log_event(f"Cart gifts sent: {successful}/{total_items} to {username}")
+            
+            return render_template('cart_success.html',
+                                 username=username,
+                                 cart=cart,
+                                 results=results,
+                                 successful=successful,
+                                 total=total_items,
+                                 failed_items=failed_items)
+        else:
+            log_event(f"PayPal execution failed: {payment.error}", level="error")
+            return render_template('shop_error.html', error='Payment execution failed'), 500
+            
+    except Exception as e:
+        log_event(f"Cart payment error: {e}", level="error")
+        return render_template('shop_error.html', error=str(e)), 500
+
+
+@app.route('/cart/payment/cancel')
+def cart_payment_cancel():
+    """Handle cancelled cart payment"""
+    session.pop('cart_purchase', None)
+    return render_template('cart_cancel.html')
+
+
+# ==================== ADMIN COUPON MANAGEMENT ====================
+
+@app.route('/admin/coupons')
+@login_required
+def admin_coupons():
+    """Admin page for managing coupons"""
+    return render_template('admin_coupons.html')
+
+
+@app.route('/api/admin/coupons', methods=['GET'])
+@login_required
+def api_get_coupons():
+    """Get all coupons"""
+    coupons = coupon_manager.get_all_coupons()
+    return jsonify(coupons)
+
+
+@app.route('/api/admin/coupons/create', methods=['POST'])
+@login_required
+def api_create_coupon():
+    """Create a new coupon"""
+    try:
+        data = request.json
+        code = data.get('code', '').strip().upper()
+        discount_percent = data.get('discount_percent')
+        max_uses = data.get('max_uses')
+        expires_at = data.get('expires_at')
+        
+        if not code or not discount_percent:
+            return jsonify({'error': 'Code and discount percent required'}), 400
+        
+        if discount_percent < 1 or discount_percent > 100:
+            return jsonify({'error': 'Discount must be between 1-100%'}), 400
+        
+        success, message = coupon_manager.create_coupon(
+            code, discount_percent, max_uses, expires_at
+        )
+        
+        if success:
+            log_event(f"Coupon created: {code} ({discount_percent}% off)")
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'error': message}), 400
+            
+    except Exception as e:
+        log_event(f"Error creating coupon: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/coupons/toggle', methods=['POST'])
+@login_required
+def api_toggle_coupon():
+    """Enable/disable a coupon"""
+    try:
+        data = request.json
+        code = data.get('code')
+        is_active = data.get('is_active')
+        
+        if not code or is_active is None:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        if coupon_manager.toggle_coupon(code, is_active):
+            status = 'enabled' if is_active else 'disabled'
+            log_event(f"Coupon {code} {status}")
+            return jsonify({'success': True, 'message': f'Coupon {status}'})
+        else:
+            return jsonify({'error': 'Coupon not found'}), 404
+            
+    except Exception as e:
+        log_event(f"Error toggling coupon: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/coupons/delete', methods=['POST'])
+@login_required
+def api_delete_coupon():
+    """Delete a coupon"""
+    try:
+        data = request.json
+        code = data.get('code')
+        
+        if not code:
+            return jsonify({'error': 'Code required'}), 400
+        
+        if coupon_manager.delete_coupon(code):
+            log_event(f"Coupon deleted: {code}")
+            return jsonify({'success': True, 'message': 'Coupon deleted'})
+        else:
+            return jsonify({'error': 'Coupon not found'}), 404
+            
+    except Exception as e:
+        log_event(f"Error deleting coupon: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+        
 # -----------------------
 # Run
 # -----------------------

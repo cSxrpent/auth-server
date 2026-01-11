@@ -50,6 +50,45 @@
         }
         .back-link:hover{transform:scale(1.05);box-shadow:var(--glow)}
         
+        /* Cart Button */
+        .cart-button{
+            position:fixed;
+            bottom:30px;
+            right:30px;
+            background:linear-gradient(135deg,var(--accent),#7b4bff);
+            color:#fff;
+            width:70px;
+            height:70px;
+            border-radius:50%;
+            border:none;
+            font-size:2rem;
+            cursor:pointer;
+            box-shadow:0 8px 30px rgba(0,212,255,0.5);
+            transition:all 0.3s;
+            z-index:100;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            position:relative;
+        }
+        .cart-button:hover{transform:scale(1.1) rotate(5deg);box-shadow:0 12px 40px rgba(0,212,255,0.7)}
+        .cart-count{
+            position:absolute;
+            top:-5px;
+            right:-5px;
+            background:var(--danger);
+            color:#fff;
+            width:28px;
+            height:28px;
+            border-radius:50%;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            font-size:0.85rem;
+            font-weight:700;
+            border:3px solid var(--card);
+        }
+        
         /* Tabs */
         .tabs{
             display:flex;
@@ -213,7 +252,7 @@
             background:linear-gradient(135deg,var(--card),rgba(15,23,36,0.95));
             padding:40px;
             border-radius:var(--radius);
-            max-width:550px;
+            max-width:600px;
             width:90%;
             max-height:90vh;
             overflow-y:auto;
@@ -228,6 +267,191 @@
             font-weight:700;
             margin-bottom:25px;
             color:#fff;
+            background:linear-gradient(90deg,var(--accent),#7b4bff);
+            background-clip:text;
+            -webkit-background-clip:text;
+            color:transparent;
+        }
+        
+        /* Cart Modal */
+        .cart-items{
+            max-height:400px;
+            overflow-y:auto;
+            margin-bottom:20px;
+        }
+        
+        .cart-item{
+            background:linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));
+            border-radius:12px;
+            padding:15px;
+            margin-bottom:12px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            border:1px solid rgba(255,255,255,0.1);
+        }
+        
+        .cart-item-info{
+            flex:1;
+        }
+        
+        .cart-item-name{
+            font-weight:600;
+            color:#fff;
+            margin-bottom:5px;
+        }
+        
+        .cart-item-price{
+            color:var(--accent);
+            font-size:0.95rem;
+        }
+        
+        .cart-item-controls{
+            display:flex;
+            align-items:center;
+            gap:10px;
+        }
+        
+        .qty-btn, .remove-btn{
+            background:rgba(255,255,255,0.1);
+            border:1px solid rgba(255,255,255,0.2);
+            color:#fff;
+            width:32px;
+            height:32px;
+            border-radius:8px;
+            cursor:pointer;
+            font-size:1.1rem;
+            font-weight:700;
+            transition:all 0.3s;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+        }
+        
+        .qty-btn:hover{
+            background:rgba(0,212,255,0.2);
+            border-color:var(--accent);
+        }
+        
+        .remove-btn{
+            background:rgba(255,71,87,0.1);
+            border-color:rgba(255,71,87,0.3);
+        }
+        
+        .remove-btn:hover{
+            background:rgba(255,71,87,0.2);
+            border-color:var(--danger);
+        }
+        
+        .cart-item-qty{
+            font-weight:700;
+            color:#fff;
+            min-width:25px;
+            text-align:center;
+        }
+        
+        .empty-cart{
+            text-align:center;
+            padding:60px 20px;
+            color:var(--muted);
+            font-size:1.2rem;
+        }
+        
+        /* Coupon Input */
+        .coupon-section{
+            background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,215,0,0.05));
+            border:2px dashed rgba(255,215,0,0.3);
+            border-radius:12px;
+            padding:20px;
+            margin-bottom:20px;
+        }
+        
+        .coupon-title{
+            font-weight:700;
+            color:var(--gold);
+            margin-bottom:12px;
+            display:flex;
+            align-items:center;
+            gap:8px;
+        }
+        
+        .coupon-input-group{
+            display:flex;
+            gap:10px;
+        }
+        
+        .coupon-input-group input{
+            flex:1;
+            padding:12px 16px;
+            border-radius:10px;
+            border:2px solid rgba(255,215,0,0.3);
+            background:rgba(0,0,0,0.3);
+            color:#fff;
+            font-size:1rem;
+            text-transform:uppercase;
+            font-weight:600;
+            letter-spacing:1px;
+            transition:all 0.3s;
+        }
+        
+        .coupon-input-group input:focus{
+            outline:none;
+            border-color:var(--gold);
+            box-shadow:0 0 20px rgba(255,215,0,0.3);
+        }
+        
+        .apply-coupon-btn{
+            padding:12px 24px;
+            background:linear-gradient(135deg,var(--gold),#ffa500);
+            border:none;
+            border-radius:10px;
+            color:#000;
+            font-weight:700;
+            cursor:pointer;
+            transition:all 0.3s;
+        }
+        
+        .apply-coupon-btn:hover{
+            transform:scale(1.05);
+            box-shadow:0 8px 25px rgba(255,215,0,0.4);
+        }
+        
+        .apply-coupon-btn:disabled{
+            opacity:0.5;
+            cursor:not-allowed;
+        }
+        
+        /* Cart Summary */
+        .cart-summary{
+            background:linear-gradient(135deg,rgba(0,212,255,0.1),rgba(123,75,255,0.05));
+            border-radius:12px;
+            padding:20px;
+            border:1px solid rgba(0,212,255,0.3);
+            margin-bottom:20px;
+        }
+        
+        .summary-row{
+            display:flex;
+            justify-content:space-between;
+            padding:10px 0;
+            color:var(--muted);
+            font-size:1.05rem;
+        }
+        
+        .summary-row.discount{
+            color:var(--success);
+        }
+        
+        .summary-row.total{
+            border-top:2px solid rgba(255,255,255,0.1);
+            margin-top:10px;
+            padding-top:15px;
+            font-size:1.4rem;
+            font-weight:700;
+            color:#fff;
+        }
+        
+        .summary-row.total span:last-child{
             background:linear-gradient(90deg,var(--accent),#7b4bff);
             background-clip:text;
             -webkit-background-clip:text;
@@ -264,15 +488,6 @@
             background:rgba(255,255,255,0.08);
         }
         .form-group textarea{resize:vertical;min-height:80px}
-        
-        #selectedItem{
-            padding:15px;
-            background:linear-gradient(135deg,rgba(0,212,255,0.1),rgba(123,75,255,0.05));
-            border-radius:10px;
-            border:1px solid rgba(0,212,255,0.3);
-            color:#fff;
-            font-size:1.05rem;
-        }
         
         .modal-buttons{
             display:flex;
@@ -316,6 +531,38 @@
         .modal-button:hover{transform:scale(1.03)}
         .modal-button.primary:hover{box-shadow:0 8px 30px rgba(0,212,255,0.5)}
         
+        /* Notifications */
+        .notification{
+            position:fixed;
+            bottom:120px;
+            right:30px;
+            background:linear-gradient(135deg,var(--success),#20bf55);
+            color:#fff;
+            padding:16px 24px;
+            border-radius:12px;
+            box-shadow:0 8px 30px rgba(46,213,115,0.4);
+            font-weight:600;
+            z-index:10000;
+            opacity:0;
+            transform:translateY(20px);
+            transition:all 0.3s;
+        }
+        
+        .notification.show{
+            opacity:1;
+            transform:translateY(0);
+        }
+        
+        .notification-error{
+            background:linear-gradient(135deg,var(--danger),#e84118);
+            box-shadow:0 8px 30px rgba(255,71,87,0.4);
+        }
+        
+        .notification-info{
+            background:linear-gradient(135deg,var(--accent),#0097e6);
+            box-shadow:0 8px 30px rgba(0,212,255,0.4);
+        }
+        
         /* Empty State */
         .empty-state{
             text-align:center;
@@ -329,6 +576,7 @@
             h1{font-size:2.5rem}
             .products-grid{grid-template-columns:repeat(auto-fill, minmax(250px, 1fr))}
             .modal-content{padding:30px 20px}
+            .cart-button{width:60px;height:60px;font-size:1.7rem;bottom:20px;right:20px}
         }
     </style>
 </head>
@@ -361,7 +609,42 @@
         <div id="products" class="products-grid"></div>
     </div>
 
-    <div id="modal" class="modal">
+    <!-- Floating Cart Button -->
+    <button id="cartButton" class="cart-button" onclick="toggleCart()">
+        🛒
+        <span id="cartCount" class="cart-count">0</span>
+    </button>
+
+    <!-- Cart Modal -->
+    <div id="cartModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">🛒 Shopping Cart</div>
+            
+            <!-- Coupon Section -->
+            <div class="coupon-section">
+                <div class="coupon-title">
+                    <span>🎫</span>
+                    <span>Have a Coupon Code?</span>
+                </div>
+                <div class="coupon-input-group">
+                    <input type="text" id="couponInput" placeholder="ENTER CODE" maxlength="20">
+                    <button class="apply-coupon-btn" onclick="applyCoupon()">Apply</button>
+                </div>
+            </div>
+            
+            <div id="cartItems" class="cart-items"></div>
+            
+            <div id="cartSummary" class="cart-summary"></div>
+            
+            <div class="modal-buttons">
+                <button class="modal-button secondary" onclick="toggleCart()">Continue Shopping</button>
+                <button class="modal-button primary" onclick="proceedToCheckout()">Checkout</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Checkout Modal -->
+    <div id="checkoutModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">🎁 Complete Your Purchase</div>
             <div class="form-group">
@@ -376,12 +659,8 @@
                 <label>Gift Message (Optional)</label>
                 <textarea id="message" rows="3" placeholder="Add a personal message..."></textarea>
             </div>
-            <div class="form-group">
-                <label>Selected Item</label>
-                <div id="selectedItem"></div>
-            </div>
             <div class="modal-buttons">
-                <button class="modal-button secondary" onclick="closeModal()">Cancel</button>
+                <button class="modal-button secondary" onclick="closeCheckout()">Cancel</button>
                 <button class="modal-button primary" onclick="completePurchase()">Proceed to Payment</button>
             </div>
         </div>
@@ -389,7 +668,7 @@
 
     <script src="{{ url_for('static', filename='shop.js') }}"></script>
     <script>
-        // Particles animation (same as index)
+        // Particles animation
         function createParticles(){
             const container = document.getElementById('particles');
             for(let i=0;i<50;i++){

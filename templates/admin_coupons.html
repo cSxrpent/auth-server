@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coupon Management</title>
+    <style>
+        :root{--bg:#0a0e1a;--card:#0f1724;--accent:#00d4ff;--success:#2ed573;--danger:#ff4757;--muted:#9aa4b2;--gold:#ffd700}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',system-ui,Arial;background:linear-gradient(135deg,#071026,#0d1526,#1a1f35);color:#eaf1ff;min-height:100vh;padding:20px}.container{max-width:1200px;margin:0 auto}h1{font-size:2.5rem;background:linear-gradient(90deg,var(--gold),#ffa500);background-clip:text;-webkit-background-clip:text;color:transparent;margin-bottom:30px;text-align:center}.back-link{display:inline-block;margin-bottom:20px;padding:10px 20px;background:rgba(255,255,255,0.1);border-radius:10px;color:#fff;text-decoration:none;transition:all 0.3s}.back-link:hover{background:rgba(0,212,255,0.2)}.create-section{background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,215,0,0.05));border:2px solid rgba(255,215,0,0.3);border-radius:15px;padding:30px;margin-bottom:30px}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:20px}.form-group{display:flex;flex-direction:column}.form-group label{margin-bottom:8px;color:var(--gold);font-weight:600;font-size:0.9rem}.form-group input{padding:12px 15px;border-radius:10px;border:2px solid rgba(255,215,0,0.3);background:rgba(0,0,0,0.3);color:#fff;font-size:1rem;transition:all 0.3s}.form-group input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 15px rgba(255,215,0,0.3)}.btn{padding:12px 30px;border-radius:10px;border:none;font-weight:700;cursor:pointer;transition:all 0.3s;font-size:1rem}.btn-primary{background:linear-gradient(135deg,var(--gold),#ffa500);color:#000}.btn-primary:hover{transform:scale(1.05);box-shadow:0 8px 25px rgba(255,215,0,0.4)}.coupons-table{background:rgba(255,255,255,0.02);border-radius:15px;overflow:hidden;border:1px solid rgba(255,255,255,0.1)}table{width:100%;border-collapse:collapse}thead{background:rgba(0,212,255,0.1)}th{padding:15px;text-align:left;color:var(--accent);font-weight:700;border-bottom:2px solid rgba(0,212,255,0.3)}td{padding:15px;border-bottom:1px solid rgba(255,255,255,0.05)}tr:hover{background:rgba(255,255,255,0.02)}.badge{padding:5px 12px;border-radius:20px;font-size:0.85rem;font-weight:600;display:inline-block}.badge-active{background:rgba(46,213,115,0.2);color:var(--success);border:1px solid var(--success)}.badge-inactive{background:rgba(255,71,87,0.2);color:var(--danger);border:1px solid var(--danger)}.actions{display:flex;gap:10px}.btn-sm{padding:6px 15px;font-size:0.9rem}.btn-danger{background:linear-gradient(135deg,var(--danger),#e84118);color:#fff}.btn-success{background:linear-gradient(135deg,var(--success),#20bf55);color:#fff}.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/admin" class="back-link">← Back to Admin</a>
+        
+        <h1>🎫 Coupon Management</h1>
+        
+        <div class="create-section">
+            <h2 style="color:var(--gold);margin-bottom:20px">Create New Coupon</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Code</label>
+                    <input type="text" id="code" placeholder="SAVE20" maxlength="20" style="text-transform:uppercase">
+                </div>
+                <div class="form-group">
+                    <label>Discount %</label>
+                    <input type="number" id="discount" placeholder="20" min="1" max="100">
+                </div>
+                <div class="form-group">
+                    <label>Max Uses (Optional)</label>
+                    <input type="number" id="maxUses" placeholder="Unlimited" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Expires At (Optional)</label>
+                    <input type="datetime-local" id="expires">
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="createCoupon()">✨ Create Coupon</button>
+        </div>
+        
+        <div class="coupons-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Discount</th>
+                        <th>Uses</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Expires</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="couponsBody">
+                    <tr><td colspan="7" class="empty-state">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        async function loadCoupons(){try{const r=await fetch('/api/admin/coupons');const c=await r.json();const t=document.getElementById('couponsBody');if(c.length===0){t.innerHTML='<tr><td colspan="7" class="empty-state">No coupons yet</td></tr>';return}t.innerHTML=c.map(p=>`<tr><td><strong style="color:var(--gold);font-family:monospace">${p.code}</strong></td><td>${p.discount_percent}%</td><td>${p.times_used}${p.max_uses?` / ${p.max_uses}`:''}</td><td><span class="badge ${p.is_active?'badge-active':'badge-inactive'}">${p.is_active?'Active':'Inactive'}</span></td><td>${p.created_at}</td><td>${p.expires_at||'Never'}</td><td><div class="actions"><button class="btn btn-sm ${p.is_active?'btn-danger':'btn-success'}" onclick="toggleCoupon('${p.code}',${!p.is_active})">${p.is_active?'Disable':'Enable'}</button><button class="btn btn-sm btn-danger" onclick="deleteCoupon('${p.code}')">Delete</button></div></td></tr>`).join('')}catch(e){console.error('Error:',e)}}async function createCoupon(){const c=document.getElementById('code').value.trim().toUpperCase();const d=parseInt(document.getElementById('discount').value);const m=document.getElementById('maxUses').value?parseInt(document.getElementById('maxUses').value):null;const e=document.getElementById('expires').value;if(!c||!d){alert('Please enter code and discount');return}if(d<1||d>100){alert('Discount must be 1-100%');return}try{const r=await fetch('/api/admin/coupons/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:c,discount_percent:d,max_uses:m,expires_at:e||null})});const data=await r.json();if(r.ok){alert('✅ Coupon created!');document.getElementById('code').value='';document.getElementById('discount').value='';document.getElementById('maxUses').value='';document.getElementById('expires').value='';loadCoupons()}else{alert('❌ '+data.error)}}catch(e){alert('❌ Error')}}async function toggleCoupon(c,a){try{const r=await fetch('/api/admin/coupons/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:c,is_active:a})});if(r.ok){loadCoupons()}else{alert('❌ Error')}}catch(e){alert('❌ Error')}}async function deleteCoupon(c){if(!confirm(`Delete ${c}?`))return;try{const r=await fetch('/api/admin/coupons/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:c})});if(r.ok){loadCoupons()}else{alert('❌ Error')}}catch(e){alert('❌ Error')}}loadCoupons()
+    </script>
+</body>
+</html>

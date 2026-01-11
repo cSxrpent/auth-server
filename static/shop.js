@@ -139,6 +139,8 @@ const CATEGORY_EMOJIS = {
 
 let currentCategory = 'all';
 let selectedProduct = null;
+let cart = [];
+let appliedCoupon = null;
 
 function getAllProducts() {
     const products = [...ITEMS];
@@ -174,24 +176,187 @@ function renderProducts(category = 'all') {
             ${product.image ? `<img class="product-image" src="https://cdn2.wolvesville.com/promos/${product.image}@2x.jpg" alt="${product.name}">` : ''}
             <div class="product-name">${product.name || product.title}</div>
             <div class="product-price">€${product.price.toFixed(2)}</div>
-            <button class="buy-button" onclick='openModal(${JSON.stringify(product).replace(/'/g, "&apos;")})'>
-                Buy Now
+            <button class="buy-button" onclick='addToCart(${JSON.stringify(product).replace(/'/g, "&apos;")})'>
+                🛒 Add to Cart
             </button>
         </div>
     `).join('');
 }
 
-function openModal(product) {
-    selectedProduct = product;
-    document.getElementById('modal').classList.add('active');
-    document.getElementById('selectedItem').innerHTML = `
-        <strong>${product.name || product.title}</strong><br>
-        Price: €${product.price.toFixed(2)}
-    `;
+function addToCart(product) {
+    // Check if product already in cart
+    const existingIndex = cart.findIndex(item => item.type === product.type);
+    
+    if (existingIndex >= 0) {
+        cart[existingIndex].quantity += 1;
+    } else {
+        cart.push({
+            ...product,
+            quantity: 1
+        });
+    }
+    
+    updateCartDisplay();
+    showNotification('✅ Added to cart!');
 }
 
-function closeModal() {
-    document.getElementById('modal').classList.remove('active');
+function removeFromCart(index) {
+    cart.splice(index, 1);
+    updateCartDisplay();
+}
+
+function updateCartQuantity(index, change) {
+    cart[index].quantity += change;
+    
+    if (cart[index].quantity <= 0) {
+        removeFromCart(index);
+    } else {
+        updateCartDisplay();
+    }
+}
+
+function calculateTotal() {
+    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    let discount = 0;
+    
+    if (appliedCoupon) {
+        discount = subtotal * (appliedCoupon.discount_percent / 100);
+    }
+    
+    return {
+        subtotal: subtotal,
+        discount: discount,
+        total: subtotal - discount
+    };
+}
+
+function updateCartDisplay() {
+    const cartBtn = document.getElementById('cartButton');
+    const cartCount = document.getElementById('cartCount');
+    const cartItems = document.getElementById('cartItems');
+    const cartSummary = document.getElementById('cartSummary');
+    
+    const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+    
+    // Update cart button
+    if (totalItems > 0) {
+        cartCount.textContent = totalItems;
+        cartCount.style.display = 'flex';
+    } else {
+        cartCount.style.display = 'none';
+    }
+    
+    // Update cart items
+    if (cart.length === 0) {
+        cartItems.innerHTML = '<div class="empty-cart">🛒 Your cart is empty</div>';
+        cartSummary.style.display = 'none';
+    } else {
+        cartItems.innerHTML = cart.map((item, index) => `
+            <div class="cart-item">
+                <div class="cart-item-info">
+                    <div class="cart-item-name">${item.name}</div>
+                    <div class="cart-item-price">€${item.price.toFixed(2)}</div>
+                </div>
+                <div class="cart-item-controls">
+                    <button onclick="updateCartQuantity(${index}, -1)" class="qty-btn">−</button>
+                    <span class="cart-item-qty">${item.quantity}</span>
+                    <button onclick="updateCartQuantity(${index}, 1)" class="qty-btn">+</button>
+                    <button onclick="removeFromCart(${index})" class="remove-btn">🗑️</button>
+                </div>
+            </div>
+        `).join('');
+        
+        const totals = calculateTotal();
+        
+        cartSummary.style.display = 'block';
+        cartSummary.innerHTML = `
+            <div class="summary-row">
+                <span>Subtotal:</span>
+                <span>€${totals.subtotal.toFixed(2)}</span>
+            </div>
+            ${appliedCoupon ? `
+                <div class="summary-row discount">
+                    <span>Discount (${appliedCoupon.discount_percent}%):</span>
+                    <span>-€${totals.discount.toFixed(2)}</span>
+                </div>
+            ` : ''}
+            <div class="summary-row total">
+                <span>Total:</span>
+                <span>€${totals.total.toFixed(2)}</span>
+            </div>
+        `;
+    }
+}
+
+function toggleCart() {
+    const cartModal = document.getElementById('cartModal');
+    cartModal.classList.toggle('active');
+}
+
+async function applyCoupon() {
+    const couponInput = document.getElementById('couponInput');
+    const couponCode = couponInput.value.trim().toUpperCase();
+    
+    if (!couponCode) {
+        showNotification('❌ Please enter a coupon code', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/shop/validate-coupon', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ code: couponCode })
+        });
+        
+        const data = await response.json();
+        
+        if (data.valid) {
+            appliedCoupon = {
+                code: couponCode,
+                discount_percent: data.discount_percent
+            };
+            
+            updateCartDisplay();
+            showNotification(`✅ Coupon applied! ${data.discount_percent}% off`, 'success');
+            couponInput.value = '';
+            
+            // Disable coupon input
+            couponInput.disabled = true;
+            document.querySelector('.apply-coupon-btn').textContent = '✓ Applied';
+            document.querySelector('.apply-coupon-btn').disabled = true;
+        } else {
+            showNotification(`❌ ${data.message}`, 'error');
+        }
+    } catch (error) {
+        showNotification('❌ Failed to validate coupon', 'error');
+    }
+}
+
+function removeCoupon() {
+    appliedCoupon = null;
+    updateCartDisplay();
+    document.getElementById('couponInput').disabled = false;
+    document.getElementById('couponInput').value = '';
+    document.querySelector('.apply-coupon-btn').textContent = 'Apply';
+    document.querySelector('.apply-coupon-btn').disabled = false;
+    showNotification('🎫 Coupon removed', 'info');
+}
+
+function proceedToCheckout() {
+    if (cart.length === 0) {
+        showNotification('❌ Your cart is empty!', 'error');
+        return;
+    }
+    
+    toggleCart();
+    document.getElementById('checkoutModal').classList.add('active');
+}
+
+function closeCheckout() {
+    document.getElementById('checkoutModal').classList.remove('active');
     document.getElementById('username').value = '';
     document.getElementById('usernameConfirm').value = '';
     document.getElementById('message').value = '';
@@ -203,33 +368,37 @@ async function completePurchase() {
     const message = document.getElementById('message').value.trim();
 
     if (!username || !usernameConfirm) {
-        alert('Please enter your Wolvesville username in both fields.');
+        showNotification('❌ Please enter your username in both fields', 'error');
         return;
     }
 
     if (username !== usernameConfirm) {
-        alert('Usernames do not match!');
+        showNotification('❌ Usernames do not match!', 'error');
         return;
     }
 
+    const totals = calculateTotal();
+
     try {
-        // Create PayPal order
-        const response = await fetch('/api/shop/create-order', {
+        // Create PayPal order for cart
+        const response = await fetch('/api/shop/create-cart-order', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                product: selectedProduct,
+                cart: cart,
                 username: username,
-                message: message
+                message: message,
+                coupon: appliedCoupon,
+                total: totals.total
             })
         });
 
         const data = await response.json();
 
         if (data.error) {
-            alert('Error: ' + data.error);
+            showNotification('❌ ' + data.error, 'error');
             return;
         }
 
@@ -237,17 +406,34 @@ async function completePurchase() {
             // Redirect to PayPal
             window.location.href = data.approval_url;
         } else {
-            alert('Failed to initiate payment. Please try again.');
+            showNotification('❌ Failed to initiate payment', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('An error occurred. Please try again.');
+        showNotification('❌ An error occurred. Please try again.', 'error');
     }
+}
+
+function showNotification(message, type = 'success') {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 10);
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', () => {
     renderProducts();
+    updateCartDisplay();
     
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
