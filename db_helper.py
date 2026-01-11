@@ -816,13 +816,6 @@ def deduct_account_gems(account_id, gems_spent):
             from init_database import GemAccount
             from datetime import datetime
 
-def deduct_account_gems(account_id, gems_spent):
-    """Deduct gems from account"""
-    try:
-        with get_db() as db:
-            from init_database import GemAccount
-            from datetime import datetime
-
             account = db.query(GemAccount).filter_by(id=account_id).first()
             if not account:
                 return False
