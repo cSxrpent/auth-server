@@ -299,7 +299,10 @@ function updateCartQuantity(index, change) {
 }
 
 function calculateTotal() {
-    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    // Helper function to round to 2 decimal places (fixes floating-point precision issues)
+    const round2 = (num) => Math.round(num * 100) / 100;
+    
+    const subtotal = round2(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0));
     
     // Calculate total items for loyalty system
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -320,18 +323,19 @@ function calculateTotal() {
             
             if (itemsFreed >= freeItemsCount) break;
         }
+        loyaltyDiscount = round2(loyaltyDiscount);
     }
     
     // Global promo discount (15% off)
     let promoDiscount = 0;
     if (GLOBAL_PROMO.enabled) {
-        promoDiscount = (subtotal - loyaltyDiscount) * (GLOBAL_PROMO.discountPercent / 100);
+        promoDiscount = round2((subtotal - loyaltyDiscount) * (GLOBAL_PROMO.discountPercent / 100));
     }
     
     // Coupon discount (applied after promo)
     let couponDiscount = 0;
     if (appliedCoupon) {
-        couponDiscount = (subtotal - loyaltyDiscount - promoDiscount) * (appliedCoupon.discount_percent / 100);
+        couponDiscount = round2((subtotal - loyaltyDiscount - promoDiscount) * (appliedCoupon.discount_percent / 100));
     }
     
     return {
@@ -339,7 +343,7 @@ function calculateTotal() {
         loyaltyDiscount: loyaltyDiscount,
         promoDiscount: promoDiscount,
         couponDiscount: couponDiscount,
-        total: Math.max(0, subtotal - loyaltyDiscount - promoDiscount - couponDiscount),
+        total: round2(Math.max(0, subtotal - loyaltyDiscount - promoDiscount - couponDiscount)),
         totalItems: totalItems,
         freeItemsCount: freeItemsCount
     };
