@@ -53,6 +53,8 @@
     .duration-btns button:hover{background:linear-gradient(90deg,var(--accent),#7b4bff);color:#fff;transform:scale(1.02)}
     input, select{padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:linear-gradient(90deg,var(--glass),rgba(255,255,255,0.01));color:inherit;font-size:14px;transition:all 0.3s}
     input:focus, select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 10px rgba(0,212,255,0.3)}
+    textarea{padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:linear-gradient(90deg,var(--glass),rgba(255,255,255,0.01));color:inherit;font-size:14px;font-family:inherit;min-height:100px;resize:vertical;width:100%;transition:all 0.3s}
+    textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 10px rgba(0,212,255,0.3)}
     button.primary{background:linear-gradient(90deg,var(--accent),#7b4bff);border:none;padding:12px 18px;border-radius:12px;color:#062033;font-weight:700;cursor:pointer;transition:all 0.3s;animation:glowAccent 3s infinite}
     button.primary:hover{transform:scale(1.05);box-shadow:0 0 20px rgba(0,212,255,0.5)}
     @keyframes glowAccent{0%,100%{box-shadow:0 0 10px rgba(0,212,255,0.3)}50%{box-shadow:0 0 20px rgba(0,212,255,0.6)}}
@@ -61,32 +63,42 @@
     @keyframes barGrow{from{width:0}to{width:var(--width)}}
     .bar span{margin-left:auto}
     @media(max-width:900px){.grid{grid-template-columns:1fr}.nav{justify-content:center}}
-    /* Logs & recent styles */
     .log-list{display:flex;flex-direction:column;gap:8px}
     .log-item{display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:10px;background:linear-gradient(90deg,rgba(255,255,255,0.01),rgba(255,255,255,0.006));border:1px solid rgba(255,255,255,0.02)}
     .log-meta{font-weight:700;color:var(--muted);min-width:140px;font-size:12px}
     .badge-info{color:#6bd1ff}
     .badge-warn{color:#ffd26b}
     .badge-error{color:#ff9b9b}
-
     .recent-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;margin-bottom:6px}
     .recent-avatar{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#1752ff,#7b4bff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
     .recent-body{flex:1}
     .recent-time{font-size:12px;color:var(--muted)}
-    
-    /* Keys styles */
     .key-code{font-family:monospace;font-size:1.2rem;font-weight:700;letter-spacing:3px;background:linear-gradient(90deg,var(--gold),#ffed4e);background-clip:text;-webkit-background-clip:text;color:transparent;padding:4px 8px;border-radius:6px;display:inline-block}
     .key-status-unused{color:var(--success);font-weight:600}
     .key-status-used{color:var(--muted);font-style:italic}
     .copy-btn{background:linear-gradient(90deg,var(--accent),#7b4bff);border:none;padding:6px 12px;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.3s}
     .copy-btn:hover{transform:scale(1.05);box-shadow:0 0 10px rgba(0,212,255,0.3)}
-    /* Pending testimonials button */
     .btn-pending{background:linear-gradient(90deg,rgba(154,164,178,0.3),rgba(154,164,178,0.2));border:2px solid rgba(154,164,178,0.3);padding:10px 16px;border-radius:12px;color:var(--muted);font-weight:600;cursor:pointer;transition:all 0.3s;display:flex;align-items:center;gap:8px}
     .btn-pending.has-pending{background:linear-gradient(90deg,var(--success),#7bed9f);border-color:var(--success);color:#fff;animation:pulse-pending 2s infinite}
     .btn-pending:hover{transform:scale(1.05)}
     @keyframes pulse-pending{0%,100%{box-shadow:0 0 10px rgba(46,213,115,0.3)}50%{box-shadow:0 0 25px rgba(46,213,115,0.6)}}
     #pendingBadge{background:rgba(255,255,255,0.2);padding:4px 10px;border-radius:20px;font-weight:700;font-size:0.9rem}
     .btn-pending.has-pending #pendingBadge{background:#fff;color:var(--success)}
+    
+    /* Shop-specific styles */
+    .badge{padding:5px 12px;border-radius:20px;font-size:0.85rem;font-weight:600;display:inline-block}
+    .badge-active{background:rgba(46,213,115,0.2);color:var(--success);border:1px solid var(--success)}
+    .badge-inactive{background:rgba(255,71,87,0.2);color:var(--danger);border:1px solid var(--danger)}
+    .btn-sm{padding:6px 15px;font-size:0.9rem}
+    .btn-danger{background:linear-gradient(135deg,var(--danger),#e84118);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600;transition:all 0.3s}
+    .btn-success{background:linear-gradient(135deg,var(--success),#20bf55);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600;transition:all 0.3s}
+    .empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+    .gems-low{color:var(--danger);font-weight:bold}
+    .gems-medium{color:#ed8936;font-weight:bold}
+    .gems-high{color:var(--success);font-weight:bold}
+    .status-active{color:var(--success);font-weight:bold}
+    .status-inactive{color:var(--danger);font-weight:bold}
+    .form-group label{display:block;margin-bottom:8px;color:var(--gold);font-weight:600;font-size:0.9rem}
   </style>
 </head>
 <body>
@@ -95,7 +107,7 @@
     <header>
       <div>
         <h1>Admin Panel</h1>
-        <div class="small muted">Manage users and subscriptions</div>
+        <div class="small muted">Complete management dashboard</div>
       </div>
       <div style="display:flex;gap:10px;align-items:center">
         <button id="pendingTestimonialsBtn" class="btn-pending" style="display:none" onclick="switchSection('testimonials')">
@@ -109,6 +121,10 @@
       <button class="nav-btn active" data-section="main">🏠 Main</button>
       <button class="nav-btn" data-section="users">👥 Users</button>
       <button class="nav-btn" data-section="keys">🎁 Keys</button>
+      <button class="nav-btn" data-section="shop-management">🛒 Shop</button>
+      <button class="nav-btn" data-section="send-gifts">🎁 Send Gifts</button>
+      <button class="nav-btn" data-section="coupons">🎫 Coupons</button>
+      <button class="nav-btn" data-section="gem-accounts">💎 Gem Accounts</button>
       <button class="nav-btn" data-section="connectivity">🌐 Connectivity</button>
       <button class="nav-btn" data-section="testimonials">⭐ Testimonials</button>
       <button class="nav-btn" data-section="stats">📊 Stats</button>
@@ -118,7 +134,7 @@
     <!-- Main Section -->
     <div id="main" class="section active">
       <div class="card">
-        <h2 style="margin-top:0;color:var(--accent)">Summary</h2>
+        <h2 style="margin-top:0;color:var(--accent)">Dashboard Summary</h2>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px">
           <div class="pill" style="text-align:center;padding:20px">
             <div style="font-size:2rem;font-weight:700" id="totalUsers">—</div>
@@ -136,20 +152,28 @@
             <div style="font-size:2rem;font-weight:700" id="totalConnections">—</div>
             <div class="small">Total Connections</div>
           </div>
+          <div class="pill" style="text-align:center;padding:20px">
+            <div style="font-size:2rem;font-weight:700;color:var(--gold)" id="totalGemAccounts">—</div>
+            <div class="small">Gem Accounts</div>
+          </div>
+          <div class="pill" style="text-align:center;padding:20px">
+            <div style="font-size:2rem;font-weight:700;color:var(--accent)" id="totalCoupons">—</div>
+            <div class="small">Active Coupons</div>
+          </div>
         </div>
       </div>
       <div class="card">
         <h3>Quick Actions</h3>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="primary" onclick="switchSection('users')">Manage Users</button>
-          <button class="primary" onclick="switchSection('keys')">Manage Keys</button>
-          <button class="primary" onclick="switchSection('connectivity')">Check Connectivity</button>
-          <button class="primary" onclick="switchSection('stats')">View Stats</button>
+          <button class="primary" onclick="switchSection('shop-management')">Manage Shop</button>
+          <button class="primary" onclick="switchSection('coupons')">Manage Coupons</button>
+          <button class="primary" onclick="switchSection('gem-accounts')">Gem Accounts</button>
         </div>
       </div>
     </div>
 
-    <!-- Users Section -->
+    <!-- Users Section (unchanged from original) -->
     <div id="users" class="section">
       <div class="card">
         <div class="grid">
@@ -164,7 +188,7 @@
             </div>
             <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
               <input id="search" placeholder="Search..." style="flex:1" />
-              <select id="filter" style="padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:linear-gradient(90deg,var(--glass),rgba(255,255,255,0.01));color:inherit">
+              <select id="filter" style="padding:10px 12px">
                 <option value="all">All</option>
                 <option value="active">Active</option>
                 <option value="expired">Expired</option>
@@ -208,7 +232,7 @@
       </div>
     </div>
 
-    <!-- Keys Section -->
+    <!-- Keys Section (unchanged) -->
     <div id="keys" class="section">
       <div class="card">
         <div class="grid">
@@ -248,6 +272,208 @@
       </div>
     </div>
 
+    <!-- NEW: Shop Management Section -->
+    <div id="shop-management" class="section">
+      <div class="card">
+        <h2 style="margin-top:0;color:var(--accent)">🛒 Shop Overview</h2>
+        <p class="small muted">View shop at <a href="/shop" target="_blank" style="color:var(--accent)">shop page</a></p>
+        <div style="background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,215,0,0.05));border:2px solid rgba(255,215,0,0.3);border-radius:12px;padding:20px;margin-top:20px">
+          <h3 style="color:var(--gold);margin-top:0">🔥 Active Promotions</h3>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:1.5rem;font-weight:700;color:var(--gold)">15% OFF SITEWIDE</div>
+              <div class="small muted">Applied automatically at checkout</div>
+            </div>
+            <div class="pill" style="background:linear-gradient(135deg,var(--gold),#ffa500);color:#000;font-weight:700">ACTIVE</div>
+          </div>
+        </div>
+        
+        <div style="margin-top:30px">
+          <h3>Featured Products</h3>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px;margin-top:15px">
+            <div style="background:linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));border-radius:12px;padding:20px;border:1px solid rgba(255,255,255,0.1)">
+              <div style="font-size:2rem;margin-bottom:10px">🔥</div>
+              <div style="font-weight:700;margin-bottom:5px">Starter Pack</div>
+              <div class="small muted">1250 gems • €6.49</div>
+              <div class="small" style="color:var(--gold);margin-top:5px">Best Value Bundle</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));border-radius:12px;padding:20px;border:1px solid rgba(255,255,255,0.1)">
+              <div style="font-size:2rem;margin-bottom:10px">🎁</div>
+              <div style="font-weight:700;margin-bottom:5px">Loyalty Program</div>
+              <div class="small muted">Buy 5, get 1 free</div>
+              <div class="small" style="color:var(--success);margin-top:5px">Automatic Rewards</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coupons Section -->
+    <div id="coupons" class="section">
+      <div class="card">
+        <div class="grid">
+          <div class="list">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+              <div style="font-weight:700;font-size:1.2rem">🎫 Coupons</div>
+              <div class="pill" id="couponsCount">0 coupons</div>
+            </div>
+            <table id="couponsTable">
+              <thead>
+                <tr><th>Code</th><th>Discount</th><th>Uses</th><th>Status</th><th>Expires</th><th>Actions</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <aside style="padding:16px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent)">
+            <div style="font-weight:700;margin-bottom:12px;font-size:1.1rem">Create Coupon</div>
+            <div class="small muted" style="margin-bottom:16px">New discount code</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <label>Code</label>
+              <input id="couponCode" placeholder="SAVE20" maxlength="20" style="text-transform:uppercase" />
+              <label>Discount %</label>
+              <input type="number" id="couponDiscount" placeholder="20" min="1" max="100" />
+              <label>Max Uses (Optional)</label>
+              <input type="number" id="couponMaxUses" placeholder="Unlimited" min="1" />
+              <label>Expires (Optional)</label>
+              <input type="datetime-local" id="couponExpires" />
+              <button class="primary" id="createCouponBtn" style="background:linear-gradient(90deg,var(--gold),#ffed4e);color:#000">✨ Create</button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gem Accounts Section -->
+    <div id="gem-accounts" class="section">
+      <div class="card">
+        <div class="grid">
+          <div class="list">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+              <div style="font-weight:700;font-size:1.2rem">💎 Gem Accounts</div>
+              <div style="display:flex;gap:8px">
+                <div class="pill" id="gemAccountsCount">0 accounts</div>
+                <div class="pill" id="gemAccountsActive">— active</div>
+              </div>
+            </div>
+            <table id="gemAccountsTable">
+              <thead>
+                <tr><th>#</th><th>Email</th><th>Nickname</th><th>Gems</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <aside style="padding:16px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent)">
+            <div style="font-weight:700;margin-bottom:12px;font-size:1.1rem">Add Account</div>
+            <div class="small muted" style="margin-bottom:16px">New gem account</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <label>Account #</label>
+              <input type="number" id="gemAccountNumber" placeholder="1, 2, 3..." />
+              <label>Email</label>
+              <input type="email" id="gemAccountEmail" placeholder="bugs bot1@example.com" />
+              <label>Password</label>
+              <input type="password" id="gemAccountPassword" placeholder="Password" />
+              <button class="primary" id="addGemAccountBtn">Add Account</button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- NEW: Send Gifts Section -->
+    <div id="send-gifts" class="section">
+      <div class="card">
+        <h2 style="margin-top:0;color:var(--accent)">🎁 Send Free Gifts</h2>
+        <p class="small muted" style="margin-bottom:20px">Send shop items to users without payment</p>
+        
+        <div class="grid">
+          <div style="background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);padding:20px;border-radius:12px">
+            <h3 style="margin-top:0">Gift Details</h3>
+            
+            <div style="display:flex;flex-direction:column;gap:15px">
+              <div class="form-group">
+                <label>Recipient Username</label>
+                <input id="giftUsername" placeholder="Wolvesville username" />
+              </div>
+              
+              <div class="form-group">
+                <label>Gift Type</label>
+                <select id="giftType" onchange="updateGiftForm()">
+                  <option value="">-- Select Type --</option>
+                  <option value="gems">💎 Gems Package</option>
+                  <option value="bundle">📦 Bundle</option>
+                  <option value="calendar">📅 Calendar</option>
+                  <option value="premium">👑 Premium Item</option>
+                  <option value="custom">✨ Custom Item</option>
+                </select>
+              </div>
+              
+              <!-- Dynamic form based on gift type -->
+              <div id="giftFormContainer"></div>
+              
+              <div class="form-group">
+                <label>Gift Message (Optional)</label>
+                <textarea id="giftMessage" rows="3" placeholder="Add a personal message..."></textarea>
+              </div>
+              
+              <button class="primary" onclick="sendGift()" style="background:linear-gradient(90deg,var(--gold),#ffed4e);color:#000;padding:15px">
+                🎁 Send Gift (Free)
+              </button>
+            </div>
+          </div>
+          
+          <aside style="padding:20px;border-radius:12px;background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,215,0,0.05));border:1px solid rgba(255,215,0,0.3)">
+            <h3 style="color:var(--gold);margin-top:0">📋 Quick Select</h3>
+            <div class="small muted" style="margin-bottom:15px">Popular gift packages</div>
+            
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <button class="duration-btns" style="width:100%;text-align:left;padding:12px" onclick="quickSelectGift('GOLDV2_1')">
+                🪙 450 Gems (€2.99 value)
+              </button>
+              <button class="duration-btns" style="width:100%;text-align:left;padding:12px" onclick="quickSelectGift('GOLDV2_2')">
+                🪙 3400 Gems (€19.99 value)
+              </button>
+              <button class="duration-btns" style="width:100%;text-align:left;padding:12px" onclick="quickSelectGift('BUNDLE_STARTER_PACK')">
+                🔥 Starter Pack (€6.49 value)
+              </button>
+              <button class="duration-btns" style="width:100%;text-align:left;padding:12px" onclick="quickSelectGift('BATTLE_PASS')">
+                👑 Battle Pass (€4.49 value)
+              </button>
+              <button class="duration-btns" style="width:100%;text-align:left;padding:12px" onclick="quickSelectGift('calendar-newyear-2026')">
+                📅 New Year Calendar (€3.99 value)
+              </button>
+            </div>
+            
+            <div style="margin-top:20px;padding-top:20px;border-top:1px solid rgba(255,215,0,0.2)">
+              <div style="font-weight:700;color:var(--gold);margin-bottom:10px">💡 Tips</div>
+              <ul style="color:var(--muted);font-size:0.9rem;padding-left:20px;line-height:1.6">
+                <li>Gifts are delivered instantly</li>
+                <li>No payment required</li>
+                <li>All shop items available</li>
+                <li>User must exist in-game</li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </div>
+      
+      <!-- Recent Gifts History -->
+      <div class="card" style="margin-top:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+          <h3 style="margin:0">📜 Recent Gifts Sent</h3>
+          <button class="primary" onclick="fetchGiftHistory()" style="padding:8px 16px;font-size:0.9rem">🔄 Refresh</button>
+        </div>
+        <div style="max-height:400px;overflow-y:auto">
+          <table id="giftHistoryTable">
+            <thead>
+              <tr><th>Date</th><th>Recipient</th><th>Item</th><th>Value</th><th>Status</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connectivity, Testimonials, Stats, Debug sections remain unchanged from original -->
     <!-- Connectivity Section -->
     <div id="connectivity" class="section">
       <div class="card">
@@ -277,17 +503,6 @@
             </div>
             <div id="recentList"></div>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Stats Section -->
-    <div id="stats" class="section">
-      <div class="card">
-        <h2 style="margin-top:0;color:var(--accent)">📊 Usage Statistics</h2>
-        <div class="chart-container">
-          <div style="font-weight:700;margin-bottom:12px">Connections per user</div>
-          <div id="statsChart"></div>
         </div>
       </div>
     </div>
@@ -325,7 +540,7 @@
               </select>
               
               <label style="color:var(--muted);font-size:13px">Comment</label>
-              <textarea id="testimonialComment" placeholder="Review text..." style="padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:linear-gradient(90deg,var(--glass),rgba(255,255,255,0.01));color:inherit;font-size:14px;font-family:inherit;min-height:100px;resize:vertical"></textarea>
+              <textarea id="testimonialComment" placeholder="Review text..."></textarea>
               
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer;color:var(--muted);font-size:14px;margin-top:5px">
                 <input type="checkbox" id="testimonialAnonymous" style="width:auto;cursor:pointer" />
@@ -335,6 +550,17 @@
               <button class="primary" id="addTestimonialBtn" style="background:linear-gradient(90deg,var(--gold),#ffed4e);color:#000">✨ Add Review</button>
             </div>
           </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Section -->
+    <div id="stats" class="section">
+      <div class="card">
+        <h2 style="margin-top:0;color:var(--accent)">📊 Usage Statistics</h2>
+        <div class="chart-container">
+          <div style="font-weight:700;margin-bottom:12px">Connections per user</div>
+          <div id="statsChart"></div>
         </div>
       </div>
     </div>
@@ -356,7 +582,6 @@
           <textarea 
             id="customMessageInput" 
             rows="3" 
-            style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:linear-gradient(90deg,var(--glass),rgba(255,255,255,0.01));color:inherit;font-size:14px;font-family:inherit;resize:vertical"
             placeholder="Enter your custom message here..."></textarea>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="primary" onclick="saveCustomMessage()">💾 Save Message</button>
@@ -369,7 +594,6 @@
     </div>
 
   <div id="toast" style="display:none" class="toast">Message</div>
-
 
   <script>
     // Particles
@@ -411,13 +635,59 @@
     const testimonialsApi = {
       list: '/api/testimonials',
       add: '/api/testimonials/add',
-      delete: '/api/testimonials/delete'
+      delete: '/api/testimonials/delete',
+      approve: '/api/testimonials/approve'
     };
     
     const customMessageApi = {
       get: '/api/custom-message',
       set: '/api/custom-message/set',
       clear: '/api/custom-message/clear'
+    };
+
+    const couponsApi = {
+      list: '/api/admin/coupons',
+      create: '/api/admin/coupons/create',
+      toggle: '/api/admin/coupons/toggle',
+      delete: '/api/admin/coupons/delete'
+    };
+
+    const gemAccountsApi = {
+      list: '/api/gem-accounts',
+      add: '/api/gem-accounts/add',
+      recharge: '/api/gem-accounts/recharge',
+      toggle: '/api/gem-accounts/toggle',
+      delete: '/api/gem-accounts/delete',
+      stats: '/api/gem-accounts/stats'
+    };
+
+    const giftsApi = {
+      send: '/api/admin/gifts/send',
+      history: '/api/admin/gifts/history'
+    };
+
+    // Gift products catalog (matches shop items)
+    const GIFT_CATALOG = {
+      gems: [
+        { id: 'GOLDV2_1', name: '450 Gems', value: '€2.99' },
+        { id: 'GOLDV2_2', name: '3400 Gems', value: '€19.99' },
+        { id: 'GOLDV2_3', name: '9000 Gems', value: '€49.99' }
+      ],
+      bundles: [
+        { id: 'BUNDLE_STARTER_PACK', name: 'Starter Pack (1250 gems)', value: '€6.49' },
+        { id: 'BUNDLE_ANGELXMAS', name: 'Angel Xmas Bundle', value: '€2.99' },
+        { id: 'BUNDLE_DARK_CUPID', name: 'Dark Cupid Bundle', value: '€4.99' },
+        { id: 'BUNDLE_WATERMELON', name: 'Watermelon Bundle', value: '€4.99' }
+      ],
+      calendars: [
+        { id: 'calendar-newyear-2026', name: 'New Year 2026 Calendar', value: '€3.99' },
+        { id: 'calendar-eggventure-2025', name: 'Eggventure Calendar', value: '€3.99' }
+      ],
+      premium: [
+        { id: 'BATTLE_PASS', name: 'Battle Pass', value: '€4.49' },
+        { id: 'BATTLE_PASS_BUNDLE', name: 'Battle Pass Bundle', value: '€8.99' },
+        { id: 'CUSTOM_GAMES_PREMIUM', name: 'Custom Games Premium', value: '€19.99' }
+      ]
     };
 
     function toast(msg, t=3000){
@@ -439,6 +709,12 @@
         fetchKeys();
       } else if(section === 'testimonials') {
         fetchTestimonials();
+      } else if(section === 'coupons') {
+        fetchCoupons();
+      } else if(section === 'gem-accounts') {
+        fetchGemAccounts();
+      } else if(section === 'send-gifts') {
+        fetchGiftHistory();
       }
     }
 
@@ -446,6 +722,7 @@
       btn.onclick = () => switchSection(btn.dataset.section);
     });
 
+    // Existing functions for users, keys, connectivity, etc. (unchanged)
     async function fetchPingStatus(){
       try{
         const res = await fetch(api.pingStatus, {credentials:'same-origin'});
@@ -606,6 +883,16 @@
         const totalConn = stats.reduce((sum, [,count]) => sum + count, 0);
         document.getElementById('totalConnections').textContent = totalConn;
       }).catch(() => document.getElementById('totalConnections').textContent = '—');
+      
+      // Load coupon and gem account counts
+      fetch(couponsApi.list, {credentials:'same-origin'}).then(res => res.json()).then(coupons => {
+        const activeCoupons = coupons.filter(c => c.is_active).length;
+        document.getElementById('totalCoupons').textContent = activeCoupons;
+      }).catch(() => document.getElementById('totalCoupons').textContent = '—');
+      
+      fetch(gemAccountsApi.stats, {credentials:'same-origin'}).then(res => res.json()).then(stats => {
+        document.getElementById('totalGemAccounts').textContent = stats.total_accounts;
+      }).catch(() => document.getElementById('totalGemAccounts').textContent = '—');
     }
 
     function renderUsers(users){
@@ -831,31 +1118,458 @@
 
     document.getElementById('generateKeyBtn').onclick = generateKey;
 
-    function escapeHtml(text){
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+    // Coupons functions
+    async function fetchCoupons(){
+      try{
+        const res = await fetch(couponsApi.list, {credentials:'same-origin'});
+        if(!res.ok){ toast('Error loading coupons'); return; }
+        const coupons = await res.json();
+        renderCoupons(coupons);
+      }catch(e){
+        console.error(e);
+        toast('Error loading coupons');
+      }
     }
 
-    document.getElementById('addBtn').onclick = async ()=>{
-      const username = document.getElementById('username').value.trim();
-      const duration = document.getElementById('duration').value;
-      if(!username){ toast('Username required'); return; }
-      const body = { username, duration: parseInt(duration) || 0 };
-      const res = await fetch(api.add, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        credentials:'same-origin',
-        body: JSON.stringify(body)
-      });
-      if(res.ok){
-        toast('User added');
-        document.getElementById('username').value = '';
-        setTimeout(fetchUsers, 220);
-      } else {
-        const j = await res.json().catch(()=>({}));
-        toast('Error: ' + (j.error || res.status));
+    function renderCoupons(coupons){
+      const tbody = document.querySelector('#couponsTable tbody');
+      tbody.innerHTML = '';
+      document.getElementById('couponsCount').textContent = coupons.length + ' coupons';
+      
+      if(coupons.length === 0){
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No coupons yet</td></tr>';
+        return;
       }
+      
+      coupons.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong style="color:var(--gold);font-family:monospace">${c.code}</strong></td>
+          <td>${c.discount_percent}%</td>
+          <td>${c.times_used}${c.max_uses?` / ${c.max_uses}`:''}</td>
+          <td><span class="badge ${c.is_active?'badge-active':'badge-inactive'}">${c.is_active?'Active':'Inactive'}</span></td>
+          <td class="small muted">${c.expires_at||'Never'}</td>
+          <td class="actions">
+            <button class="btn-sm ${c.is_active?'btn-danger':'btn-success'}" onclick="toggleCoupon('${c.code}',${!c.is_active})">${c.is_active?'Disable':'Enable'}</button>
+            <button class="btn-sm btn-danger" onclick="deleteCoupon('${c.code}')">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function createCoupon(){
+      const code = document.getElementById('couponCode').value.trim().toUpperCase();
+      const discount = parseInt(document.getElementById('couponDiscount').value);
+      const maxUses = document.getElementById('couponMaxUses').value ? parseInt(document.getElementById('couponMaxUses').value) : null;
+      const expires = document.getElementById('couponExpires').value;
+      
+      if(!code || !discount){
+        toast('Code and discount required');
+        return;
+      }
+      
+      if(discount < 1 || discount > 100){
+        toast('Discount must be 1-100%');
+        return;
+      }
+      
+      try{
+        const res = await fetch(couponsApi.create, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({code, discount_percent: discount, max_uses: maxUses, expires_at: expires||null}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          toast('✅ Coupon created!');
+          document.getElementById('couponCode').value = '';
+          document.getElementById('couponDiscount').value = '';
+          document.getElementById('couponMaxUses').value = '';
+          document.getElementById('couponExpires').value = '';
+          await fetchCoupons();
+        } else {
+          const j = await res.json().catch(()=>({}));
+          toast('❌ ' + (j.error || 'Error'));
+        }
+      }catch(e){
+        console.error(e);
+        toast('Error creating coupon');
+      }
+    }
+
+    async function toggleCoupon(code, isActive){
+      try{
+        const res = await fetch(couponsApi.toggle, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({code, is_active: isActive}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          await fetchCoupons();
+        } else {
+          toast('❌ Error');
+        }
+      }catch(e){
+        toast('❌ Error');
+      }
+    }
+
+    async function deleteCoupon(code){
+      if(!confirm(`Delete coupon ${code}?`)) return;
+      
+      try{
+        const res = await fetch(couponsApi.delete, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({code}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          await fetchCoupons();
+        } else {
+          toast('❌ Error');
+        }
+      }catch(e){
+        toast('❌ Error');
+      }
+    }
+
+    document.getElementById('createCouponBtn').onclick = createCoupon;
+
+    // Gem Accounts functions
+    async function fetchGemAccounts(){
+      try{
+        const res = await fetch(gemAccountsApi.list, {credentials:'same-origin'});
+        if(!res.ok){ toast('Error loading gem accounts'); return; }
+        const accounts = await res.json();
+        renderGemAccounts(accounts);
+      }catch(e){
+        console.error(e);
+        toast('Error loading gem accounts');
+      }
+    }
+
+    function renderGemAccounts(accounts){
+      const tbody = document.querySelector('#gemAccountsTable tbody');
+      tbody.innerHTML = '';
+      const active = accounts.filter(a => a.is_active).length;
+      document.getElementById('gemAccountsCount').textContent = accounts.length + ' accounts';
+      document.getElementById('gemAccountsActive').textContent = active + ' active';
+      
+      if(accounts.length === 0){
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No gem accounts yet</td></tr>';
+        return;
+      }
+      
+      accounts.forEach(a => {
+        const gemsClass = a.gems_remaining < 1000 ? 'gems-low' : a.gems_remaining < 3000 ? 'gems-medium' : 'gems-high';
+        const statusClass = a.is_active ? 'status-active' : 'status-inactive';
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${a.account_number}</td>
+          <td>${a.email}</td>
+          <td>${a.current_nickname || '—'}</td>
+          <td class="${gemsClass}">${a.gems_remaining.toLocaleString()}</td>
+          <td class="${statusClass}">${a.is_active ? 'Active' : 'Inactive'}</td>
+          <td class="actions">
+            <button class="btn-success btn-sm" onclick="rechargeGemAccount(${a.id})">Recharge</button>
+            <button class="btn-sm ${a.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleGemAccount(${a.id}, ${!a.is_active})">${a.is_active ? 'Disable' : 'Enable'}</button>
+            <button class="btn-danger btn-sm" onclick="deleteGemAccount(${a.id})">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function addGemAccount(){
+      const number = parseInt(document.getElementById('gemAccountNumber').value);
+      const email = document.getElementById('gemAccountEmail').value.trim();
+      const password = document.getElementById('gemAccountPassword').value.trim();
+      
+      if(!number || !email || !password){
+        toast('All fields required');
+        return;
+      }
+      
+      try{
+        const res = await fetch(gemAccountsApi.add, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({account_number: number, email, password}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          toast('✅ Gem account added!');
+          document.getElementById('gemAccountNumber').value = '';
+          document.getElementById('gemAccountEmail').value = '';
+          document.getElementById('gemAccountPassword').value = '';
+          await fetchGemAccounts();
+          updateMainStats(await(await fetch(api.list, {credentials:'same-origin'})).json());
+        } else {
+          const j = await res.json().catch(()=>({}));
+          toast('❌ ' + (j.error || 'Error'));
+        }
+      }catch(e){
+        console.error(e);
+        toast('Error adding gem account');
+      }
+    }
+
+    async function rechargeGemAccount(id){
+      const amount = prompt('Enter gems amount (default: 5000):', '5000');
+      if(!amount) return;
+      
+      try{
+        const res = await fetch(gemAccountsApi.recharge, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({account_id: id, gems_amount: parseInt(amount)}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          toast('✅ Account recharged!');
+          await fetchGemAccounts();
+        } else {
+          const j = await res.json().catch(()=>({}));
+          toast('❌ ' + (j.error || 'Error'));
+        }
+      }catch(e){
+        toast('❌ Error');
+      }
+    }
+
+    async function toggleGemAccount(id, isActive){
+      try{
+        const res = await fetch(gemAccountsApi.toggle, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({account_id: id, is_active: isActive}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          await fetchGemAccounts();
+        } else {
+          toast('❌ Error');
+        }
+      }catch(e){
+        toast('❌ Error');
+      }
+    }
+
+    async function deleteGemAccount(id){
+      if(!confirm('Delete this gem account?')) return;
+      
+      try{
+        const res = await fetch(gemAccountsApi.delete, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({account_id: id}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          toast('✅ Account deleted!');
+          await fetchGemAccounts();
+          updateMainStats(await(await fetch(api.list, {credentials:'same-origin'})).json());
+        } else {
+          toast('❌ Error');
+        }
+      }catch(e){
+        toast('❌ Error');
+      }
+    }
+
+    document.getElementById('addGemAccountBtn').onclick = addGemAccount;
+
+    // Gift sending functions
+    function updateGiftForm(){
+      const giftType = document.getElementById('giftType').value;
+      const container = document.getElementById('giftFormContainer');
+      
+      if(!giftType){
+        container.innerHTML = '';
+        return;
+      }
+      
+      let options = '';
+      if(giftType === 'custom'){
+        container.innerHTML = `
+          <div class="form-group">
+            <label>Custom Item ID</label>
+            <input id="customItemId" placeholder="e.g., GOLDV2_1, BUNDLE_STRAWBERRY" />
+          </div>
+          <div class="form-group">
+            <label>Item Name (for display)</label>
+            <input id="customItemName" placeholder="e.g., 450 Gems Package" />
+          </div>
+        `;
+        return;
+      }
+      
+      const catalog = GIFT_CATALOG[giftType] || [];
+      options = catalog.map(item => 
+        `<option value="${item.id}">${item.name} - ${item.value}</option>`
+      ).join('');
+      
+      container.innerHTML = `
+        <div class="form-group">
+          <label>Select Item</label>
+          <select id="giftItemSelect">
+            <option value="">-- Choose Item --</option>
+            ${options}
+          </select>
+        </div>
+      `;
+    }
+
+    function quickSelectGift(itemId){
+      // Find item in catalog
+      let foundItem = null;
+      let foundType = null;
+      
+      for(const [type, items] of Object.entries(GIFT_CATALOG)){
+        const item = items.find(i => i.id === itemId);
+        if(item){
+          foundItem = item;
+          foundType = type;
+          break;
+        }
+      }
+      
+      if(!foundItem) return;
+      
+      // Set form values
+      document.getElementById('giftType').value = foundType;
+      updateGiftForm();
+      
+      setTimeout(() => {
+        const select = document.getElementById('giftItemSelect');
+        if(select){
+          select.value = itemId;
+        }
+      }, 100);
+      
+      toast('📋 Gift selected: ' + foundItem.name);
+    }
+
+    async function sendGift(){
+      const username = document.getElementById('giftUsername').value.trim();
+      const giftType = document.getElementById('giftType').value;
+      const message = document.getElementById('giftMessage').value.trim();
+      
+      if(!username){
+        toast('❌ Username required');
+        return;
+      }
+      
+      if(!giftType){
+        toast('❌ Please select a gift type');
+        return;
+      }
+      
+      let itemId, itemName;
+      
+      if(giftType === 'custom'){
+        itemId = document.getElementById('customItemId').value.trim();
+        itemName = document.getElementById('customItemName').value.trim();
+        
+        if(!itemId || !itemName){
+          toast('❌ Custom item ID and name required');
+          return;
+        }
+      } else {
+        const select = document.getElementById('giftItemSelect');
+        if(!select || !select.value){
+          toast('❌ Please select an item');
+          return;
+        }
+        
+        itemId = select.value;
+        itemName = select.options[select.selectedIndex].text;
+      }
+      
+      if(!confirm(`Send "${itemName}" to ${username}?\n\nThis is a FREE gift (no payment required).`)){
+        return;
+      }
+      
+      try{
+        const res = await fetch(giftsApi.send, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            username,
+            item_id: itemId,
+            item_name: itemName,
+            message: message || null
+          }),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          const result = await res.json();
+          toast('✅ Gift sent successfully!');
+          
+          // Clear form
+          document.getElementById('giftUsername').value = '';
+          document.getElementById('giftType').value = '';
+          document.getElementById('giftMessage').value = '';
+          updateGiftForm();
+          
+          // Refresh history
+          await fetchGiftHistory();
+        } else {
+          const j = await res.json().catch(()=>({}));
+          toast('❌ ' + (j.error || 'Failed to send gift'));
+        }
+      }catch(e){
+        console.error(e);
+        toast('❌ Error sending gift');
+      }
+    }
+
+    async function fetchGiftHistory(){
+      try{
+        const res = await fetch(giftsApi.history, {credentials:'same-origin'});
+        if(!res.ok) return;
+        
+        const history = await res.json();
+        renderGiftHistory(history);
+      }catch(e){
+        console.error(e);
+      }
+    }
+
+    function renderGiftHistory(history){
+      const tbody = document.querySelector('#giftHistoryTable tbody');
+      tbody.innerHTML = '';
+      
+      if(history.length === 0){
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No gifts sent yet</td></tr>';
+        return;
+      }
+      
+      history.slice(0, 50).forEach(gift => {
+        const tr = document.createElement('tr');
+        const statusClass = gift.status === 'delivered' ? 'status-active' : 'status-inactive';
+        
+        tr.innerHTML = `
+          <td class="small muted">${gift.sent_at || '—'}</td>
+          <td><strong>${escapeHtml(gift.recipient_username)}</strong></td>
+          <td>${escapeHtml(gift.item_name)}</td>
+          <td class="small muted">${gift.item_value || '—'}</td>
+          <td><span class="${statusClass}">${gift.status || 'pending'}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
     }
 
     // Testimonials management
@@ -876,7 +1590,6 @@
       const tbody = document.querySelector('#testimonialsTable tbody');
       tbody.innerHTML = '';
       
-      // Séparer pending et approved
       const pending = testimonials.filter(t => !t.approved);
       const approved = testimonials.filter(t => t.approved);
       
@@ -887,7 +1600,6 @@
         return;
       }
       
-      // Show pending first
       [...pending, ...approved].forEach(t => {
         const tr = document.createElement('tr');
         const stars = '⭐'.repeat(t.rating);
@@ -929,7 +1641,7 @@
     
     async function approveTestimonial(id){
       try{
-        const res = await fetch('/api/testimonials/approve', {
+        const res = await fetch(testimonialsApi.approve, {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({id}),
@@ -1086,6 +1798,33 @@
         toast('Error clearing message');
         document.getElementById('customMessageStatus').textContent = '❌ Error clearing message';
         document.getElementById('customMessageStatus').style.color = 'var(--danger)';
+      }
+    }
+
+    function escapeHtml(text){
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    document.getElementById('addBtn').onclick = async ()=>{
+      const username = document.getElementById('username').value.trim();
+      const duration = document.getElementById('duration').value;
+      if(!username){ toast('Username required'); return; }
+      const body = { username, duration: parseInt(duration) || 0 };
+      const res = await fetch(api.add, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify(body)
+      });
+      if(res.ok){
+        toast('User added');
+        document.getElementById('username').value = '';
+        setTimeout(fetchUsers, 220);
+      } else {
+        const j = await res.json().catch(()=>({}));
+        toast('Error: ' + (j.error || res.status));
       }
     }
 

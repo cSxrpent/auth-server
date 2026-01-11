@@ -122,9 +122,19 @@ const BUNDLES = [
     { type: "BUNDLE_MYCAKE", cost: 800, price: 4.99, name: "My Cake Bundle", image: "bundle-mycake" },
     { type: "BUNDLE_CURSED", cost: 800, price: 4.99, name: "Cursed Bundle", image: "bundle-cursed" },
     { type: "BUNDLE_LEOPARD", cost: 800, price: 4.99, name: "Leopard Bundle", image: "bundle-leopard" },
-    { type: "BUNDLE_YEEHAW", cost: 800, price: 4.99, name: "Yeehaw Bundle", image: "bundle-yeehaw" }
+    { type: "BUNDLE_YEEHAW", cost: 800, price: 4.99, name: "Yeehaw Bundle", image: "bundle-yeehaw" },
+    
+    // NEW: Starter Pack Bundle
+    { 
+        type: "BUNDLE_STARTER_PACK", 
+        cost: 1250, // 800 + 450 gems
+        price: 6.49, 
+        name: "🔥 Starter Pack", 
+        image: "bundle-starter-pack",
+        isBestValue: true,
+        description: "Best value! Includes 1250 gems total"
+    }
 ];
-
 
 const CATEGORY_EMOJIS = {
     coins: '🪙',
@@ -135,6 +145,29 @@ const CATEGORY_EMOJIS = {
     rolecards: '🎴',
     calendar: '📅',
     bundles: '📦'
+};
+
+// Official store prices for comparison (UI display only, NOT used for calculations)
+const OFFICIAL_PRICES = {
+    340: 2.99,
+    700: 5.99,
+    1460: 11.99,
+    3080: 24.99,
+    6300: 49.99,
+    13200: 99.99
+};
+
+// Global promo configuration
+const GLOBAL_PROMO = {
+    enabled: true,
+    discountPercent: 15,
+    label: "🔥 15% OFF SITEWIDE"
+};
+
+// Loyalty system configuration
+const LOYALTY_CONFIG = {
+    itemsRequired: 5,
+    rewardType: 'cheapest_free'
 };
 
 let currentCategory = 'all';
@@ -163,6 +196,28 @@ function getAllProducts() {
     return products;
 }
 
+// Get closest official price for comparison
+function getOfficialComparison(gems) {
+    const sortedPrices = Object.keys(OFFICIAL_PRICES).map(Number).sort((a, b) => a - b);
+    
+    // Find the closest official gem amount
+    let closest = sortedPrices[0];
+    let minDiff = Math.abs(gems - closest);
+    
+    for (let gemAmount of sortedPrices) {
+        const diff = Math.abs(gems - gemAmount);
+        if (diff < minDiff) {
+            minDiff = diff;
+            closest = gemAmount;
+        }
+    }
+    
+    return {
+        officialGems: closest,
+        officialPrice: OFFICIAL_PRICES[closest]
+    };
+}
+
 function renderProducts(category = 'all') {
     const productsContainer = document.getElementById('products');
     const allProducts = getAllProducts();
@@ -170,17 +225,45 @@ function renderProducts(category = 'all') {
         ? allProducts 
         : allProducts.filter(p => p.category === category);
 
-    productsContainer.innerHTML = filtered.map(product => `
-        <div class="product-card">
-            <div class="category-emoji">${CATEGORY_EMOJIS[product.category] || '📦'}</div>
-            ${product.image ? `<img class="product-image" src="https://cdn2.wolvesville.com/promos/${product.image}@2x.jpg" alt="${product.name}">` : ''}
-            <div class="product-name">${product.name || product.title}</div>
-            <div class="product-price">€${product.price.toFixed(2)}</div>
-            <button class="buy-button" onclick='addToCart(${JSON.stringify(product).replace(/'/g, "&apos;")})'>
-                🛒 Add to Cart
-            </button>
-        </div>
-    `).join('');
+    productsContainer.innerHTML = filtered.map(product => {
+        let savingsHTML = '';
+        
+        // Add official price comparison for items with gems
+        if (product.cost && product.cost >= 340) {
+            const comparison = getOfficialComparison(product.cost);
+            const savings = comparison.officialPrice - product.price;
+            
+            if (savings > 0) {
+                savingsHTML = `
+                    <div style="background:linear-gradient(135deg,rgba(46,213,115,0.15),rgba(46,213,115,0.05));border:1px solid rgba(46,213,115,0.3);border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.85rem">
+                        <div style="color:var(--muted);margin-bottom:4px">Official Store: €${comparison.officialPrice.toFixed(2)}</div>
+                        <div style="color:var(--success);font-weight:700">You save: €${savings.toFixed(2)}</div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Best value badge
+        let badgeHTML = '';
+        if (product.isBestValue) {
+            badgeHTML = '<div style="position:absolute;top:10px;right:10px;background:linear-gradient(135deg,var(--gold),#ffa500);color:#000;padding:6px 12px;border-radius:20px;font-weight:700;font-size:0.75rem;box-shadow:0 4px 15px rgba(255,215,0,0.4)">🔥 BEST VALUE</div>';
+        }
+        
+        return `
+            <div class="product-card" style="position:relative">
+                ${badgeHTML}
+                <div class="category-emoji">${CATEGORY_EMOJIS[product.category] || '📦'}</div>
+                ${product.image ? `<img class="product-image" src="https://cdn2.wolvesville.com/promos/${product.image}@2x.jpg" alt="${product.name}" onerror="this.style.display='none'">` : ''}
+                <div class="product-name">${product.name || product.title}</div>
+                ${product.description ? `<div style="color:var(--muted);font-size:0.9rem;margin-bottom:10px;text-align:center">${product.description}</div>` : ''}
+                ${savingsHTML}
+                <div class="product-price">€${product.price.toFixed(2)}</div>
+                <button class="buy-button" onclick='addToCart(${JSON.stringify(product).replace(/'/g, "&apos;")})'>
+                    🛒 Add to Cart
+                </button>
+            </div>
+        `;
+    }).join('');
 }
 
 function addToCart(product) {
@@ -217,16 +300,48 @@ function updateCartQuantity(index, change) {
 
 function calculateTotal() {
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    let discount = 0;
     
+    // Calculate total items for loyalty system
+    const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+    
+    // Loyalty discount: every 5th item is free (cheapest one)
+    let loyaltyDiscount = 0;
+    let freeItemsCount = Math.floor(totalItems / LOYALTY_CONFIG.itemsRequired);
+    
+    if (freeItemsCount > 0) {
+        // Find cheapest items and apply discount
+        const sortedCart = [...cart].sort((a, b) => a.price - b.price);
+        let itemsFreed = 0;
+        
+        for (let item of sortedCart) {
+            const itemsToFree = Math.min(item.quantity, freeItemsCount - itemsFreed);
+            loyaltyDiscount += item.price * itemsToFree;
+            itemsFreed += itemsToFree;
+            
+            if (itemsFreed >= freeItemsCount) break;
+        }
+    }
+    
+    // Global promo discount (15% off)
+    let promoDiscount = 0;
+    if (GLOBAL_PROMO.enabled) {
+        promoDiscount = (subtotal - loyaltyDiscount) * (GLOBAL_PROMO.discountPercent / 100);
+    }
+    
+    // Coupon discount (applied after promo)
+    let couponDiscount = 0;
     if (appliedCoupon) {
-        discount = subtotal * (appliedCoupon.discount_percent / 100);
+        couponDiscount = (subtotal - loyaltyDiscount - promoDiscount) * (appliedCoupon.discount_percent / 100);
     }
     
     return {
         subtotal: subtotal,
-        discount: discount,
-        total: subtotal - discount
+        loyaltyDiscount: loyaltyDiscount,
+        promoDiscount: promoDiscount,
+        couponDiscount: couponDiscount,
+        total: Math.max(0, subtotal - loyaltyDiscount - promoDiscount - couponDiscount),
+        totalItems: totalItems,
+        freeItemsCount: freeItemsCount
     };
 }
 
@@ -251,33 +366,89 @@ function updateCartDisplay() {
         cartItems.innerHTML = '<div class="empty-cart">🛒 Your cart is empty</div>';
         cartSummary.style.display = 'none';
     } else {
-        cartItems.innerHTML = cart.map((item, index) => `
-            <div class="cart-item">
-                <div class="cart-item-info">
-                    <div class="cart-item-name">${item.name}</div>
-                    <div class="cart-item-price">€${item.price.toFixed(2)}</div>
+        const totals = calculateTotal();
+        
+        // Determine which items are free due to loyalty
+        let freeItemsRemaining = totals.freeItemsCount;
+        const sortedCart = [...cart].map((item, idx) => ({...item, originalIndex: idx}))
+            .sort((a, b) => a.price - b.price);
+        
+        const freeItemIndices = new Set();
+        for (let item of sortedCart) {
+            const itemsToFree = Math.min(item.quantity, freeItemsRemaining);
+            if (itemsToFree > 0) {
+                freeItemIndices.add(item.originalIndex);
+            }
+            freeItemsRemaining -= itemsToFree;
+            if (freeItemsRemaining <= 0) break;
+        }
+        
+        cartItems.innerHTML = cart.map((item, index) => {
+            const isFree = freeItemIndices.has(index);
+            const freeLabel = isFree ? '<span style="background:linear-gradient(135deg,var(--success),#20bf55);color:#fff;padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:700;margin-left:8px">🎁 FREE</span>' : '';
+            
+            return `
+                <div class="cart-item">
+                    <div class="cart-item-info">
+                        <div class="cart-item-name">${item.name}${freeLabel}</div>
+                        <div class="cart-item-price">€${item.price.toFixed(2)}</div>
+                    </div>
+                    <div class="cart-item-controls">
+                        <button onclick="updateCartQuantity(${index}, -1)" class="qty-btn">−</button>
+                        <span class="cart-item-qty">${item.quantity}</span>
+                        <button onclick="updateCartQuantity(${index}, 1)" class="qty-btn">+</button>
+                        <button onclick="removeFromCart(${index})" class="remove-btn">🗑️</button>
+                    </div>
                 </div>
-                <div class="cart-item-controls">
-                    <button onclick="updateCartQuantity(${index}, -1)" class="qty-btn">−</button>
-                    <span class="cart-item-qty">${item.quantity}</span>
-                    <button onclick="updateCartQuantity(${index}, 1)" class="qty-btn">+</button>
-                    <button onclick="removeFromCart(${index})" class="remove-btn">🗑️</button>
+            `;
+        }).join('');
+        
+        // Loyalty progress bar
+        const progress = (totals.totalItems % LOYALTY_CONFIG.itemsRequired);
+        const progressPercent = (progress / LOYALTY_CONFIG.itemsRequired) * 100;
+        const itemsUntilFree = LOYALTY_CONFIG.itemsRequired - progress;
+        
+        const loyaltyHTML = `
+            <div style="background:linear-gradient(135deg,rgba(123,75,255,0.15),rgba(123,75,255,0.05));border:1px solid rgba(123,75,255,0.3);border-radius:12px;padding:15px;margin-bottom:15px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <div style="font-weight:700;color:#7b4bff">🎁 Loyalty Reward</div>
+                    <div style="color:var(--muted);font-size:0.9rem">${progress} / ${LOYALTY_CONFIG.itemsRequired} items</div>
+                </div>
+                <div style="background:rgba(0,0,0,0.3);height:8px;border-radius:10px;overflow:hidden;margin-bottom:8px">
+                    <div style="background:linear-gradient(90deg,#7b4bff,var(--accent));height:100%;width:${progressPercent}%;transition:width 0.3s"></div>
+                </div>
+                <div style="color:var(--muted);font-size:0.85rem">
+                    ${totals.freeItemsCount > 0 ? 
+                        `<span style="color:var(--success);font-weight:600">✨ ${totals.freeItemsCount} free item${totals.freeItemsCount > 1 ? 's' : ''} unlocked!</span>` : 
+                        `${itemsUntilFree} more item${itemsUntilFree > 1 ? 's' : ''} until free item!`
+                    }
                 </div>
             </div>
-        `).join('');
-        
-        const totals = calculateTotal();
+        `;
         
         cartSummary.style.display = 'block';
         cartSummary.innerHTML = `
+            ${loyaltyHTML}
             <div class="summary-row">
                 <span>Subtotal:</span>
                 <span>€${totals.subtotal.toFixed(2)}</span>
             </div>
+            ${totals.loyaltyDiscount > 0 ? `
+                <div class="summary-row discount">
+                    <span>🎁 Loyalty Reward:</span>
+                    <span>-€${totals.loyaltyDiscount.toFixed(2)}</span>
+                </div>
+            ` : ''}
+            ${GLOBAL_PROMO.enabled ? `
+                <div class="summary-row discount">
+                    <span>${GLOBAL_PROMO.label}:</span>
+                    <span>-€${totals.promoDiscount.toFixed(2)}</span>
+                </div>
+            ` : ''}
             ${appliedCoupon ? `
                 <div class="summary-row discount">
-                    <span>Discount (${appliedCoupon.discount_percent}%):</span>
-                    <span>-€${totals.discount.toFixed(2)}</span>
+                    <span>Coupon (${appliedCoupon.discount_percent}%):</span>
+                    <span>-€${totals.couponDiscount.toFixed(2)}</span>
                 </div>
             ` : ''}
             <div class="summary-row total">
@@ -391,7 +562,14 @@ async function completePurchase() {
                 username: username,
                 message: message,
                 coupon: appliedCoupon,
-                total: totals.total
+                globalPromo: GLOBAL_PROMO.enabled ? GLOBAL_PROMO : null,
+                total: totals.total,
+                breakdown: {
+                    subtotal: totals.subtotal,
+                    loyaltyDiscount: totals.loyaltyDiscount,
+                    promoDiscount: totals.promoDiscount,
+                    couponDiscount: totals.couponDiscount
+                }
             })
         });
 
