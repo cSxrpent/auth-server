@@ -52,41 +52,38 @@
         
         /* Cart Button */
         .cart-button{
-            position:fixed;
-            bottom:30px;
-            right:30px;
-            background:linear-gradient(135deg,var(--accent),#7b4bff);
+            position:absolute;
+            top:20px;
+            right:20px;
+            background:linear-gradient(90deg,var(--accent),#7b4bff);
             color:#fff;
-            width:70px;
-            height:70px;
-            border-radius:50%;
+            padding:12px 24px;
+            border-radius:12px;
             border:none;
-            font-size:2rem;
+            font-size:1.2rem;
             cursor:pointer;
             box-shadow:0 8px 30px rgba(0,212,255,0.5);
             transition:all 0.3s;
             z-index:100;
-            display:flex;
+            display:inline-flex;
             align-items:center;
             justify-content:center;
-            position:relative;
+            gap:8px;
+            font-weight:600;
         }
-        .cart-button:hover{transform:scale(1.1) rotate(5deg);box-shadow:0 12px 40px rgba(0,212,255,0.7)}
+        .cart-button:hover{transform:scale(1.05);box-shadow:var(--glow)}
         .cart-count{
-            position:absolute;
-            top:-5px;
-            right:-5px;
             background:var(--danger);
             color:#fff;
-            width:28px;
-            height:28px;
-            border-radius:50%;
+            min-width:24px;
+            height:24px;
+            border-radius:12px;
             display:none;
             align-items:center;
             justify-content:center;
             font-size:0.85rem;
             font-weight:700;
-            border:3px solid var(--card);
+            padding:0 8px;
         }
         
         /* Tabs */
@@ -534,7 +531,7 @@
         /* Notifications */
         .notification{
             position:fixed;
-            bottom:120px;
+            top:100px;
             right:30px;
             background:linear-gradient(135deg,var(--success),#20bf55);
             color:#fff;
@@ -544,7 +541,7 @@
             font-weight:600;
             z-index:10000;
             opacity:0;
-            transform:translateY(20px);
+            transform:translateY(-20px);
             transition:all 0.3s;
         }
         
@@ -576,7 +573,27 @@
             h1{font-size:2.5rem}
             .products-grid{grid-template-columns:repeat(auto-fill, minmax(250px, 1fr))}
             .modal-content{padding:30px 20px}
-            .cart-button{width:60px;height:60px;font-size:1.7rem;bottom:20px;right:20px}
+            .back-link, .cart-button{
+                position:absolute;
+                padding:10px 16px;
+                font-size:0.9rem;
+            }
+            .back-link{
+                top:10px;
+                left:10px;
+            }
+            .cart-button{
+                top:10px;
+                right:10px;
+            }
+            header{
+                padding-top:70px;
+            }
+            .notification{
+                right:10px;
+                left:10px;
+                top:70px;
+            }
         }
     </style>
 </head>
@@ -588,6 +605,13 @@
             <span>←</span>
             <span>Back to Home</span>
         </a>
+        
+        <!-- Cart Button -->
+        <button id="cartButton" class="cart-button" onclick="toggleCart()">
+            <span>🛒</span>
+            <span>Cart</span>
+            <span id="cartCount" class="cart-count">0</span>
+        </button>
         
         <header>
             <h1>🎁 Wolvesville Gift Shop</h1>
@@ -608,12 +632,6 @@
 
         <div id="products" class="products-grid"></div>
     </div>
-
-    <!-- Floating Cart Button -->
-    <button id="cartButton" class="cart-button" onclick="toggleCart()">
-        🛒
-        <span id="cartCount" class="cart-count">0</span>
-    </button>
 
     <!-- Cart Modal -->
     <div id="cartModal" class="modal">
