@@ -496,7 +496,30 @@ def download():
     if not payload:
         abort(403)
 
-    return send_file("files/rxzbot.zip", as_attachment=True)
+    # ✅ FIX: Add proper MIME type and error handling
+    import os
+    file_path = "files/rxzbot.zip"
+    
+    # Check if file exists
+    if not os.path.exists(file_path):
+        log_event(f"Download failed: File not found at {file_path}", level="error")
+        abort(404, description="Download file not found")
+    
+    # Check file permissions
+    if not os.access(file_path, os.R_OK):
+        log_event(f"Download failed: No read permission for {file_path}", level="error")
+        abort(500, description="File permission error")
+    
+    try:
+        return send_file(
+            file_path,
+            mimetype='application/zip',  # ✅ Explicit MIME type
+            as_attachment=True,
+            download_name='rxzbot.zip'  # ✅ Use download_name instead of attachment_filename
+        )
+    except Exception as e:
+        log_event(f"Download failed: {e}", level="error")
+        abort(500, description=f"Download error: {str(e)}")
 
 
 def activate_license(username, item):
