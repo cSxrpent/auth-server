@@ -339,12 +339,11 @@ def api_delete_key():
 @app.route("/buy/<item>", methods=["GET", "POST"])
 def buy(item):
     prices = {
-        "test": {"amount": "0.05", "description": "Test Purchase", "days": 1},
         "1month": {"amount": "2.00", "description": "1 Month Subscription", "days": 30},
         "2months": {"amount": "4.00", "description": "2 Months Subscription", "days": 60},
         "3months": {"amount": "5.00", "description": "3 Months Subscription", "days": 90},
         "1year": {"amount": "10.00", "description": "1 Year Subscription", "days": 365},
-        "rawcode": {"amount": "20.00", "description": "Raw Code", "days": 0},  # Permanent license
+        "lifetime": {"amount": "20.00", "description": "Lifetime bot with updates", "days": 0},  # Permanent license
         "custombot": {"amount": "15.00", "description": "Custom Bot", "days": 0}  # Permanent license
     }
     
