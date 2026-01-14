@@ -377,7 +377,7 @@ def pay(item):
         "2months": {"amount": "4.00", "description": "2 Months Subscription"},
         "3months": {"amount": "5.00", "description": "3 Months Subscription"},
         "1year": {"amount": "10.00", "description": "1 Year Subscription"},
-        "rawcode": {"amount": "20.00", "description": "Raw Code (Permanent)"},
+        "lifetime": {"amount": "20.00", "description": "Lifetime bot with updates (Permanent)"},
         "custombot": {"amount": "15.00", "description": "Custom Bot (Permanent)"}
     }
     
