@@ -2501,6 +2501,7 @@ def api_users_bot_versions():
     try:
         with db_helper.get_db() as db:
             from sqlalchemy import func
+            from init_database import User
             
             # Get count of users per bot version
             version_stats = db.query(
@@ -2523,7 +2524,7 @@ def api_users_bot_versions():
     except Exception as e:
         log_event(f"Error getting bot version stats: {e}", level="error")
         return jsonify({"error": str(e)}), 500
-        
+
 # -----------------------
 # Run
 # -----------------------
