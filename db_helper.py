@@ -899,6 +899,56 @@ def get_pool_stats():
             "checked_in": 0
         }
 
+# ==================== BOT VERSION FUNCTIONS ====================
+
+def get_latest_bot_version():
+    """Get the latest bot version from settings"""
+    try:
+        with get_db() as db:
+            from init_database import BotSettings
+            settings = db.query(BotSettings).first()
+            if not settings:
+                return "0.6.9"  # Default version
+            return settings.latest_bot_version
+    except Exception as e:
+        print(f"⚠️ Error getting latest bot version: {e}")
+        return "0.6.9"
+
+def set_latest_bot_version(version: str):
+    """Set the latest bot version"""
+    try:
+        with get_db() as db:
+            from init_database import BotSettings
+            from datetime import datetime
+            
+            settings = db.query(BotSettings).first()
+            if settings:
+                settings.latest_bot_version = version
+                settings.updated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                new_settings = BotSettings(
+                    id=1,
+                    latest_bot_version=version
+                )
+                db.add(new_settings)
+            return True
+    except Exception as e:
+        print(f"⚠️ Error setting latest bot version: {e}")
+        return False
+
+def update_user_bot_version(username: str, bot_version: str):
+    """Update user's last connected bot version"""
+    try:
+        with get_db() as db:
+            user = db.query(User).filter(User.username == username).first()
+            if not user:
+                return False
+            user.last_bot_version = bot_version
+            return True
+    except Exception as e:
+        print(f"⚠️ Error updating user bot version: {e}")
+        return False
+
 # ==================== EXPORTS ====================
 
 __all__ = [
@@ -943,5 +993,8 @@ __all__ = [
     'update_gem_account_nickname',
     'deduct_account_gems',
     'recharge_account_gems',
-    'get_pool_stats'
+    'get_pool_stats',
+    'get_latest_bot_version',  # ✅ NOUVEAU
+    'set_latest_bot_version',  # ✅ NOUVEAU
+    'update_user_bot_version'  # ✅ NOUVEAU
 ]

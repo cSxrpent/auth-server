@@ -14,14 +14,14 @@ class User(Base):
     __tablename__ = 'users'
     
     username = Column(String(255), primary_key=True)
-    player_id = Column(String(255), nullable=True, index=True)  # ✅ ADDED - matches your ALTER TABLE command
+    player_id = Column(String(255), nullable=True, index=True)
     expires = Column(String(10), nullable=False)  # YYYY-MM-DD format
     paused = Column(Boolean, default=False)
     paused_at = Column(String(10), nullable=True)
     remaining_days = Column(Integer, nullable=True)
-    last_nickname = Column(String(255), nullable=True)  # ✅ ADDED - matches your ALTER TABLE command
-    first_connection_date = Column(String(30), nullable=True)  # ✅ ADDED - matches your ALTER TABLE command
-
+    last_nickname = Column(String(255), nullable=True)
+    first_connection_date = Column(String(30), nullable=True)
+    last_bot_version = Column(String(20), nullable=True)
 class Key(Base):
     __tablename__ = 'keys'
     
@@ -105,7 +105,14 @@ class GemAccount(Base):
     is_active = Column(Boolean, default=True)
     last_used = Column(String(30), nullable=True)  # Last time this account was used
     created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+class BotSettings(Base):
+    __tablename__ = 'bot_settings'
     
+    id = Column(Integer, primary_key=True, default=1)
+    latest_bot_version = Column(String(20), nullable=False, default='0.6.9')
+    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
 def init_database():
     """Initialize database with all tables"""
     DATABASE_URL = os.getenv("DATABASE_URL")

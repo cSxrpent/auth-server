@@ -39,7 +39,8 @@ from db_helper import (
     save_log, get_recent_logs,
     save_recent_connection, get_recent_connections,
     get_user_by_player_id, update_user_player_id, update_user_nickname,
-    get_custom_message, set_custom_message
+    get_custom_message, set_custom_message,
+    get_latest_bot_version, set_latest_bot_version, update_user_bot_version
 )
 from gem_account_manager import gem_account_manager
 from coupon_manager import coupon_manager
@@ -606,14 +607,27 @@ def verify_download_token(token):
 @login_required
 def debug():
     """Debug route to check configuration"""
+    
+    # Get latest bot version from recent connections
+    latest_version = "Unknown"
+    try:
+        recent_logs = db_helper.get_recent_logs(limit=100)
+        for log in recent_logs:
+            if "bot version" in log.get("msg", ""):
+                # Extract version from log message
+                import re
+                match = re.search(r'v\d+\.\d+\.\d+', log["msg"])
+                if match:
+                    latest_version = match.group(0)
+                    break
+    except:
+        pass
+    
     info = {
         "env_file_exists": os.path.exists('.env'),
-#        "paypal_client_id_set": bool(PAYPAL_CLIENT_ID),
-#        "paypal_client_id_prefix": PAYPAL_CLIENT_ID[:10] if PAYPAL_CLIENT_ID else None,
-#        "paypal_client_secret_set": bool(PAYPAL_CLIENT_SECRET),
         "paypal_mode": PAYPAL_MODE,
-#        "secret_key_set": bool(app.secret_key),
-        "admin_password_set": bool(ADMIN_PASSWORD)
+        "admin_password_set": bool(ADMIN_PASSWORD),
+        "latest_bot_version": latest_version  
     }
     return jsonify(info)
 
@@ -1809,29 +1823,26 @@ def logout():
 @app.route("/authv2", methods=["GET"])
 def authv2():
     """
-    Enhanced authentication with player ID verification
-    GET /authv2?username=XXX&player_id=YYY
-    Returns:
-      - 200 + {"message":"authorized","expires":"YYYY-MM-DD","nickname":"XXX","custom_message":"..."}
-      - 403 + {"message":"unauthorized"/"expired"/"paused","nickname":"XXX"}
-      - 400 + {"message":"missing parameters"}
-    
-    Authentication flow:
-    1. Check player_id first (primary verification)
-    2. If ID matches: verify, check if paused, update nickname if changed
-    3. If no ID match but nickname exists without ID: first connection, bind ID
-    4. If neither: unauthorized
+    Enhanced authentication with player ID verification and bot version check
     """
     username = request.args.get("username")
     player_id = request.args.get("player_id")
+    bot_version = request.args.get("bot_version", "v1.0.0")
     
     if not username or not player_id:
         return jsonify({"message": "missing parameters"}), 400
 
     # Get client IP
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    
+    # ✅ NOUVEAU: Vérifier la version du bot
+    latest_version = db_helper.get_latest_bot_version()
+    is_up_to_date = bot_version >= latest_version
+    
+    # Log bot version
+    log_event(f"authv2: '{username}' connecting with bot version {bot_version} (latest: {latest_version}, upToDate: {is_up_to_date})", level="info")
 
-    # STEP 1: Try to find by player_id first (primary verification)
+    # STEP 1: Try to find by player_id first
     user_by_id = db_helper.get_user_by_player_id(player_id)
     
     # STEP 2: If no ID match, try nickname
@@ -1848,7 +1859,8 @@ def authv2():
             record_connection(username, ip, "paused")
             return jsonify({
                 "message": "paused",
-                "nickname": username
+                "nickname": username,
+                "upToDate": is_up_to_date  # ✅ NOUVEAU
             }), 403
 
         try:
@@ -1856,9 +1868,16 @@ def authv2():
         except Exception:
             log_event(f"authv2 fail: invalid expiry date for ID (nickname: '{username}')", level="error")
             record_connection(username, ip, "unauthorized")
-            return jsonify({"message": "unauthorized", "nickname": username}), 403
+            return jsonify({
+                "message": "unauthorized",
+                "nickname": username,
+                "upToDate": is_up_to_date  # ✅ NOUVEAU
+            }), 403
 
         if expiry >= datetime.now():
+            # ✅ NOUVEAU: Update user's last bot version
+            db_helper.update_user_bot_version(user_by_id["username"], bot_version)
+            
             # Check if nickname changed
             old_nickname = user_by_id.get("username", "")
             custom_msg = ""
@@ -1880,7 +1899,9 @@ def authv2():
                 "message": "authorized",
                 "expires": user_by_id["expires"],
                 "nickname": username,
-                "custom_message": custom_msg if custom_msg else None
+                "custom_message": custom_msg if custom_msg else None,
+                "bot_version": bot_version,
+                "upToDate": is_up_to_date  # ✅ NOUVEAU
             }), 200
         else:
             log_event(f"authv2 expired: '{username}' expired on {user_by_id['expires']}", level="warn")
@@ -1888,19 +1909,20 @@ def authv2():
             return jsonify({
                 "message": "expired",
                 "expires": user_by_id["expires"],
-                "nickname": username
+                "nickname": username,
+                "upToDate": is_up_to_date  # ✅ NOUVEAU
             }), 403
     
     # SCENARIO 2: No ID match, but nickname exists without ID (first connection)
     elif user_by_nickname:
         if user_by_nickname.get("player_id") is None:
-            # CHECK IF LICENSE IS PAUSED
             if user_by_nickname.get("paused", False):
                 log_event(f"authv2 paused: '{username}' license is paused", level="warn")
                 record_connection(username, ip, "paused")
                 return jsonify({
                     "message": "paused",
-                    "nickname": username
+                    "nickname": username,
+                    "upToDate": is_up_to_date  # ✅ NOUVEAU
                 }), 403
 
             try:
@@ -1908,11 +1930,18 @@ def authv2():
             except Exception:
                 log_event(f"authv2 fail: invalid expiry date for '{username}'", level="error")
                 record_connection(username, ip, "unauthorized")
-                return jsonify({"message": "unauthorized", "nickname": username}), 403
+                return jsonify({
+                    "message": "unauthorized",
+                    "nickname": username,
+                    "upToDate": is_up_to_date  # ✅ NOUVEAU
+                }), 403
 
             if expiry >= datetime.now():
                 # First connection - bind player_id to this account
                 db_helper.update_user_player_id(username, player_id)
+                
+                # ✅ NOUVEAU: Update user's last bot version
+                db_helper.update_user_bot_version(username, bot_version)
                 
                 custom_msg = f"🎉 Welcome! This is your first connection. Your account is now linked."
                 
@@ -1928,7 +1957,9 @@ def authv2():
                     "message": "authorized",
                     "expires": user_by_nickname["expires"],
                     "nickname": username,
-                    "custom_message": custom_msg
+                    "custom_message": custom_msg,
+                    "bot_version": bot_version,
+                    "upToDate": is_up_to_date  # ✅ NOUVEAU
                 }), 200
             else:
                 log_event(f"authv2 expired: '{username}' expired on {user_by_nickname['expires']}", level="warn")
@@ -1936,19 +1967,27 @@ def authv2():
                 return jsonify({
                     "message": "expired",
                     "expires": user_by_nickname["expires"],
-                    "nickname": username
+                    "nickname": username,
+                    "upToDate": is_up_to_date  # ✅ NOUVEAU
                 }), 403
         else:
-            # Nickname exists but already has different player_id
             log_event(f"authv2 fail: nickname '{username}' already linked to different ID", level="warn")
             record_connection(username, ip, "unauthorized")
-            return jsonify({"message": "unauthorized", "nickname": username}), 403
+            return jsonify({
+                "message": "unauthorized",
+                "nickname": username,
+                "upToDate": is_up_to_date  # ✅ NOUVEAU
+            }), 403
     
     # SCENARIO 3: Neither ID nor nickname found
     else:
         log_event(f"authv2 fail: no account found for nickname '{username}'", level="warn")
         record_connection(username, ip, "unauthorized")
-        return jsonify({"message": "unauthorized", "nickname": username}), 403
+        return jsonify({
+            "message": "unauthorized",
+            "nickname": username,
+            "upToDate": is_up_to_date  # ✅ NOUVEAU
+        }), 403
 
 
 @app.route("/api/custom-message", methods=["GET"])
@@ -2425,6 +2464,65 @@ def api_delete_coupon():
     except Exception as e:
         log_event(f"Error deleting coupon: {e}", level="error")
         return jsonify({'error': str(e)}), 500
+
+@app.route("/api/bot-version", methods=["GET"])
+@login_required
+def api_bot_version_get():
+    """Get the latest bot version"""
+    version = db_helper.get_latest_bot_version()
+    return jsonify({"latest_version": version}), 200
+
+@app.route("/api/bot-version/set", methods=["POST"])
+@login_required
+def api_bot_version_set():
+    """Set the latest bot version"""
+    body = request.get_json() or {}
+    new_version = body.get("version", "").strip()
+    
+    if not new_version:
+        return jsonify({"error": "Version required"}), 400
+    
+    # Simple validation: version should be like "0.6.9" or "v0.6.9"
+    import re
+    if not re.match(r'^v?\d+\.\d+\.\d+$', new_version):
+        return jsonify({"error": "Invalid version format (use X.Y.Z or vX.Y.Z)"}), 400
+    
+    if db_helper.set_latest_bot_version(new_version):
+        log_event(f"Bot version updated to: {new_version}")
+        return jsonify({"message": "ok", "latest_version": new_version}), 200
+    else:
+        log_event(f"Failed to update bot version", level="error")
+        return jsonify({"error": "Failed to save version"}), 500
+
+@app.route("/api/users/bot-versions", methods=["GET"])
+@login_required
+def api_users_bot_versions():
+    """Get bot version statistics for all users"""
+    try:
+        with db_helper.get_db() as db:
+            from sqlalchemy import func
+            
+            # Get count of users per bot version
+            version_stats = db.query(
+                User.last_bot_version,
+                func.count(User.username).label('count')
+            ).filter(
+                User.last_bot_version.isnot(None)
+            ).group_by(
+                User.last_bot_version
+            ).order_by(
+                func.count(User.username).desc()
+            ).all()
+            
+            results = [
+                {"version": v or "Unknown", "count": c}
+                for v, c in version_stats
+            ]
+            
+            return jsonify(results), 200
+    except Exception as e:
+        log_event(f"Error getting bot version stats: {e}", level="error")
+        return jsonify({"error": str(e)}), 500
         
 # -----------------------
 # Run

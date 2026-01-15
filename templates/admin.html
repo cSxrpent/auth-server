@@ -591,11 +591,145 @@
           <div id="customMessageStatus" style="margin-top:8px;font-weight:600;color:var(--muted)"></div>
         </div>
       </div>
+
+      <!-- Bot Version Management Section -->
+      <div class="card" style="margin-top:20px">
+        <h2 style="margin-top:0;color:var(--accent)">🤖 Bot Version Management</h2>
+        <p class="small muted" style="margin-bottom:16px">Set the latest bot version. Users will see "upToDate: false" if their version is outdated.</p>
+        
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="form-group">
+            <label>Latest Bot Version</label>
+            <input 
+              id="latestBotVersionInput" 
+              placeholder="0.6.9"
+              style="font-family:monospace;font-size:1.1rem" />
+            <div class="small muted" style="margin-top:5px">Format: X.Y.Z or vX.Y.Z (example: 0.7.0 or v0.7.0)</div>
+          </div>
+          
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="primary" onclick="saveBotVersion()">💾 Set Latest Version</button>
+            <button class="primary" onclick="loadBotVersion()" style="background:linear-gradient(90deg,var(--muted),#7b7b7b)">🔄 Refresh</button>
+          </div>
+          
+          <div id="botVersionStatus" style="margin-top:8px;font-weight:600;color:var(--muted)"></div>
+        </div>
+        
+        <!-- Version Statistics -->
+        <div style="margin-top:30px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.1)">
+          <h3 style="margin-top:0">📊 User Version Statistics</h3>
+          <button class="primary" onclick="loadBotVersionStats()" style="margin-bottom:15px">🔄 Refresh Stats</button>
+          <div id="botVersionStatsChart"></div>
+        </div>
+      </div>
     </div>
 
   <div id="toast" style="display:none" class="toast">Message</div>
 
   <script>
+    const botVersionApi = {
+      get: '/api/bot-version',
+      set: '/api/bot-version/set',
+      stats: '/api/users/bot-versions'
+    };
+
+    async function loadBotVersion(){
+      try{
+        const res = await fetch(botVersionApi.get, {credentials:'same-origin'});
+        if(!res.ok){ 
+          document.getElementById('botVersionStatus').textContent = 'Error loading version';
+          document.getElementById('botVersionStatus').style.color = 'var(--danger)';
+          document.getElementById('latestBotVersionInput').value = '';
+          return; 
+        }
+        const data = await res.json();
+        document.getElementById('latestBotVersionInput').value = data.latest_version || '';
+        document.getElementById('botVersionStatus').textContent = `✅ Current: ${data.latest_version}`;
+        document.getElementById('botVersionStatus').style.color = 'var(--success)';
+      }catch(e){
+        console.error(e);
+        document.getElementById('botVersionStatus').textContent = 'Error loading version';
+        document.getElementById('botVersionStatus').style.color = 'var(--danger)';
+      }
+    }
+
+    async function saveBotVersion(){
+      const version = document.getElementById('latestBotVersionInput').value.trim();
+      
+      if(!version){
+        toast('❌ Version cannot be empty');
+        return;
+      }
+      
+      // Validate format
+      const versionRegex = /^v?\d+\.\d+\.\d+$/;
+      if(!versionRegex.test(version)){
+        toast('❌ Invalid format. Use X.Y.Z or vX.Y.Z (e.g., 0.7.0 or v0.7.0)');
+        return;
+      }
+      
+      try{
+        const res = await fetch(botVersionApi.set, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({version}),
+          credentials:'same-origin'
+        });
+        
+        if(res.ok){
+          toast('✅ Bot version updated');
+          document.getElementById('botVersionStatus').textContent = `✅ Updated to ${version}`;
+          document.getElementById('botVersionStatus').style.color = 'var(--success)';
+        } else {
+          const j = await res.json().catch(()=>({}));
+          toast('❌ ' + (j.error || 'Error'));
+          document.getElementById('botVersionStatus').textContent = '❌ Failed to update version';
+          document.getElementById('botVersionStatus').style.color = 'var(--danger)';
+        }
+      }catch(e){
+        console.error(e);
+        toast('Error saving version');
+        document.getElementById('botVersionStatus').textContent = '❌ Error saving version';
+        document.getElementById('botVersionStatus').style.color = 'var(--danger)';
+      }
+    }
+
+    async function loadBotVersionStats(){
+      try{
+        const res = await fetch(botVersionApi.stats, {credentials:'same-origin'});
+        if(!res.ok){ 
+          document.getElementById('botVersionStatsChart').innerHTML = '<div class="small muted">Error loading stats</div>';
+          return; 
+        }
+        const stats = await res.json();
+        renderBotVersionStats(stats);
+      }catch(e){
+        console.error(e);
+        document.getElementById('botVersionStatsChart').innerHTML = '<div class="small muted">Error loading stats</div>';
+      }
+    }
+
+    function renderBotVersionStats(stats){
+      const container = document.getElementById('botVersionStatsChart');
+      container.innerHTML = '';
+      
+      if(stats.length === 0){
+        container.innerHTML = '<div class="small muted">No version data yet</div>';
+        return;
+      }
+      
+      const total = stats.reduce((sum, s) => sum + s.count, 0);
+      const max = Math.max(...stats.map(s => s.count));
+      
+      stats.forEach(({version, count}) => {
+        const percentage = ((count / total) * 100).toFixed(1);
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        bar.style.setProperty('--width', `${(count / max) * 100}%`);
+        bar.innerHTML = `<span>${escapeHtml(version)}</span><span>${count} users (${percentage}%)</span>`;
+        container.appendChild(bar);
+      });
+    }
     // Particles
     function createParticles(){
       const container = document.getElementById('particles');
@@ -1837,6 +1971,7 @@
     loadDebug();
     fetchTestimonials();
     loadCustomMessage();
+    loadBotVersion();
   </script>
 </body>
 </html>
