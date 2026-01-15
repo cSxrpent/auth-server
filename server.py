@@ -1835,9 +1835,9 @@ def authv2():
     # Get client IP
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     
-    # ✅ NOUVEAU: Vérifier la version du bot
+    # ✅ FIXÉ: Vérifier la version du bot avec normalisation
     latest_version = db_helper.get_latest_bot_version()
-    is_up_to_date = bot_version >= latest_version
+    is_up_to_date = bot_version.lstrip('v') == latest_version.lstrip('v')
     
     # Log bot version
     log_event(f"authv2: '{username}' connecting with bot version {bot_version} (latest: {latest_version}, upToDate: {is_up_to_date})", level="info")
@@ -1860,7 +1860,7 @@ def authv2():
             return jsonify({
                 "message": "paused",
                 "nickname": username,
-                "upToDate": is_up_to_date  # ✅ NOUVEAU
+                "upToDate": is_up_to_date
             }), 403
 
         try:
@@ -1871,11 +1871,11 @@ def authv2():
             return jsonify({
                 "message": "unauthorized",
                 "nickname": username,
-                "upToDate": is_up_to_date  # ✅ NOUVEAU
+                "upToDate": is_up_to_date
             }), 403
 
         if expiry >= datetime.now():
-            # ✅ NOUVEAU: Update user's last bot version
+            # ✅ Update user's last bot version
             db_helper.update_user_bot_version(user_by_id["username"], bot_version)
             
             # Check if nickname changed
@@ -1901,7 +1901,7 @@ def authv2():
                 "nickname": username,
                 "custom_message": custom_msg if custom_msg else None,
                 "bot_version": bot_version,
-                "upToDate": is_up_to_date  # ✅ NOUVEAU
+                "upToDate": is_up_to_date
             }), 200
         else:
             log_event(f"authv2 expired: '{username}' expired on {user_by_id['expires']}", level="warn")
@@ -1910,7 +1910,7 @@ def authv2():
                 "message": "expired",
                 "expires": user_by_id["expires"],
                 "nickname": username,
-                "upToDate": is_up_to_date  # ✅ NOUVEAU
+                "upToDate": is_up_to_date
             }), 403
     
     # SCENARIO 2: No ID match, but nickname exists without ID (first connection)
@@ -1922,7 +1922,7 @@ def authv2():
                 return jsonify({
                     "message": "paused",
                     "nickname": username,
-                    "upToDate": is_up_to_date  # ✅ NOUVEAU
+                    "upToDate": is_up_to_date
                 }), 403
 
             try:
@@ -1933,14 +1933,14 @@ def authv2():
                 return jsonify({
                     "message": "unauthorized",
                     "nickname": username,
-                    "upToDate": is_up_to_date  # ✅ NOUVEAU
+                    "upToDate": is_up_to_date
                 }), 403
 
             if expiry >= datetime.now():
                 # First connection - bind player_id to this account
                 db_helper.update_user_player_id(username, player_id)
                 
-                # ✅ NOUVEAU: Update user's last bot version
+                # ✅ Update user's last bot version
                 db_helper.update_user_bot_version(username, bot_version)
                 
                 custom_msg = f"🎉 Welcome! This is your first connection. Your account is now linked."
@@ -1959,7 +1959,7 @@ def authv2():
                     "nickname": username,
                     "custom_message": custom_msg,
                     "bot_version": bot_version,
-                    "upToDate": is_up_to_date  # ✅ NOUVEAU
+                    "upToDate": is_up_to_date
                 }), 200
             else:
                 log_event(f"authv2 expired: '{username}' expired on {user_by_nickname['expires']}", level="warn")
@@ -1968,7 +1968,7 @@ def authv2():
                     "message": "expired",
                     "expires": user_by_nickname["expires"],
                     "nickname": username,
-                    "upToDate": is_up_to_date  # ✅ NOUVEAU
+                    "upToDate": is_up_to_date
                 }), 403
         else:
             log_event(f"authv2 fail: nickname '{username}' already linked to different ID", level="warn")
@@ -1976,7 +1976,7 @@ def authv2():
             return jsonify({
                 "message": "unauthorized",
                 "nickname": username,
-                "upToDate": is_up_to_date  # ✅ NOUVEAU
+                "upToDate": is_up_to_date
             }), 403
     
     # SCENARIO 3: Neither ID nor nickname found
@@ -1986,7 +1986,7 @@ def authv2():
         return jsonify({
             "message": "unauthorized",
             "nickname": username,
-            "upToDate": is_up_to_date  # ✅ NOUVEAU
+            "upToDate": is_up_to_date
         }), 403
 
 
