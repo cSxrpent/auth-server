@@ -601,7 +601,7 @@ def save_log(timestamp, message, level='info'):
     try:
         with get_db() as db:
             log = Log(timestamp=timestamp, message=message, level=level)
-            db.add(log)
+            #db.add(log)
     except Exception as e:
         print(f"⚠️ Error saving log: {e}")
 
