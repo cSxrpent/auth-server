@@ -489,23 +489,45 @@ def payment_cancel():
 @app.route("/download")
 def download():
     token = request.args.get("token")
+    
+    # ✅ LOG THE RAW TOKEN
+    log_event(f"Download attempt - Token: {token[:50] if token else 'MISSING'}... (len={len(token) if token else 0})", level="info")
+    
     if not token:
+        log_event("Download failed: No token in request", level="error")
         abort(403)
 
+    # ✅ TRY TO FIX COMMON TOKEN ISSUES
+    # Some browsers/proxies replace spaces with +, or URL-encode the token
+    token = token.strip()  # Remove whitespace
+    token = token.replace(' ', '+')  # Fix space->plus conversion
+    
+    # Try to decode and verify
     payload = verify_download_token(token)
+    
     if not payload:
-        abort(403)
+        # ✅ LOG EXACTLY WHAT FAILED
+        log_event(f"Download failed: Token verification failed for token: {token[:50]}...", level="error")
+        
+        # Try URL-decoding the token (in case browser double-encoded it)
+        import urllib.parse
+        decoded_token = urllib.parse.unquote(token)
+        
+        if decoded_token != token:
+            log_event(f"Trying URL-decoded token: {decoded_token[:50]}...", level="info")
+            payload = verify_download_token(decoded_token)
+        
+        if not payload:
+            abort(403)
 
-    # ✅ FIX: Add proper MIME type and error handling
-    import os
+    log_event(f"Download successful for user: {payload.get('u')}", level="info")
+
     file_path = "files/rxzbot.zip"
     
-    # Check if file exists
     if not os.path.exists(file_path):
         log_event(f"Download failed: File not found at {file_path}", level="error")
         abort(404, description="Download file not found")
     
-    # Check file permissions
     if not os.access(file_path, os.R_OK):
         log_event(f"Download failed: No read permission for {file_path}", level="error")
         abort(500, description="File permission error")
@@ -513,9 +535,9 @@ def download():
     try:
         return send_file(
             file_path,
-            mimetype='application/zip',  # ✅ Explicit MIME type
+            mimetype='application/zip',
             as_attachment=True,
-            download_name='rxzbot.zip'  # ✅ Use download_name instead of attachment_filename
+            download_name='rxzbot.zip'
         )
     except Exception as e:
         log_event(f"Download failed: {e}", level="error")
