@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shop Management - RXZBot Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+<body>
+    <div class="admin-container">
+        <h1>🛍️ Shop Data Management</h1>
+        
+        <div class="admin-section">
+            <div class="section-header">
+                <h2>Shop Sync Status</h2>
+                <button onclick="refreshShopData()" class="btn btn-primary">🔄 Refresh Now</button>
+            </div>
+            
+            <div id="shopStatus" class="info-grid">
+                <div class="info-card">
+                    <div class="info-label">Last Updated</div>
+                    <div id="lastUpdated" class="info-value">Loading...</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Total Bundles</div>
+                    <div id="totalBundles" class="info-value">0</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">New Items</div>
+                    <div id="newItems" class="info-value">0</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Skin Sets</div>
+                    <div id="skinSets" class="info-value">0</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Daily Skins</div>
+                    <div id="dailySkins" class="info-value">0</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Calendars</div>
+                    <div id="calendars" class="info-value">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="admin-section">
+            <h2>🆕 New Items (Last 7 Days)</h2>
+            <div id="newItemsList" class="items-list">
+                <p class="loading">Loading new items...</p>
+            </div>
+        </div>
+
+        <div class="admin-section">
+            <h2>📦 All Bundles</h2>
+            <div id="bundlesList" class="items-list">
+                <p class="loading">Loading bundles...</p>
+            </div>
+        </div>
+
+        <div class="admin-section">
+            <h2>🎨 Current Skin Sets</h2>
+            <div id="skinSetsList" class="items-list">
+                <p class="loading">Loading skin sets...</p>
+            </div>
+        </div>
+
+        <div class="admin-section">
+            <h2>📅 Available Calendars</h2>
+            <div id="calendarsList" class="items-list">
+                <p class="loading">Loading calendars...</p>
+            </div>
+        </div>
+
+        <div class="admin-section">
+            <h2>ℹ️ Sync Schedule</h2>
+            <div class="info-box">
+                <p><strong>Automatic Sync:</strong> Daily at 1:10 AM CET</p>
+                <p><strong>Token Source:</strong> Using existing token manager (no extra 2captcha costs)</p>
+                <p><strong>Data Sources:</strong></p>
+                <ul>
+                    <li>Bundles: <code>/purchasableItems/gemOffers</code></li>
+                    <li>Skin Sets & Daily Skins: <code>/billing/rotatingLimitedOffers/v2</code></li>
+                    <li>Calendars: <code>/calendars/purchasable</code></li>
+                </ul>
+            </div>
+        </div>
+
+        <p class="back-link"><a href="{{ url_for('admin_page') }}">← Back to Admin</a></p>
+    </div>
+
+    <script>
+        async function loadShopData() {
+            try {
+                const response = await fetch('/api/shop/data');
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                // Update status
+                document.getElementById('lastUpdated').textContent = 
+                    data.last_updated ? new Date(data.last_updated).toLocaleString() : 'Never';
+                document.getElementById('totalBundles').textContent = data.bundles?.length || 0;
+                document.getElementById('newItems').textContent = 
+                    data.bundles?.filter(b => b.isNew).length || 0;
+                document.getElementById('skinSets').textContent = data.skin_sets?.length || 0;
+                document.getElementById('dailySkins').textContent = data.daily_skins?.length || 0;
+                document.getElementById('calendars').textContent = data.calendars?.length || 0;
+
+                // Display new items
+                displayNewItems(data.bundles?.filter(b => b.isNew) || []);
+
+                // Display all bundles
+                displayBundles(data.bundles || []);
+
+                // Display skin sets
+                displaySkinSets(data.skin_sets || []);
+
+                // Display calendars
+                displayCalendars(data.calendars || []);
+
+            } catch (error) {
+                console.error('Error loading shop data:', error);
+                showError('Failed to load shop data');
+            }
+        }
+
+        function displayNewItems(items) {
+            const container = document.getElementById('newItemsList');
+            
+            if (items.length === 0) {
+                container.innerHTML = '<p class="empty">No new items in the last 7 days</p>';
+                return;
+            }
+
+            container.innerHTML = items.map(item => `
+                <div class="item-card new-item">
+                    <div class="item-badge">🆕 NEW</div>
+                    <div class="item-name">${item.name}</div>
+                    <div class="item-details">
+                        <span class="item-price">€${item.price.toFixed(2)}</span>
+                        <span class="item-gems">${item.cost} gems</span>
+                        <span class="item-date">Since ${item.newSince}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function displayBundles(bundles) {
+            const container = document.getElementById('bundlesList');
+            
+            if (bundles.length === 0) {
+                container.innerHTML = '<p class="empty">No bundles available</p>';
+                return;
+            }
+
+            container.innerHTML = bundles.map(bundle => `
+                <div class="item-card ${bundle.isNew ? 'new-item' : ''}">
+                    ${bundle.isNew ? '<div class="item-badge">🆕 NEW</div>' : ''}
+                    <div class="item-name">${bundle.name}</div>
+                    <div class="item-details">
+                        <span class="item-price">€${bundle.price.toFixed(2)}</span>
+                        <span class="item-gems">${bundle.cost} gems</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function displaySkinSets(skinSets) {
+            const container = document.getElementById('skinSetsList');
+            
+            if (skinSets.length === 0) {
+                container.innerHTML = '<p class="empty">No skin sets available</p>';
+                return;
+            }
+
+            container.innerHTML = skinSets.map(set => `
+                <div class="item-card">
+                    <div class="item-name">${set.name}</div>
+                    <div class="item-details">
+                        <span class="item-price">€${set.price.toFixed(2)}</span>
+                        <span class="item-gems">${set.cost} gems</span>
+                        <span class="item-expires">Expires: ${new Date(set.expireDate).toLocaleDateString()}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function displayCalendars(calendars) {
+            const container = document.getElementById('calendarsList');
+            
+            if (calendars.length === 0) {
+                container.innerHTML = '<p class="empty">No calendars available</p>';
+                return;
+            }
+
+            container.innerHTML = calendars.map(cal => `
+                <div class="item-card">
+                    <div class="item-name">${cal.title}</div>
+                    <div class="item-details">
+                        <span class="item-price">€${cal.price.toFixed(2)}</span>
+                        <span class="item-gems">${cal.cost} gems</span>
+                        <span class="item-days">${cal.durationInDays} days</span>
+                        ${cal.owned ? '<span class="item-owned">✅ Owned</span>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function refreshShopData() {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Refreshing...';
+
+            try {
+                const response = await fetch('/api/shop/refresh', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Shop data refreshed successfully!');
+                    loadShopData();
+                } else {
+                    alert('❌ Failed to refresh: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error refreshing shop data:', error);
+                alert('❌ Failed to refresh shop data');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        function showError(message) {
+            const sections = ['newItemsList', 'bundlesList', 'skinSetsList', 'calendarsList'];
+            sections.forEach(id => {
+                document.getElementById(id).innerHTML = `<p class="error">${message}</p>`;
+            });
+        }
+
+        // Load data on page load
+        loadShopData();
+    </script>
+
+    <style>
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .info-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .info-label {
+            color: #9aa4b2;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .info-value {
+            color: #00d4ff;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .items-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .item-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 15px;
+            position: relative;
+        }
+
+        .item-card.new-item {
+            border-color: rgba(255, 215, 0, 0.5);
+            background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.05));
+        }
+
+        .item-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #ffd700, #ffa500);
+            color: #000;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .item-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+
+        .item-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+
+        .item-price {
+            color: #00d4ff;
+            font-weight: 700;
+        }
+
+        .item-gems {
+            color: #9aa4b2;
+        }
+
+        .item-date, .item-expires, .item-days {
+            color: #7b4bff;
+        }
+
+        .item-owned {
+            color: #2ed573;
+        }
+
+        .loading, .empty, .error {
+            text-align: center;
+            padding: 40px;
+            color: #9aa4b2;
+        }
+
+        .error {
+            color: #ff4757;
+        }
+
+        .info-box {
+            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            color: #9aa4b2;
+        }
+
+        .info-box strong {
+            color: #fff;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        .info-box code {
+            background: rgba(0,212,255,0.1);
+            color: #00d4ff;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+    </style>
+</body>
+</html>

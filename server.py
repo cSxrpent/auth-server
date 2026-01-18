@@ -44,6 +44,7 @@ from db_helper import (
 )
 from gem_account_manager import gem_account_manager
 from coupon_manager import coupon_manager
+from shop_data_fetcher import shop_data_fetcher
 
 
 load_dotenv()  # load .env file if it exists (for local development)
@@ -2547,6 +2548,125 @@ def api_users_bot_versions():
         log_event(f"Error getting bot version stats: {e}", level="error")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/shop/validate-username', methods=['POST'])
+def validate_shop_username():
+    """Validate Wolvesville username exists before allowing purchase"""
+    try:
+        data = request.json
+        username = data.get('username', '').strip()
+        
+        if not username:
+            return jsonify({'valid': False, 'error': 'Username required'}), 400
+        
+        # Search player using Wolvesville API
+        player = wolvesville_api.search_player(username)
+        
+        if not player:
+            log_event(f"Shop username validation failed: '{username}' not found")
+            return jsonify({
+                'valid': False,
+                'error': f'Username "{username}" not found on Wolvesville'
+            }), 404
+        
+        log_event(f"Shop username validated: '{username}' (ID: {player.get('id')})")
+        
+        return jsonify({
+            'valid': True,
+            'player_id': player.get('id'),
+            'username': player.get('username')  # Return exact username (case-sensitive)
+        }), 200
+        
+    except Exception as e:
+        log_event(f"Username validation error: {e}", level="error")
+        return jsonify({
+            'valid': False,
+            'error': 'Failed to validate username. Please try again.'
+        }), 500
+
+
+@app.route('/api/shop/data', methods=['GET'])
+def get_shop_data():
+    """Get current shop data (bundles, skins, calendars)"""
+    try:
+        shop_data, _ = db_helper.read_storage('shop-data.json')
+        
+        if not shop_data:
+            return jsonify({
+                'error': 'Shop data not available yet. Please try again in a few minutes.'
+            }), 503
+        
+        # Filter out "new" items that are older than 7 days
+        if 'bundles' in shop_data:
+            today = datetime.now()
+            for bundle in shop_data['bundles']:
+                if bundle.get('isNew') and bundle.get('newSince'):
+                    try:
+                        new_since = datetime.strptime(bundle['newSince'], '%Y-%m-%d')
+                        if (today - new_since).days >= 7:
+                            bundle['isNew'] = False
+                    except:
+                        bundle['isNew'] = False
+        
+        return jsonify(shop_data), 200
+        
+    except Exception as e:
+        log_event(f"Error getting shop data: {e}", level="error")
+        return jsonify({'error': 'Failed to load shop data'}), 500
+
+
+@app.route('/api/shop/refresh', methods=['POST'])
+@login_required
+def refresh_shop_data():
+    """Admin endpoint to manually trigger shop data refresh"""
+    try:
+        shop_data_fetcher.sync_shop_data()
+        return jsonify({'success': True, 'message': 'Shop data refreshed successfully'}), 200
+    except Exception as e:
+        log_event(f"Manual shop refresh failed: {e}", level="error")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/shop/new-items', methods=['GET'])
+def get_new_shop_items():
+    """Get only items marked as "new" (less than 7 days old)"""
+    try:
+        shop_data, _ = db_helper.read_storage('shop-data.json')
+        
+        if not shop_data:
+            return jsonify({'bundles': [], 'skin_sets': [], 'daily_skins': []}), 200
+        
+        today = datetime.now()
+        
+        # Filter new bundles
+        new_bundles = []
+        for bundle in shop_data.get('bundles', []):
+            if bundle.get('isNew') and bundle.get('newSince'):
+                try:
+                    new_since = datetime.strptime(bundle['newSince'], '%Y-%m-%d')
+                    if (today - new_since).days < 7:
+                        new_bundles.append(bundle)
+                except:
+                    pass
+        
+        return jsonify({
+            'bundles': new_bundles,
+            'skin_sets': shop_data.get('skin_sets', []),  # Always show current skin sets
+            'daily_skins': shop_data.get('daily_skins', [])  # Always show current daily skins
+        }), 200
+        
+    except Exception as e:
+        log_event(f"Error getting new items: {e}", level="error")
+        return jsonify({'bundles': [], 'skin_sets': [], 'daily_skins': []}), 500
+
+
+# ==================== ADMIN SHOP MANAGEMENT PAGE ====================
+
+@app.route('/admin/shop')
+@login_required
+def admin_shop():
+    """Admin page for shop data management"""
+    return render_template('admin_shop.html')
+
 # -----------------------
 # Run
 # -----------------------
@@ -2580,6 +2700,7 @@ def get_wolvesville_player_profile(player_id):
     """Get player profile using managed tokens"""
     return wolvesville_api.get_player_profile(player_id)
 
+shop_data_fetcher.start_scheduler()
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))

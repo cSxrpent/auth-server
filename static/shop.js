@@ -542,6 +542,7 @@ async function completePurchase() {
     const usernameConfirm = document.getElementById('usernameConfirm').value.trim();
     const message = document.getElementById('message').value.trim();
 
+    // Basic validation
     if (!username || !usernameConfirm) {
         showNotification('❌ Please enter your username in both fields', 'error');
         return;
@@ -552,6 +553,48 @@ async function completePurchase() {
         return;
     }
 
+    // ✅ NEW: Validate username exists on Wolvesville BEFORE payment
+    const validateBtn = document.querySelector('.modal-button.primary');
+    const originalText = validateBtn.textContent;
+    
+    validateBtn.disabled = true;
+    validateBtn.textContent = '🔍 Validating username...';
+    
+    try {
+        const validateResponse = await fetch('/api/shop/validate-username', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username })
+        });
+        
+        const validateData = await validateResponse.json();
+        
+        if (!validateData.valid) {
+            validateBtn.disabled = false;
+            validateBtn.textContent = originalText;
+            showNotification(`❌ Username "${username}" not found on Wolvesville!`, 'error');
+            return;
+        }
+        
+        // Use the exact username from Wolvesville (case-sensitive)
+        const exactUsername = validateData.username || username;
+        
+        showNotification('✅ Username verified!', 'success');
+        
+        // Short delay for UX
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+    } catch (error) {
+        validateBtn.disabled = false;
+        validateBtn.textContent = originalText;
+        showNotification('❌ Failed to validate username. Please try again.', 'error');
+        console.error('Validation error:', error);
+        return;
+    }
+
+    // Continue with payment
+    validateBtn.textContent = '💳 Processing payment...';
+    
     const totals = calculateTotal();
 
     try {
@@ -580,6 +623,8 @@ async function completePurchase() {
         const data = await response.json();
 
         if (data.error) {
+            validateBtn.disabled = false;
+            validateBtn.textContent = originalText;
             showNotification('❌ ' + data.error, 'error');
             return;
         }
@@ -588,9 +633,13 @@ async function completePurchase() {
             // Redirect to PayPal
             window.location.href = data.approval_url;
         } else {
+            validateBtn.disabled = false;
+            validateBtn.textContent = originalText;
             showNotification('❌ Failed to initiate payment', 'error');
         }
     } catch (error) {
+        validateBtn.disabled = false;
+        validateBtn.textContent = originalText;
         console.error('Error:', error);
         showNotification('❌ An error occurred. Please try again.', 'error');
     }
