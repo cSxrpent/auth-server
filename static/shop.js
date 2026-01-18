@@ -97,13 +97,15 @@ function getAllProducts() {
             // Extract base name from bundle type (e.g., BUNDLE_MONSTER -> monster)
             const baseName = bundle.type.replace('BUNDLE_', '').toLowerCase();
             
-            // Try three different URL formats:
+            // Try FOUR different URL formats:
             // 1. bundle-name.jpg (e.g., bundle-monster.jpg)
             // 2. nameBundle.jpg (e.g., musicBundle.jpg)
             // 3. bundle_name.jpg with underscores (e.g., bundle_once_upon_a_time.jpg)
+            // 4. name.jpg (e.g., poolpartyrose.jpg)
             const bundleNameDash = `bundle-${baseName.replace(/_/g, '-')}`;
             const bundleNameCamel = baseName.replace(/_/g, '') + 'bundle';
             const bundleNameUnderscore = `bundle_${baseName}`;
+            const bundleNamePlain = baseName.replace(/_/g, '');
             
             products.push({
                 ...bundle,
@@ -111,7 +113,8 @@ function getAllProducts() {
                 imageUrls: [
                     `https://cdn2.wolvesville.com/promos/${bundleNameDash}.jpg`,
                     `https://cdn2.wolvesville.com/promos/${bundleNameCamel}.jpg`,
-                    `https://cdn2.wolvesville.com/promos/${bundleNameUnderscore}.jpg`
+                    `https://cdn2.wolvesville.com/promos/${bundleNameUnderscore}.jpg`,
+                    `https://cdn2.wolvesville.com/promos/${bundleNamePlain}.jpg`
                 ]
             });
         });
@@ -237,20 +240,20 @@ function renderProducts(category = 'all') {
         }
         
         return `
-            <div class="product-card" style="position:relative;display:flex;flex-direction:column;min-height:280px">
+            <div class="product-card" style="position:relative;display:flex;flex-direction:column;min-height:280px;padding:20px">
                 ${badgeHTML}
                 ${imageHTML}
-                <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between">
+                <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;text-align:center">
                     <div>
-                        <div class="product-name" style="margin-bottom:8px">${product.name || product.title}</div>
-                        ${product.goldReward ? `<div style="color:var(--gold);font-size:0.85rem;margin-bottom:4px">+${product.goldReward} Gold</div>` : ''}
-                        ${product.battlePassCoinCount ? `<div style="color:#7b4bff;font-size:0.85rem;margin-bottom:4px">+${product.battlePassCoinCount} BP Coins</div>` : ''}
-                        ${product.lootBoxCount ? `<div style="color:var(--accent);font-size:0.85rem;margin-bottom:4px">${product.lootBoxCount}x Loot Boxes</div>` : ''}
-                        ${product.roleCardCount ? `<div style="color:#ff6b9d;font-size:0.85rem;margin-bottom:4px">${product.roleCardCount}x Role Cards</div>` : ''}
+                        <div class="product-name" style="margin-bottom:12px;font-size:1.1rem;font-weight:700">${product.name || product.title}</div>
+                        ${product.goldReward ? `<div style="color:var(--gold);font-size:0.9rem;margin-bottom:6px;font-weight:600">+${product.goldReward.toLocaleString()} Gold</div>` : ''}
+                        ${product.battlePassCoinCount ? `<div style="color:#7b4bff;font-size:0.9rem;margin-bottom:6px;font-weight:600">+${product.battlePassCoinCount.toLocaleString()} BP Coins</div>` : ''}
+                        ${product.lootBoxCount ? `<div style="color:var(--accent);font-size:0.9rem;margin-bottom:6px;font-weight:600">${product.lootBoxCount}x Loot Boxes</div>` : ''}
+                        ${product.roleCardCount ? `<div style="color:#ff6b9d;font-size:0.9rem;margin-bottom:6px;font-weight:600">${product.roleCardCount}x Role Cards</div>` : ''}
                     </div>
-                    <div style="margin-top:auto">
-                        <div class="product-price" style="margin-bottom:12px">€${product.price.toFixed(2)}</div>
-                        <button class="buy-button" onclick='addToCart(${JSON.stringify(product).replace(/'/g, "&apos;")})'>
+                    <div style="margin-top:auto;width:100%">
+                        <div class="product-price" style="margin-bottom:16px;font-size:1.5rem;font-weight:700">€${product.price.toFixed(2)}</div>
+                        <button class="buy-button" style="width:100%;padding:14px;font-size:1rem;font-weight:600;border-radius:12px" onclick='addToCart(${JSON.stringify(product).replace(/'/g, "&apos;")})'>
                             🛒 Add to Cart
                         </button>
                     </div>
