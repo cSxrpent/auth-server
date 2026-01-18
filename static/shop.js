@@ -85,11 +85,34 @@ function getAllProducts() {
     // Add bundles from database
     if (shopData.bundles) {
         shopData.bundles.forEach(bundle => {
-            const imageName = bundle.image ? bundle.image.replace('bundle_', '') : null;
+            if (!bundle.image) {
+                products.push({
+                    ...bundle,
+                    category: 'bundles',
+                    imageUrl: null
+                });
+                return;
+            }
+            
+            // Extract base name from bundle type (e.g., BUNDLE_MONSTER -> monster)
+            const baseName = bundle.type.replace('BUNDLE_', '').toLowerCase();
+            
+            // Try three different URL formats:
+            // 1. bundle-name.jpg (e.g., bundle-monster.jpg)
+            // 2. nameBundle.jpg (e.g., musicBundle.jpg)
+            // 3. bundle_name.jpg with underscores (e.g., bundle_once_upon_a_time.jpg)
+            const bundleNameDash = `bundle-${baseName.replace(/_/g, '-')}`;
+            const bundleNameCamel = baseName.replace(/_/g, '') + 'bundle';
+            const bundleNameUnderscore = `bundle_${baseName}`;
+            
             products.push({
                 ...bundle,
                 category: 'bundles',
-                imageUrl: imageName ? `https://cdn2.wolvesville.com/promos/bundle-${imageName}@2x.jpg` : null
+                imageUrls: [
+                    `https://cdn2.wolvesville.com/promos/${bundleNameDash}.jpg`,
+                    `https://cdn2.wolvesville.com/promos/${bundleNameCamel}.jpg`,
+                    `https://cdn2.wolvesville.com/promos/${bundleNameUnderscore}.jpg`
+                ]
             });
         });
     }
@@ -104,7 +127,7 @@ function getAllProducts() {
                 ...skinSet,
                 category: 'skinsets',
                 name: skinSet.name,
-                imageUrl: `https://www.wolvesville.com/static/media/${skinSetName}.51c6be4955597b23b49f.png`
+                imageUrl: `https://www.wolvesville.com/static/media/${skinSetName}.png`
             });
         });
     }
@@ -190,14 +213,28 @@ function renderProducts(category = 'all') {
             badgeHTML += '<div style="position:absolute;top:8px;left:8px;background:linear-gradient(135deg,#ff6b6b,#ee5a6f);color:#fff;padding:4px 10px;border-radius:16px;font-weight:700;font-size:0.7rem;box-shadow:0 3px 12px rgba(255,107,107,0.4);z-index:2">🆕 NEW</div>';
         }
         
-        // Image display with proper sizing
-        const imageHTML = product.imageUrl ? 
-            `<div style="width:100%;height:140px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;overflow:hidden;border-radius:8px;">
+        // Image display with proper sizing and fallback handling
+        let imageHTML;
+        
+        if (product.imageUrls && product.imageUrls.length > 0) {
+            // Multiple URL fallbacks (for bundles)
+            const fallbackUrls = product.imageUrls.slice(1).map(url => `'${url}'`).join(',');
+            imageHTML = `<div style="width:100%;height:140px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;overflow:hidden;border-radius:8px;">
+                <img src="${product.imageUrls[0]}" alt="${product.name}" 
+                     style="max-width:100%;max-height:100%;object-fit:contain;" 
+                     onerror="tryNextImage(this, [${fallbackUrls}])">
+            </div>`;
+        } else if (product.imageUrl) {
+            // Single URL (for other items)
+            imageHTML = `<div style="width:100%;height:140px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;overflow:hidden;border-radius:8px;">
                 <img src="${product.imageUrl}" alt="${product.name}" 
                      style="max-width:100%;max-height:100%;object-fit:contain;" 
                      onerror="this.parentElement.style.display='none'">
-            </div>` : 
-            `<div class="category-emoji" style="font-size:3rem;margin:20px 0">${CATEGORY_EMOJIS[product.category] || '📦'}</div>`;
+            </div>`;
+        } else {
+            // No image - show emoji
+            imageHTML = `<div class="category-emoji" style="font-size:3rem;margin:20px 0">${CATEGORY_EMOJIS[product.category] || '📦'}</div>`;
+        }
         
         return `
             <div class="product-card" style="position:relative;display:flex;flex-direction:column;min-height:280px">
@@ -221,6 +258,17 @@ function renderProducts(category = 'all') {
             </div>
         `;
     }).join('');
+}
+
+function tryNextImage(img, fallbackUrls) {
+    if (fallbackUrls.length > 0) {
+        const nextUrl = fallbackUrls.shift();
+        img.onerror = () => tryNextImage(img, fallbackUrls);
+        img.src = nextUrl;
+    } else {
+        // All URLs failed - hide image container
+        img.parentElement.style.display = 'none';
+    }
 }
 
 function addToCart(product) {
