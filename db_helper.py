@@ -1191,7 +1191,7 @@ def save_all_shop_data(bundles, skin_sets, daily_skins, calendars):
                 db.add(ShopBundle(
                     type=bundle['type'],
                     cost=bundle['cost'],
-                    price=str(bundle['price']),
+                    price=float(bundle['price']),  # ← CHANGED to float
                     name=bundle['name'],
                     image=bundle.get('image'),
                     is_new=bundle.get('isNew', False),
@@ -1205,7 +1205,7 @@ def save_all_shop_data(bundles, skin_sets, daily_skins, calendars):
                 db.add(ShopSkinSet(
                     type=skin_set['type'],
                     cost=skin_set['cost'],
-                    price=str(skin_set['price']),
+                    price=float(skin_set['price']),  # ← CHANGED to float
                     name=skin_set['name'],
                     expire_date=skin_set.get('expireDate'),
                     item_sets=skin_set.get('itemSets', []),
@@ -1218,7 +1218,7 @@ def save_all_shop_data(bundles, skin_sets, daily_skins, calendars):
                 db.add(ShopDailySkin(
                     type=skin['type'],
                     cost=skin['cost'],
-                    price=str(skin['price']),
+                    price=float(skin['price']),  # ← CHANGED to float
                     name=skin['name'],
                     image_name=skin.get('imageName'),
                     image_color=skin.get('imageColor'),
@@ -1234,7 +1234,7 @@ def save_all_shop_data(bundles, skin_sets, daily_skins, calendars):
                     calendar_id=calendar['id'],
                     title=calendar['title'],
                     cost=calendar['cost'],
-                    price=str(calendar['price']),
+                    price=float(calendar['price']),  # ← CHANGED to float
                     description=calendar.get('description'),
                     image_name=calendar.get('imageName'),
                     icon_name=calendar.get('iconName'),

@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, String, Integer, Boolean, DateTime, JSON, Text
+from sqlalchemy import create_engine, Column, String, Integer, Boolean, DateTime, JSON, Text, Numeric
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -119,11 +119,11 @@ class ShopBundle(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     type = Column(String(100), unique=True, nullable=False, index=True)
     cost = Column(Integer, nullable=False)
-    price = Column(String(10), nullable=False)  # Store as string to preserve decimal
+    price = Column(Numeric(10, 2), nullable=False)
     name = Column(String(255), nullable=False)
     image = Column(String(255))
     is_new = Column(Boolean, default=False)
-    new_since = Column(String(10))  # YYYY-MM-DD format
+    new_since = Column(String(10))
     created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
     updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
@@ -133,7 +133,7 @@ class ShopSkinSet(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     type = Column(String(100), nullable=False)
     cost = Column(Integer, nullable=False)
-    price = Column(String(10), nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
     name = Column(String(255), nullable=False)
     expire_date = Column(String(50))
     item_sets = Column(JSON)
@@ -146,7 +146,7 @@ class ShopDailySkin(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     type = Column(String(100), nullable=False)
     cost = Column(Integer, nullable=False)
-    price = Column(String(10), nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
     name = Column(String(255), nullable=False)
     image_name = Column(String(255))
     image_color = Column(String(50))
@@ -162,7 +162,7 @@ class ShopCalendar(Base):
     calendar_id = Column(String(100), unique=True, nullable=False, index=True)
     title = Column(String(255), nullable=False)
     cost = Column(Integer, nullable=False)
-    price = Column(String(10), nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
     description = Column(Text)
     image_name = Column(String(255))
     icon_name = Column(String(255))
@@ -176,7 +176,7 @@ class ShopMetadata(Base):
     
     id = Column(Integer, primary_key=True, default=1)
     last_updated = Column(String(30), nullable=False)
-    
+
 def init_database():
     """Initialize database with all tables"""
     DATABASE_URL = os.getenv("DATABASE_URL")
