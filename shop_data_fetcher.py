@@ -164,11 +164,10 @@ class ShopDataFetcher:
             return []
     
     def detect_new_items(self, current_bundles):
-        """Compare with previous day and mark new items"""
+        """Compare with previous day and mark new items - OPTIMIZED"""
         try:
-            # Load previous bundles
-            previous_data, _ = db_helper.read_storage('shop-bundles.json')
-            previous_bundles = previous_data.get('bundles', []) if previous_data else []
+            # Load previous bundles using the new optimized function
+            previous_bundles = db_helper.get_shop_bundles_only()
             previous_types = {b['type'] for b in previous_bundles}
             
             today = datetime.now().strftime('%Y-%m-%d')
@@ -205,28 +204,32 @@ class ShopDataFetcher:
             return current_bundles
     
     def sync_shop_data(self):
-        """Main sync function - called daily at 1:10 AM CET"""
+        """Main sync function - OPTIMIZED to use single transaction"""
         print("\n" + "="*60)
         print(f"🔄 Starting shop data sync at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*60)
         
         try:
-            # Fetch all data
+            # Fetch all data from API
+            print("📡 Fetching data from Wolvesville API...")
             bundles = self.fetch_bundles()
             skin_sets, daily_skins = self.fetch_rotating_offers()
             calendars = self.fetch_calendars()
             
             # Detect new bundles
+            print("🔍 Detecting new items...")
             bundles = self.detect_new_items(bundles)
             
-            # Save to database using new functions
-            success_bundles = db_helper.save_shop_bundles(bundles)
-            success_skin_sets = db_helper.save_shop_skin_sets(skin_sets)
-            success_daily_skins = db_helper.save_shop_daily_skins(daily_skins)
-            success_calendars = db_helper.save_shop_calendars(calendars)
-            success_metadata = db_helper.update_shop_metadata()
+            # ✅ SINGLE DATABASE SAVE - All in one transaction!
+            print("💾 Saving to database (single transaction)...")
+            success = db_helper.save_all_shop_data(
+                bundles=bundles,
+                skin_sets=skin_sets,
+                daily_skins=daily_skins,
+                calendars=calendars
+            )
             
-            if all([success_bundles, success_skin_sets, success_daily_skins, success_calendars, success_metadata]):
+            if success:
                 print("="*60)
                 print("✅ Shop data sync completed successfully!")
                 print(f"   - Bundles: {len(bundles)} ({len([b for b in bundles if b.get('isNew')])} new)")
@@ -235,12 +238,7 @@ class ShopDataFetcher:
                 print(f"   - Calendars: {len(calendars)}")
                 print("="*60 + "\n")
             else:
-                print("❌ Failed to save some shop data to database")
-                print(f"   Bundles: {'✅' if success_bundles else '❌'}")
-                print(f"   Skin sets: {'✅' if success_skin_sets else '❌'}")
-                print(f"   Daily skins: {'✅' if success_daily_skins else '❌'}")
-                print(f"   Calendars: {'✅' if success_calendars else '❌'}")
-                print(f"   Metadata: {'✅' if success_metadata else '❌'}")
+                print("❌ Failed to save shop data to database")
                 
         except Exception as e:
             print(f"❌ Shop sync failed: {e}")

@@ -1165,6 +1165,205 @@ def get_shop_data():
         print(f"⚠️ Error getting shop data: {e}")
         return None
     
+
+def save_all_shop_data(bundles, skin_sets, daily_skins, calendars):
+    """
+    Save ALL shop data in a SINGLE transaction to avoid connection pool issues.
+    This is much more efficient and reliable than separate saves.
+    """
+    try:
+        with get_db() as db:
+            from init_database import ShopBundle, ShopSkinSet, ShopDailySkin, ShopCalendar, ShopMetadata
+            from datetime import datetime
+            
+            timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            
+            print("🗑️  Clearing old shop data...")
+            # Clear all existing data first
+            db.query(ShopBundle).delete()
+            db.query(ShopSkinSet).delete()
+            db.query(ShopDailySkin).delete()
+            db.query(ShopCalendar).delete()
+            
+            print(f"💾 Saving {len(bundles)} bundles...")
+            # Batch insert bundles
+            for bundle in bundles:
+                db.add(ShopBundle(
+                    type=bundle['type'],
+                    cost=bundle['cost'],
+                    price=str(bundle['price']),
+                    name=bundle['name'],
+                    image=bundle.get('image'),
+                    is_new=bundle.get('isNew', False),
+                    new_since=bundle.get('newSince'),
+                    updated_at=timestamp
+                ))
+            
+            print(f"💾 Saving {len(skin_sets)} skin sets...")
+            # Batch insert skin sets
+            for skin_set in skin_sets:
+                db.add(ShopSkinSet(
+                    type=skin_set['type'],
+                    cost=skin_set['cost'],
+                    price=str(skin_set['price']),
+                    name=skin_set['name'],
+                    expire_date=skin_set.get('expireDate'),
+                    item_sets=skin_set.get('itemSets', []),
+                    updated_at=timestamp
+                ))
+            
+            print(f"💾 Saving {len(daily_skins)} daily skins...")
+            # Batch insert daily skins
+            for skin in daily_skins:
+                db.add(ShopDailySkin(
+                    type=skin['type'],
+                    cost=skin['cost'],
+                    price=str(skin['price']),
+                    name=skin['name'],
+                    image_name=skin.get('imageName'),
+                    image_color=skin.get('imageColor'),
+                    expire_date=skin.get('expireDate'),
+                    avatar_item_ids=skin.get('avatarItemIds', []),
+                    updated_at=timestamp
+                ))
+            
+            print(f"💾 Saving {len(calendars)} calendars...")
+            # Batch insert calendars
+            for calendar in calendars:
+                db.add(ShopCalendar(
+                    calendar_id=calendar['id'],
+                    title=calendar['title'],
+                    cost=calendar['cost'],
+                    price=str(calendar['price']),
+                    description=calendar.get('description'),
+                    image_name=calendar.get('imageName'),
+                    icon_name=calendar.get('iconName'),
+                    duration_in_days=calendar.get('durationInDays'),
+                    owned=calendar.get('owned', False),
+                    updated_at=timestamp
+                ))
+            
+            # Update metadata
+            print("📝 Updating metadata...")
+            metadata = db.query(ShopMetadata).filter_by(id=1).first()
+            if metadata:
+                metadata.last_updated = timestamp
+            else:
+                db.add(ShopMetadata(id=1, last_updated=timestamp))
+            
+            # Flush and commit happens automatically when exiting context
+            print("✅ All shop data saved successfully in single transaction!")
+            return True
+            
+    except Exception as e:
+        print(f"❌ Error saving shop data: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def get_shop_data():
+    """
+    Get all shop data from database in a SINGLE query session.
+    More efficient than multiple separate queries.
+    """
+    try:
+        with get_db() as db:
+            from init_database import ShopBundle, ShopSkinSet, ShopDailySkin, ShopCalendar, ShopMetadata
+            
+            # Single session for all queries
+            bundles = db.query(ShopBundle).all()
+            skin_sets = db.query(ShopSkinSet).all()
+            daily_skins = db.query(ShopDailySkin).all()
+            calendars = db.query(ShopCalendar).all()
+            metadata = db.query(ShopMetadata).filter_by(id=1).first()
+            
+            return {
+                'bundles': [
+                    {
+                        'type': b.type,
+                        'cost': b.cost,
+                        'price': float(b.price),
+                        'name': b.name,
+                        'image': b.image,
+                        'isNew': b.is_new,
+                        'newSince': b.new_since
+                    }
+                    for b in bundles
+                ],
+                'skin_sets': [
+                    {
+                        'type': s.type,
+                        'cost': s.cost,
+                        'price': float(s.price),
+                        'name': s.name,
+                        'expireDate': s.expire_date,
+                        'itemSets': s.item_sets or []
+                    }
+                    for s in skin_sets
+                ],
+                'daily_skins': [
+                    {
+                        'type': d.type,
+                        'cost': d.cost,
+                        'price': float(d.price),
+                        'name': d.name,
+                        'imageName': d.image_name,
+                        'imageColor': d.image_color,
+                        'expireDate': d.expire_date,
+                        'avatarItemIds': d.avatar_item_ids or []
+                    }
+                    for d in daily_skins
+                ],
+                'calendars': [
+                    {
+                        'id': c.calendar_id,
+                        'title': c.title,
+                        'cost': c.cost,
+                        'price': float(c.price),
+                        'description': c.description,
+                        'imageName': c.image_name,
+                        'iconName': c.icon_name,
+                        'durationInDays': c.duration_in_days,
+                        'owned': c.owned
+                    }
+                    for c in calendars
+                ],
+                'last_updated': metadata.last_updated if metadata else None
+            }
+    except Exception as e:
+        print(f"⚠️ Error getting shop data: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def get_shop_bundles_only():
+    """
+    Get only bundles for new item detection.
+    Lightweight query for comparison purposes.
+    """
+    try:
+        with get_db() as db:
+            from init_database import ShopBundle
+            
+            bundles = db.query(ShopBundle).all()
+            return [
+                {
+                    'type': b.type,
+                    'cost': b.cost,
+                    'price': float(b.price),
+                    'name': b.name,
+                    'image': b.image,
+                    'isNew': b.is_new,
+                    'newSince': b.new_since
+                }
+                for b in bundles
+            ]
+    except Exception as e:
+        print(f"⚠️ Error getting shop bundles: {e}")
+        return []
+    
 # ==================== EXPORTS ====================
 
 __all__ = [
@@ -1210,7 +1409,10 @@ __all__ = [
     'deduct_account_gems',
     'recharge_account_gems',
     'get_pool_stats',
-    'get_latest_bot_version',  # ✅ NOUVEAU
-    'set_latest_bot_version',  # ✅ NOUVEAU
-    'update_user_bot_version'  # ✅ NOUVEAU
+    'get_latest_bot_version',
+    'set_latest_bot_version',
+    'update_user_bot_version',
+    'save_all_shop_data',
+    'get_shop_data',
+    'get_shop_bundles_only'
 ]
