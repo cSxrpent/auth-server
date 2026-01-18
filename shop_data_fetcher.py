@@ -129,7 +129,7 @@ class ShopDataFetcher:
             return [], []
     
     def fetch_calendars(self):
-        """Fetch all available calendars"""
+        """Fetch all available calendars with icon names"""
         try:
             headers = self.get_headers()
             response = requests.get(
@@ -149,9 +149,8 @@ class ShopDataFetcher:
                     'title': cal.get('title'),
                     'cost': 600,  # CALENDAR_LEGACY cost from gemOffers
                     'price': 3.99,
-                    'description': cal.get('description'),
                     'imageName': cal.get('imageBaseName'),
-                    'iconName': cal.get('iconImageName'),
+                    'iconName': cal.get('iconImageName'),  # Use icon for display
                     'durationInDays': cal.get('durationInDays'),
                     'owned': cal.get('owned', False)
                 })

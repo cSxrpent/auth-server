@@ -1151,7 +1151,6 @@ def get_shop_data():
                         'title': c.title,
                         'cost': c.cost,
                         'price': float(c.price),
-                        'description': c.description,
                         'imageName': c.image_name,
                         'iconName': c.icon_name,
                         'durationInDays': c.duration_in_days,

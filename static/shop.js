@@ -19,8 +19,36 @@ const CATEGORY_EMOJIS = {
     lootbox: '🎁',
     rolecards: '🎴',
     calendar: '📅',
-    bundles: '📦'
+    bundles: '📦',
+    dailyskins: '🎨',
+    skinsets: '👕'
 };
+
+// Permanent base shop items (always available)
+const BASE_SHOP_ITEMS = [
+    { type: 'GOLDV2_1', cost: 450, price: 2.99, name: 'Gold Pack S', category: 'coins', goldReward: 600 },
+    { type: 'GOLDV2_2', cost: 3400, price: 19.99, name: 'Gold Pack M', category: 'coins', goldReward: 5000 },
+    { type: 'GOLDV2_3', cost: 9000, price: 49.99, name: 'Gold Pack L', category: 'coins', goldReward: 15000 },
+    { type: 'BATTLE_PASS_COINS_1', cost: 160, price: 0.99, name: 'BP Coins S', category: 'bpcoins', battlePassCoinCount: 340 },
+    { type: 'BATTLE_PASS_COINS_2', cost: 300, price: 1.99, name: 'BP Coins M', category: 'bpcoins', battlePassCoinCount: 720 },
+    { type: 'BATTLE_PASS_COINS_3', cost: 590, price: 3.99, name: 'BP Coins L', category: 'bpcoins', battlePassCoinCount: 1480 },
+    { type: 'EMOJI_1', cost: 520, price: 3.49, name: 'Emoji Pack 1', category: 'emote' },
+    { type: 'EMOJI_2', cost: 520, price: 3.49, name: 'Emoji Pack 2', category: 'emote' },
+    { type: 'EMOJI_3', cost: 520, price: 3.49, name: 'Emoji Pack 3', category: 'emote' },
+    { type: 'BATTLE_PASS', cost: 620, price: 3.99, name: 'Battle Pass', category: 'premium' },
+    { type: 'BATTLE_PASS_BUNDLE', cost: 1280, price: 7.99, name: 'Battle Pass Bundle', category: 'premium', isBestValue: true },
+    { type: 'LOOT_BOX_1', cost: 320, price: 1.99, name: 'Loot Box x3', category: 'lootbox', lootBoxCount: 3 },
+    { type: 'LOOT_BOX_2', cost: 2600, price: 15.99, name: 'Loot Box x30', category: 'lootbox', lootBoxCount: 30 },
+    { type: 'LOOT_BOX_3', cost: 7400, price: 44.99, name: 'Loot Box x100', category: 'lootbox', lootBoxCount: 100, isBestValue: true },
+    { type: 'CUSTOM_GAMES', cost: 680, price: 4.49, name: 'Custom Games', category: 'premium' },
+    { type: 'CUSTOM_GAMES_PREMIUM', cost: 3100, price: 19.99, name: 'Custom Games Premium', category: 'premium' },
+    { type: 'AUTO_DOUBLE_XP', cost: 3100, price: 19.99, name: 'Auto Double XP', category: 'premium' },
+    { type: 'TALISMANS_PREMIUM', cost: 3100, price: 19.99, name: 'Talismans Premium', category: 'premium' },
+    { type: 'ROLE_CARDS_1', cost: 85, price: 0.49, name: 'Role Card x1', category: 'rolecards', roleCardCount: 1 },
+    { type: 'ROLE_CARDS_2', cost: 750, price: 4.49, name: 'Role Cards x10', category: 'rolecards', roleCardCount: 10 },
+    { type: 'ROLE_CARDS_MONTHLY_BUNDLE', cost: 1250, price: 7.99, name: 'Role Cards Monthly', category: 'rolecards', minLoyaltyTokenCount: 5, isBestValue: true }
+];
+
 
 let currentCategory = 'all';
 let selectedProduct = null;
@@ -50,17 +78,18 @@ async function fetchShopData() {
 }
 
 function getAllProducts() {
-    if (!shopData) return [];
+    if (!shopData) return BASE_SHOP_ITEMS; // Return base items if no data yet
     
-    const products = [];
+    const products = [...BASE_SHOP_ITEMS]; // Start with base items
     
     // Add bundles from database
     if (shopData.bundles) {
         shopData.bundles.forEach(bundle => {
+            const imageName = bundle.image ? bundle.image.replace('bundle_', '') : null;
             products.push({
                 ...bundle,
                 category: 'bundles',
-                imageUrl: bundle.image ? `https://cdn2.wolvesville.com/promos/${bundle.image}@2x.jpg` : null
+                imageUrl: imageName ? `https://cdn2.wolvesville.com/promos/bundle-${imageName}@2x.jpg` : null
             });
         });
     }
@@ -68,11 +97,14 @@ function getAllProducts() {
     // Add skin sets
     if (shopData.skin_sets) {
         shopData.skin_sets.forEach(skinSet => {
+            // Extract the skin set name from type (e.g., GUDNITE_OUTFITS -> gudnite_outfits_promotion)
+            const skinSetName = skinSet.type.toLowerCase().replace('_outfits', '_outfits_promotion');
+            
             products.push({
                 ...skinSet,
-                category: 'bundles',
+                category: 'skinsets',
                 name: skinSet.name,
-                imageUrl: null
+                imageUrl: `https://www.wolvesville.com/static/media/${skinSetName}.51c6be4955597b23b49f.png`
             });
         });
     }
@@ -82,14 +114,14 @@ function getAllProducts() {
         shopData.daily_skins.forEach(skin => {
             products.push({
                 ...skin,
-                category: 'bundles',
+                category: 'dailyskins',
                 name: skin.name,
-                imageUrl: skin.imageName ? `https://cdn2.wolvesville.com/avatarItems/${skin.imageName}.png` : null
+                imageUrl: skin.imageName ? `https://cdn2.wolvesville.com/promos/${skin.imageName}@2x.jpg` : null
             });
         });
     }
     
-    // Add calendars
+    // Add calendars with ICON images
     if (shopData.calendars) {
         shopData.calendars.forEach(cal => {
             products.push({
@@ -99,8 +131,7 @@ function getAllProducts() {
                 price: cal.price,
                 cost: cal.cost,
                 category: 'calendar',
-                description: cal.description,
-                imageUrl: cal.imageName ? `https://cdn2.wolvesville.com/calendars/${cal.imageName}.png` : null
+                imageUrl: cal.iconName ? `https://cdn2.wolvesville.com/calendars/${cal.iconName}@2x.png` : null
             });
         });
     }
@@ -151,37 +182,64 @@ function renderProducts(category = 'all') {
         // Best value badge
         let badgeHTML = '';
         if (product.isBestValue) {
-            badgeHTML = '<div style="position:absolute;top:10px;right:10px;background:linear-gradient(135deg,var(--gold),#ffa500);color:#000;padding:6px 12px;border-radius:20px;font-weight:700;font-size:0.75rem;box-shadow:0 4px 15px rgba(255,215,0,0.4)">🔥 BEST VALUE</div>';
+            badgeHTML = '<div style="position:absolute;top:8px;right:8px;background:linear-gradient(135deg,var(--gold),#ffa500);color:#000;padding:4px 10px;border-radius:16px;font-weight:700;font-size:0.7rem;box-shadow:0 3px 12px rgba(255,215,0,0.4);z-index:2">🔥 BEST</div>';
         }
         
         // New badge
         if (product.isNew) {
-            badgeHTML += '<div style="position:absolute;top:10px;left:10px;background:linear-gradient(135deg,#ff6b6b,#ee5a6f);color:#fff;padding:6px 12px;border-radius:20px;font-weight:700;font-size:0.75rem;box-shadow:0 4px 15px rgba(255,107,107,0.4)">🆕 NEW</div>';
+            badgeHTML += '<div style="position:absolute;top:8px;left:8px;background:linear-gradient(135deg,#ff6b6b,#ee5a6f);color:#fff;padding:4px 10px;border-radius:16px;font-weight:700;font-size:0.7rem;box-shadow:0 3px 12px rgba(255,107,107,0.4);z-index:2">🆕 NEW</div>';
         }
         
+        // Image display with proper sizing
+        const imageHTML = product.imageUrl ? 
+            `<div style="width:100%;height:140px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;overflow:hidden;border-radius:8px;">
+                <img src="${product.imageUrl}" alt="${product.name}" 
+                     style="max-width:100%;max-height:100%;object-fit:contain;" 
+                     onerror="this.parentElement.style.display='none'">
+            </div>` : 
+            `<div class="category-emoji" style="font-size:3rem;margin:20px 0">${CATEGORY_EMOJIS[product.category] || '📦'}</div>`;
+        
         return `
-            <div class="product-card" style="position:relative">
+            <div class="product-card" style="position:relative;display:flex;flex-direction:column;min-height:280px">
                 ${badgeHTML}
-                <div class="category-emoji">${CATEGORY_EMOJIS[product.category] || '📦'}</div>
-                ${product.imageUrl ? `<img class="product-image" src="${product.imageUrl}" alt="${product.name}" onerror="this.style.display='none'">` : ''}
-                <div class="product-name">${product.name || product.title}</div>
-                ${product.description ? `<div style="color:var(--muted);font-size:0.9rem;margin-bottom:10px;text-align:center">${product.description}</div>` : ''}
-                <div class="product-price">€${product.price.toFixed(2)}</div>
-                <button class="buy-button" onclick='addToCart(${JSON.stringify(product).replace(/'/g, "&apos;")})'>
-                    🛒 Add to Cart
-                </button>
+                ${imageHTML}
+                <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between">
+                    <div>
+                        <div class="product-name" style="margin-bottom:8px">${product.name || product.title}</div>
+                        ${product.goldReward ? `<div style="color:var(--gold);font-size:0.85rem;margin-bottom:4px">+${product.goldReward} Gold</div>` : ''}
+                        ${product.battlePassCoinCount ? `<div style="color:#7b4bff;font-size:0.85rem;margin-bottom:4px">+${product.battlePassCoinCount} BP Coins</div>` : ''}
+                        ${product.lootBoxCount ? `<div style="color:var(--accent);font-size:0.85rem;margin-bottom:4px">${product.lootBoxCount}x Loot Boxes</div>` : ''}
+                        ${product.roleCardCount ? `<div style="color:#ff6b9d;font-size:0.85rem;margin-bottom:4px">${product.roleCardCount}x Role Cards</div>` : ''}
+                    </div>
+                    <div style="margin-top:auto">
+                        <div class="product-price" style="margin-bottom:12px">€${product.price.toFixed(2)}</div>
+                        <button class="buy-button" onclick='addToCart(${JSON.stringify(product).replace(/'/g, "&apos;")})'>
+                            🛒 Add to Cart
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
     }).join('');
 }
 
 function addToCart(product) {
+    // Categories that can only be purchased once (no quantity increase)
+    const singlePurchaseCategories = ['bundles', 'calendar', 'dailyskins', 'skinsets', 'premium', 'emote'];
+    
     const existingIndex = cart.findIndex(item => 
         item.type === product.type || 
         (item.id && item.id === product.id)
     );
     
     if (existingIndex >= 0) {
+        // Check if this is a single-purchase item
+        if (singlePurchaseCategories.includes(product.category)) {
+            showNotification('⚠️ This item is already in your cart!', 'info');
+            return;
+        }
+        
+        // Allow quantity increase for other items (coins, loot boxes, etc.)
         cart[existingIndex].quantity += 1;
     } else {
         cart.push({
@@ -298,12 +356,17 @@ function updateCartDisplay() {
                         <div class="cart-item-name">${item.name}${freeLabel}</div>
                         <div class="cart-item-price">€${item.price.toFixed(2)}</div>
                     </div>
-                    <div class="cart-item-controls">
-                        <button onclick="updateCartQuantity(${index}, -1)" class="qty-btn">−</button>
+                <div class="cart-item-controls">
+                    ${['bundles', 'calendar', 'dailyskins', 'skinsets', 'premium', 'emote'].includes(item.category) ? 
+                        // Single-purchase items: only show remove button
+                        `<button onclick="removeFromCart(${index})" class="remove-btn">🗑️</button>` :
+                        // Multi-purchase items: show quantity controls
+                        `<button onclick="updateCartQuantity(${index}, -1)" class="qty-btn">−</button>
                         <span class="cart-item-qty">${item.quantity}</span>
                         <button onclick="updateCartQuantity(${index}, 1)" class="qty-btn">+</button>
-                        <button onclick="removeFromCart(${index})" class="remove-btn">🗑️</button>
-                    </div>
+                        <button onclick="removeFromCart(${index})" class="remove-btn">🗑️</button>`
+                    }
+                </div>
                 </div>
             `;
         }).join('');
@@ -472,7 +535,7 @@ async function completePurchase() {
             showNotification(`❌ Username "${username}" not found on Wolvesville!`, 'error');
             return;
         }
-                
+
         const exactUsername = validateData.username || username;
         
         showNotification('✅ Username verified!', 'success');
