@@ -219,22 +219,14 @@ class ShopDataFetcher:
             # Detect new bundles
             bundles = self.detect_new_items(bundles)
             
-            # Save to database
-            shop_data = {
-                'bundles': bundles,
-                'skin_sets': skin_sets,
-                'daily_skins': daily_skins,
-                'calendars': calendars,
-                'last_updated': datetime.now().isoformat()
-            }
+            # Save to database using new functions
+            success_bundles = db_helper.save_shop_bundles(bundles)
+            success_skin_sets = db_helper.save_shop_skin_sets(skin_sets)
+            success_daily_skins = db_helper.save_shop_daily_skins(daily_skins)
+            success_calendars = db_helper.save_shop_calendars(calendars)
+            success_metadata = db_helper.update_shop_metadata()
             
-            # Save bundles separately for new item tracking
-            db_helper.write_storage('shop-bundles.json', {'bundles': bundles}, None)
-            
-            # Save complete shop data
-            success = db_helper.write_storage('shop-data.json', shop_data, None)
-            
-            if success:
+            if all([success_bundles, success_skin_sets, success_daily_skins, success_calendars, success_metadata]):
                 print("="*60)
                 print("✅ Shop data sync completed successfully!")
                 print(f"   - Bundles: {len(bundles)} ({len([b for b in bundles if b.get('isNew')])} new)")
@@ -243,7 +235,12 @@ class ShopDataFetcher:
                 print(f"   - Calendars: {len(calendars)}")
                 print("="*60 + "\n")
             else:
-                print("❌ Failed to save shop data to database")
+                print("❌ Failed to save some shop data to database")
+                print(f"   Bundles: {'✅' if success_bundles else '❌'}")
+                print(f"   Skin sets: {'✅' if success_skin_sets else '❌'}")
+                print(f"   Daily skins: {'✅' if success_daily_skins else '❌'}")
+                print(f"   Calendars: {'✅' if success_calendars else '❌'}")
+                print(f"   Metadata: {'✅' if success_metadata else '❌'}")
                 
         except Exception as e:
             print(f"❌ Shop sync failed: {e}")

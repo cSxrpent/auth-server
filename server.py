@@ -2588,7 +2588,7 @@ def validate_shop_username():
 def get_shop_data():
     """Get current shop data (bundles, skins, calendars)"""
     try:
-        shop_data, _ = db_helper.read_storage('shop-data.json')
+        shop_data = db_helper.get_shop_data()
         
         if not shop_data:
             return jsonify({

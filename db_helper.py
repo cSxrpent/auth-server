@@ -949,6 +949,222 @@ def update_user_bot_version(username: str, bot_version: str):
         print(f"⚠️ Error updating user bot version: {e}")
         return False
 
+def save_shop_bundles(bundles_list):
+    """Save/update shop bundles"""
+    try:
+        with get_db() as db:
+            from init_database import ShopBundle
+            from datetime import datetime
+            
+            # Clear existing bundles
+            db.query(ShopBundle).delete()
+            
+            # Add new bundles
+            for bundle in bundles_list:
+                new_bundle = ShopBundle(
+                    type=bundle['type'],
+                    cost=bundle['cost'],
+                    price=str(bundle['price']),
+                    name=bundle['name'],
+                    image=bundle.get('image'),
+                    is_new=bundle.get('isNew', False),
+                    new_since=bundle.get('newSince'),
+                    updated_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                )
+                db.add(new_bundle)
+            
+            return True
+    except Exception as e:
+        print(f"⚠️ Error saving shop bundles: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def save_shop_skin_sets(skin_sets_list):
+    """Save/update shop skin sets"""
+    try:
+        with get_db() as db:
+            from init_database import ShopSkinSet
+            from datetime import datetime
+            
+            # Clear existing skin sets
+            db.query(ShopSkinSet).delete()
+            
+            # Add new skin sets
+            for skin_set in skin_sets_list:
+                new_skin_set = ShopSkinSet(
+                    type=skin_set['type'],
+                    cost=skin_set['cost'],
+                    price=str(skin_set['price']),
+                    name=skin_set['name'],
+                    expire_date=skin_set.get('expireDate'),
+                    item_sets=skin_set.get('itemSets', []),
+                    updated_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                )
+                db.add(new_skin_set)
+            
+            return True
+    except Exception as e:
+        print(f"⚠️ Error saving shop skin sets: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def save_shop_daily_skins(daily_skins_list):
+    """Save/update shop daily skins"""
+    try:
+        with get_db() as db:
+            from init_database import ShopDailySkin
+            from datetime import datetime
+            
+            # Clear existing daily skins
+            db.query(ShopDailySkin).delete()
+            
+            # Add new daily skins
+            for skin in daily_skins_list:
+                new_skin = ShopDailySkin(
+                    type=skin['type'],
+                    cost=skin['cost'],
+                    price=str(skin['price']),
+                    name=skin['name'],
+                    image_name=skin.get('imageName'),
+                    image_color=skin.get('imageColor'),
+                    expire_date=skin.get('expireDate'),
+                    avatar_item_ids=skin.get('avatarItemIds', []),
+                    updated_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                )
+                db.add(new_skin)
+            
+            return True
+    except Exception as e:
+        print(f"⚠️ Error saving shop daily skins: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def save_shop_calendars(calendars_list):
+    """Save/update shop calendars"""
+    try:
+        with get_db() as db:
+            from init_database import ShopCalendar
+            from datetime import datetime
+            
+            # Clear existing calendars
+            db.query(ShopCalendar).delete()
+            
+            # Add new calendars
+            for calendar in calendars_list:
+                new_calendar = ShopCalendar(
+                    calendar_id=calendar['id'],
+                    title=calendar['title'],
+                    cost=calendar['cost'],
+                    price=str(calendar['price']),
+                    description=calendar.get('description'),
+                    image_name=calendar.get('imageName'),
+                    icon_name=calendar.get('iconName'),
+                    duration_in_days=calendar.get('durationInDays'),
+                    owned=calendar.get('owned', False),
+                    updated_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                )
+                db.add(new_calendar)
+            
+            return True
+    except Exception as e:
+        print(f"⚠️ Error saving shop calendars: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def update_shop_metadata():
+    """Update last shop sync timestamp"""
+    try:
+        with get_db() as db:
+            from init_database import ShopMetadata
+            from datetime import datetime
+            
+            metadata = db.query(ShopMetadata).filter_by(id=1).first()
+            timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            
+            if metadata:
+                metadata.last_updated = timestamp
+            else:
+                new_metadata = ShopMetadata(id=1, last_updated=timestamp)
+                db.add(new_metadata)
+            
+            return True
+    except Exception as e:
+        print(f"⚠️ Error updating shop metadata: {e}")
+        return False
+
+def get_shop_data():
+    """Get all shop data from database"""
+    try:
+        with get_db() as db:
+            from init_database import ShopBundle, ShopSkinSet, ShopDailySkin, ShopCalendar, ShopMetadata
+            
+            bundles = db.query(ShopBundle).all()
+            skin_sets = db.query(ShopSkinSet).all()
+            daily_skins = db.query(ShopDailySkin).all()
+            calendars = db.query(ShopCalendar).all()
+            metadata = db.query(ShopMetadata).filter_by(id=1).first()
+            
+            return {
+                'bundles': [
+                    {
+                        'type': b.type,
+                        'cost': b.cost,
+                        'price': float(b.price),
+                        'name': b.name,
+                        'image': b.image,
+                        'isNew': b.is_new,
+                        'newSince': b.new_since
+                    }
+                    for b in bundles
+                ],
+                'skin_sets': [
+                    {
+                        'type': s.type,
+                        'cost': s.cost,
+                        'price': float(s.price),
+                        'name': s.name,
+                        'expireDate': s.expire_date,
+                        'itemSets': s.item_sets or []
+                    }
+                    for s in skin_sets
+                ],
+                'daily_skins': [
+                    {
+                        'type': d.type,
+                        'cost': d.cost,
+                        'price': float(d.price),
+                        'name': d.name,
+                        'imageName': d.image_name,
+                        'imageColor': d.image_color,
+                        'expireDate': d.expire_date,
+                        'avatarItemIds': d.avatar_item_ids or []
+                    }
+                    for d in daily_skins
+                ],
+                'calendars': [
+                    {
+                        'id': c.calendar_id,
+                        'title': c.title,
+                        'cost': c.cost,
+                        'price': float(c.price),
+                        'description': c.description,
+                        'imageName': c.image_name,
+                        'iconName': c.icon_name,
+                        'durationInDays': c.duration_in_days,
+                        'owned': c.owned
+                    }
+                    for c in calendars
+                ],
+                'last_updated': metadata.last_updated if metadata else None
+            }
+    except Exception as e:
+        print(f"⚠️ Error getting shop data: {e}")
+        return None
+    
 # ==================== EXPORTS ====================
 
 __all__ = [

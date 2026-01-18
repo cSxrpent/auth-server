@@ -113,6 +113,70 @@ class BotSettings(Base):
     latest_bot_version = Column(String(20), nullable=False, default='0.6.9')
     updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
+class ShopBundle(Base):
+    __tablename__ = 'shop_bundles'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    type = Column(String(100), unique=True, nullable=False, index=True)
+    cost = Column(Integer, nullable=False)
+    price = Column(String(10), nullable=False)  # Store as string to preserve decimal
+    name = Column(String(255), nullable=False)
+    image = Column(String(255))
+    is_new = Column(Boolean, default=False)
+    new_since = Column(String(10))  # YYYY-MM-DD format
+    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+class ShopSkinSet(Base):
+    __tablename__ = 'shop_skin_sets'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    type = Column(String(100), nullable=False)
+    cost = Column(Integer, nullable=False)
+    price = Column(String(10), nullable=False)
+    name = Column(String(255), nullable=False)
+    expire_date = Column(String(50))
+    item_sets = Column(JSON)
+    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+class ShopDailySkin(Base):
+    __tablename__ = 'shop_daily_skins'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    type = Column(String(100), nullable=False)
+    cost = Column(Integer, nullable=False)
+    price = Column(String(10), nullable=False)
+    name = Column(String(255), nullable=False)
+    image_name = Column(String(255))
+    image_color = Column(String(50))
+    expire_date = Column(String(50))
+    avatar_item_ids = Column(JSON)
+    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+class ShopCalendar(Base):
+    __tablename__ = 'shop_calendars'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    calendar_id = Column(String(100), unique=True, nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    cost = Column(Integer, nullable=False)
+    price = Column(String(10), nullable=False)
+    description = Column(Text)
+    image_name = Column(String(255))
+    icon_name = Column(String(255))
+    duration_in_days = Column(Integer)
+    owned = Column(Boolean, default=False)
+    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+class ShopMetadata(Base):
+    __tablename__ = 'shop_metadata'
+    
+    id = Column(Integer, primary_key=True, default=1)
+    last_updated = Column(String(30), nullable=False)
+    
 def init_database():
     """Initialize database with all tables"""
     DATABASE_URL = os.getenv("DATABASE_URL")
