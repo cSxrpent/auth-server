@@ -472,7 +472,7 @@ async function completePurchase() {
             showNotification(`❌ Username "${username}" not found on Wolvesville!`, 'error');
             return;
         }
-        
+                
         const exactUsername = validateData.username || username;
         
         showNotification('✅ Username verified!', 'success');
