@@ -508,10 +508,16 @@ async function loadAllLikeCounts() {
             body: JSON.stringify({ items })
         });
         
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (data.error) {
-            console.error('Error loading likes:', data.error);
+            console.warn('Batch endpoint error, falling back to individual requests:', data.error);
+            // Fallback to individual requests
+            loadAllLikeCountsFallback(likeButtons);
             return;
         }
         
@@ -530,7 +536,27 @@ async function loadAllLikeCounts() {
             }
         }
     } catch (error) {
-        console.error('Error loading likes batch:', error);
+        console.warn('Error loading likes batch, falling back to individual requests:', error);
+        // Fallback to individual requests if batch endpoint fails
+        loadAllLikeCountsFallback(likeButtons);
+    }
+}
+
+async function loadAllLikeCountsFallback(likeButtons) {
+    // Fallback: fetch likes individually (old method)
+    for (const btn of likeButtons) {
+        const itemType = btn.dataset.type;
+        const itemName = btn.dataset.name;
+        
+        try {
+            const data = await getItemLikes(itemType, itemName);
+            btn.innerHTML = `👍 ${data.likes}`;
+            if (data.hasLiked) {
+                btn.classList.add('liked');
+            }
+        } catch (error) {
+            console.error('Error loading likes for:', itemType, itemName, error);
+        }
     }
 }
 
