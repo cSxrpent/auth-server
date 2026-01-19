@@ -225,102 +225,108 @@ class GemAccountManager:
         """Send gift with automatic account switching"""
         try:
             gem_cost = product.get('cost', 0)
-            
+
             print(f"🎁 Preparing to send {product['name']} ({gem_cost} gems) to {recipient_username}")
-            
+
             # Find account with enough gems
             account = self.get_active_account_with_gems(gem_cost)
-            
-            print(f"💎 Using account #{account['account_number']} ({account['gems_remaining']} gems)")
-            
+            print(f"💎 Selected account #{account['account_number']} | Email: {account['email']} | Gems remaining: {account['gems_remaining']} | Required: {gem_cost}")
+
             # Switch to this account (changes nickname to RXZBOT)
             if not self.switch_to_account(account['id']):
                 raise Exception("Failed to switch to account")
-            
-            # Search for recipient
+
+            # Search for recipient (uses managed/global tokens)
             player = wolvesville_api.search_player(recipient_username)
             if not player:
                 # Restore nickname before failing
                 self.restore_account_nickname(account['id'])
                 raise Exception(f"Player '{recipient_username}' not found")
+
+            player_id = player.get('id')
+
+            # Prepare gift request
+            gift_type = product.get('type')
+            gift_message = message or "Gift from Wolvesville Shop!"
+
+            body = {
+                'type': gift_type,
+                'giftRecipientId': player_id,
+                'giftMessage': gift_message
+            }
+
+            # Add calendar ID if it's a calendar
+            if gift_type == 'CALENDAR':
+                calendar_id = product.get('id')
+                if calendar_id:
+                    body['calendarId'] = calendar_id
+
+            # Get tokens for this specific gem account
+            tokens = token_manager.get_tokens_for_account(account['email'], account['password'])
+            print(f"🔑 Using tokens for account: {account['email']}")
+
+            # Send gift using account-specific tokens
+            headers = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Authorization': f"Bearer {tokens['bearer']}",
+                'Cf-JWT': tokens['cfJwt'],
+                'ids': '1'
+            }
+
+            print(f"📦 Sending POST to Wolvesville API with body: {body} and headers: [Authorization: Bearer {tokens['bearer'][:8]}..., Cf-JWT: {tokens['cfJwt'][:8]}...]")
+
+            response = requests.post(
+                'https://core.api-wolvesville.com/gemOffers/purchases',
+                json=body,
+                headers=headers,
+                timeout=10
+            )
+
+            print(f"🔄 Wolvesville API response: {response.status_code} {response.text}")
+
+            # Try to parse gemCount from the response body (available after purchase attempt)
             try:
-                gem_cost = product.get('cost', 0)
-                print(f"🎁 Preparing to send {product['name']} ({gem_cost} gems) to {recipient_username}")
+                resp_json = response.json()
+            except Exception:
+                resp_json = None
 
-                # Find account with enough gems
-                account = self.get_active_account_with_gems(gem_cost)
-                print(f"💎 Selected account #{account['account_number']} | Email: {account['email']} | Gems remaining: {account['gems_remaining']} | Required: {gem_cost}")
+            # If response contains gemCount, sync local DB
+            if resp_json and isinstance(resp_json, dict):
+                gem_count = None
+                if 'gemCount' in resp_json:
+                    gem_count = resp_json.get('gemCount')
+                elif 'gems' in resp_json:
+                    gem_count = resp_json.get('gems')
 
-                # Switch to this account (changes nickname to RXZBOT)
-                if not self.switch_to_account(account['id']):
-                    raise Exception("Failed to switch to account")
+                try:
+                    if gem_count is not None:
+                        real_gems = int(gem_count)
+                        print(f"🔄 Wolvesville returned gemCount: {real_gems} — syncing local account #{account['account_number']}")
+                        self.recharge_account(account['id'], real_gems)
+                        account['gems_remaining'] = real_gems
+                except Exception:
+                    pass
 
-                # Search for recipient
-                player = wolvesville_api.search_player(recipient_username)
-                if not player:
-                    # Restore nickname before failing
-                    self.restore_account_nickname(account['id'])
-                    raise Exception(f"Player '{recipient_username}' not found")
-
-                player_id = player.get('id')
-
-                # Prepare gift request
-                gift_type = product.get('type')
-                gift_message = message or "Gift from Wolvesville Shop!"
-
-                body = {
-                    'type': gift_type,
-                    'giftRecipientId': player_id,
-                    'giftMessage': gift_message
-                }
-
-                # Add calendar ID if it's a calendar
-                if gift_type == 'CALENDAR':
-                    calendar_id = product.get('id')
-                    if calendar_id:
-                        body['calendarId'] = calendar_id
-
-                # Get tokens for this specific gem account
-                tokens = token_manager.get_tokens_for_account(account['email'], account['password'])
-                print(f"🔑 Using tokens for account: {account['email']}")
-
-                # Send gift
-                headers = {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'Authorization': f"Bearer {tokens['bearer']}",
-                    'Cf-JWT': tokens['cfJwt'],
-                    'ids': '1'
-                }
-
-                print(f"📦 Sending POST to Wolvesville API with body: {body} and headers: [Authorization: Bearer {tokens['bearer'][:8]}..., Cf-JWT: {tokens['cfJwt'][:8]}...]")
-
-                response = requests.post(
-                    'https://core.api-wolvesville.com/gemOffers/purchases',
-                    json=body,
-                    headers=headers,
-                    timeout=10
-                )
-
-                print(f"🔄 Wolvesville API response: {response.status_code} {response.text}")
-
-                if response.status_code == 200:
-                    # Success! Deduct gems
+            if response.status_code == 200:
+                # Success! Deduct gems locally if response didn't provide exact count
+                if not (resp_json and ('gemCount' in resp_json or 'gems' in resp_json)):
                     self.deduct_gems(account['id'], gem_cost)
 
-                    # Restore original nickname
-                    self.restore_account_nickname(account['id'])
+                # Restore original nickname
+                self.restore_account_nickname(account['id'])
 
-                    print(f"✅ Gift sent successfully!")
-                    return response.json()
-                else:
-                    # Failed - restore nickname
-                    self.restore_account_nickname(account['id'])
+                print(f"✅ Gift sent successfully!")
+                return resp_json or {'status': 'ok'}
+            else:
+                # If we have new gemCount info, we've already synced above
+                # Failed - restore nickname
+                self.restore_account_nickname(account['id'])
 
-                    error_msg = f"API error {response.status_code}: {response.text}"
-                    print(f"❌ {error_msg}")
-                    raise Exception(error_msg)
+                error_msg = f"API error {response.status_code}: {response.text}"
+                print(f"❌ {error_msg}")
+                raise Exception(error_msg)
 
-            except Exception as e:
-                print(f"❌ send_gift_with_auto_switch error: {e}")
-                raise
+        except Exception as e:
+            print(f"❌ send_gift_with_auto_switch error: {e}")
+            raise

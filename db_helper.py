@@ -1397,14 +1397,31 @@ def get_all_gift_codes():
 def create_purchase(username, items, total_amount, message=None, coupon_used=None, payment_id=None):
     """Create a purchase record"""
     try:
+        import json as _json
         with get_db() as db:
             from init_database import Purchase
+            # Ensure items is a Python object (SQLAlchemy JSON column expects a JSON-serializable object)
+            safe_items = items
+            if isinstance(items, str):
+                try:
+                    safe_items = _json.loads(items)
+                except Exception:
+                    safe_items = items
+
+            # Serialize coupon_used to string if it's a dict
+            safe_coupon = coupon_used
+            if isinstance(coupon_used, (dict, list)):
+                try:
+                    safe_coupon = _json.dumps(coupon_used)
+                except Exception:
+                    safe_coupon = str(coupon_used)
+
             purchase = Purchase(
                 username=username,
-                items=items,
+                items=safe_items,
                 total_amount=total_amount,
                 message=message,
-                coupon_used=coupon_used,
+                coupon_used=safe_coupon,
                 payment_id=payment_id
             )
             db.add(purchase)
