@@ -346,7 +346,7 @@ def buy(item):
         "3months": {"amount": "5.00", "description": "3 Months Subscription", "days": 90},
         "1year": {"amount": "10.00", "description": "1 Year Subscription", "days": 365},
         "lifetime": {"amount": "20.00", "description": "Lifetime bot with updates", "days": 0},  # Permanent license
-        "custombot": {"amount": "15.00", "description": "Custom Bot", "days": 0}  # Permanent license
+        "custombot": {"amount": "25.00", "description": "Custom Bot", "days": 0}  # Permanent license
     }
     
     if item not in prices:
@@ -380,7 +380,7 @@ def pay(item):
         "3months": {"amount": "5.00", "description": "3 Months Subscription"},
         "1year": {"amount": "10.00", "description": "1 Year Subscription"},
         "lifetime": {"amount": "20.00", "description": "Lifetime bot with updates (Permanent)"},
-        "custombot": {"amount": "15.00", "description": "Custom Bot (Permanent)"}
+        "custombot": {"amount": "25.00", "description": "Custom Bot (Permanent)"}
     }
     
     if item not in prices:
