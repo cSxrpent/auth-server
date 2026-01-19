@@ -12,7 +12,10 @@
     <div class="container">
         <div class="success-icon">🎉</div>
         <h1>Purchase Successful!</h1>
-        <p class="subtitle">Your gifts are on their way to <strong>{{ username }}</strong></p>
+        <p class="subtitle">Your purchase has been completed for <strong>{{ username }}</strong></p>
+        
+        {% set has_gift_cards = cart | selectattr('category', 'equalto', 'gift_card') | list | length > 0 %}
+        {% set has_real_items = cart | selectattr('category', 'not', 'gift_card') | list | length > 0 %}
         
         <div class="stats-grid">
             <div class="stat-card">
@@ -25,7 +28,7 @@
             </div>
         </div>
         
-        {% if successful < total %}
+        {% if successful < total and has_real_items %}
         <div class="warning-box">
             <strong>⚠️ Partial Delivery</strong><br>
             Some items couldn't be delivered. Please contact support.
@@ -37,12 +40,21 @@
             
             <div class="items-list">
                 {% for item in cart %}
+                    {% if item.category == 'gift_card' %}
+                    <div class="item-row">
+                        <div class="item-name">{{ item.name }}</div>
+                        <div class="item-status">
+                            <span class="status-icon success-status">🎁</span>
+                            <span class="success-status">Gift Card Ready</span>
+                        </div>
+                    </div>
+                    {% else %}
                     {% set item_results = results | selectattr('item', 'equalto', item.name) | list %}
                     {% for i in range(item.quantity) %}
                     <div class="item-row">
                         <div class="item-name">{{ item.name }}</div>
                         <div class="item-status">
-                            {% if item_results[loop.index0].success %}
+                            {% if item_results and item_results[loop.index0] and item_results[loop.index0].success %}
                             <span class="status-icon success-status">✓</span>
                             <span class="success-status">Delivered</span>
                             {% else %}
@@ -52,23 +64,39 @@
                         </div>
                     </div>
                     {% endfor %}
+                    {% endif %}
                 {% endfor %}
             </div>
             
             <div class="summary-row" style="border-top:2px solid rgba(255,255,255,0.1);padding-top:15px;margin-top:15px">
-                <strong>Delivery Status:</strong>
-                <strong style="color:{{ 'var(--success)' if successful == total else 'var(--danger)' }}">
-                    {{ successful }}/{{ total }} successful
+                <strong>Status:</strong>
+                <strong style="color:{{ 'var(--success)' if (successful == total or (has_gift_cards and not has_real_items)) else 'var(--danger)' }}">
+                    {% if has_gift_cards and not has_real_items %}
+                    ✅ Ready to Use
+                    {% else %}
+                    {{ successful }}/{{ total }} delivered
+                    {% endif %}
                 </strong>
             </div>
         </div>
         
+        {% if has_real_items %}
         <div style="background:rgba(0,212,255,0.1);border-radius:12px;padding:20px;margin:25px 0;border:1px solid rgba(0,212,255,0.3)">
             <strong style="color:var(--accent)">ℹ️ Important</strong><br>
             <span style="color:var(--muted);font-size:0.95rem">
                 Gifts were sent with 2-second delays. Check your Wolvesville account!
             </span>
         </div>
+        {% endif %}
+        
+        {% if has_gift_cards %}
+        <div style="background:rgba(46,213,115,0.1);border-radius:12px;padding:20px;margin:25px 0;border:1px solid rgba(46,213,115,0.3)">
+            <strong style="color:var(--success)">🎁 Gift Card Ready</strong><br>
+            <span style="color:var(--muted);font-size:0.95rem">
+                Your gift card code is ready to use. You'll receive it via email or can view it in your account dashboard.
+            </span>
+        </div>
+        {% endif %}
         
         <a href="/shop" class="button">← Back to Shop</a>
     </div>
