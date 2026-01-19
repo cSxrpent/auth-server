@@ -870,7 +870,7 @@ async function completePurchase() {
             // Full payment covered by gift card
             showNotification('✅ Purchase completed with gift card!', 'success');
             setTimeout(() => {
-                window.location.href = '/cart_success.html';
+                window.location.href = '/cart/success';
             }, 1500);
             return;
         }

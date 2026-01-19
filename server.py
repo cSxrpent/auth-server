@@ -2457,6 +2457,53 @@ def cart_payment_cancel():
     return render_template('cart_cancel.html')
 
 
+@app.route('/cart/success')
+def cart_success():
+    """Handle successful cart purchase (gift card only or after PayPal)"""
+    purchase_info = session.get('cart_purchase')
+    
+    if not purchase_info:
+        return render_template('shop_error.html', error='Purchase session expired'), 400
+    
+    # Check session timeout (30 minutes)
+    if time.time() - purchase_info.get('timestamp', 0) > 1800:
+        session.pop('cart_purchase', None)
+        return render_template('shop_error.html', error='Purchase session expired'), 400
+    
+    cart = purchase_info.get('cart', [])
+    username = purchase_info.get('username', 'Unknown')
+    message = purchase_info.get('message', '')
+    gift_card = purchase_info.get('gift_card')
+    
+    # Filter out gift cards - only real items were sent
+    items_to_send = [item for item in cart if item.get('type') != 'GIFT_CARD' and item.get('category') != 'gift_card']
+    
+    # Build results - real items would have been sent already
+    results = []
+    for item in items_to_send:
+        for i in range(item.get('quantity', 1)):
+            results.append({
+                'item': item.get('name'),
+                'success': True
+            })
+    
+    total_items = sum(item.get('quantity', 1) for item in cart)
+    successful = len(results)
+    
+    # Clear session
+    session.pop('cart_purchase', None)
+    
+    log_event(f"Cart success page displayed: {successful}/{total_items} items for {username}")
+    
+    return render_template('cart_success.html',
+                         username=username,
+                         cart=cart,
+                         results=results,
+                         successful=successful,
+                         total=total_items,
+                         failed_items=[])
+
+
 # ==================== ADMIN COUPON MANAGEMENT ====================
 
 @app.route('/admin/coupons')
