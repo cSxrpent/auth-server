@@ -663,7 +663,7 @@
         </button>
 
         <!-- Gift Card Button -->
-        <button id="giftCardButton" class="cart-button" style="background: linear-gradient(135deg, var(--gold), #ffa500); border-color: var(--gold);" onclick="showGiftCardModal()">
+        <button id="giftCardButton" class="cart-button" style="background: linear-gradient(135deg, var(--gold), #ffa500); border-color: var(--gold);" onclick="showGiftCardChoiceModal()">
             <span>💳</span>
             <span>Gift Card</span>
         </button>
@@ -701,25 +701,68 @@
         <div id="products" class="products-grid"></div>
     </div>
 
-    <!-- Gift Card Modal -->
-    <div id="giftCardModal" class="modal">
+    <!-- Gift Card Choice Modal -->
+    <div id="giftCardChoiceModal" class="modal">
+        <div class="modal-content" style="max-width: 500px; text-align: center;">
+            <div class="modal-header">🎁 Gift Card</div>
+            <div style="margin: 30px 0; color: var(--muted); font-size: 1.1rem;">What would you like to do?</div>
+            <div class="modal-buttons" style="gap: 15px; flex-direction: column;">
+                <button class="modal-button primary" onclick="showBuyGiftCardPage()" style="font-size: 1rem; padding: 16px;">💳 Buy Gift Card</button>
+                <button class="modal-button secondary" onclick="showRedeemGiftCardPage()" style="font-size: 1rem; padding: 16px;">🔓 Redeem Gift Card</button>
+                <button class="modal-button secondary" onclick="closeGiftCardChoiceModal()" style="font-size: 1rem; padding: 16px;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Buy Gift Card Modal -->
+    <div id="buyGiftCardModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">💳 Purchase Gift Card</div>
-            <div style="padding: 20px;">
-                <p style="margin-bottom: 20px; color: var(--muted);">Choose a gift card amount:</p>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
-                    <button onclick="buyGiftCard(3)" style="padding: 15px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1rem;">€3</button>
-                    <button onclick="buyGiftCard(5)" style="padding: 15px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1rem;">€5</button>
-                    <button onclick="buyGiftCard(10)" style="padding: 15px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1rem;">€10</button>
-                    <button onclick="buyGiftCard(20)" style="padding: 15px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1rem;">€20</button>
+            <div class="modal-header">💳 Buy Gift Card</div>
+            <div style="margin-bottom: 20px; text-align: center; color: var(--muted);">
+                Choose an amount to add to your cart
+            </div>
+            <div class="form-group">
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px;">
+                    <button onclick="addGiftCardToCart(3)" style="padding: 18px; background: linear-gradient(135deg, var(--accent), #00a8d8); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 1.1rem; transition: all 0.3s; box-shadow: 0 4px 15px rgba(0,212,255,0.3);">€3.00</button>
+                    <button onclick="addGiftCardToCart(5)" style="padding: 18px; background: linear-gradient(135deg, var(--accent), #00a8d8); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 1.1rem; transition: all 0.3s; box-shadow: 0 4px 15px rgba(0,212,255,0.3);">€5.00</button>
+                    <button onclick="addGiftCardToCart(10)" style="padding: 18px; background: linear-gradient(135deg, var(--accent), #00a8d8); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 1.1rem; transition: all 0.3s; box-shadow: 0 4px 15px rgba(0,212,255,0.3);">€10.00</button>
+                    <button onclick="addGiftCardToCart(20)" style="padding: 18px; background: linear-gradient(135deg, var(--accent), #00a8d8); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 1.1rem; transition: all 0.3s; box-shadow: 0 4px 15px rgba(0,212,255,0.3);">€20.00</button>
                 </div>
-                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                    <input type="number" id="customAmount" min="1" step="0.01" placeholder="Custom amount (€)" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.02); color: #fff;">
-                    <button onclick="buyGiftCard()" style="padding: 12px 16px; background: linear-gradient(90deg, var(--gold), #ffa500); color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Custom</button>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; color: var(--muted); font-weight: 600; font-size: 0.95rem;">Custom Amount (€)</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="customGiftAmount" min="1" step="0.01" placeholder="e.g. 15.00" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(0,212,255,0.3); background: rgba(0,212,255,0.05); color: #fff;">
+                        <button onclick="addGiftCardToCart(null)" style="padding: 12px 20px; background: linear-gradient(135deg, var(--gold), #ffa500); color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">Add</button>
+                    </div>
                 </div>
             </div>
             <div class="modal-buttons">
-                <button class="modal-button secondary" onclick="closeGiftCardModal()">Cancel</button>
+                <button class="modal-button secondary" onclick="closeBuyGiftCardModal()">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Redeem Gift Card Modal -->
+    <div id="redeemGiftCardModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">🔓 Redeem Gift Card</div>
+            <div id="redeemStatus" style="margin-bottom: 20px;"></div>
+            <div class="form-group">
+                <label style="display: block; margin-bottom: 8px; color: var(--muted); font-weight: 600;">Gift Card Code</label>
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <input type="text" id="redeemCode" placeholder="Enter your gift card code" maxlength="20" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(0,212,255,0.3); background: rgba(0,212,255,0.05); color: #fff; text-transform: uppercase;">
+                    <button onclick="checkGiftCardCode()" style="padding: 12px 20px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">Check</button>
+                </div>
+            </div>
+            <div id="giftCardDetails" style="display: none; margin-bottom: 20px; padding: 16px; background: rgba(46,213,115,0.1); border-radius: 10px; border: 1px solid var(--success);">
+                <div style="margin-bottom: 12px;">
+                    <div style="color: var(--muted); font-size: 0.9rem;">Available Balance</div>
+                    <div style="font-size: 1.8rem; font-weight: 700; color: var(--success); margin-top: 4px;">€<span id="giftCardBalance">0.00</span></div>
+                </div>
+                <button onclick="applyRedeemGiftCard()" style="width: 100%; padding: 12px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; margin-top: 12px;">✅ Apply to Checkout</button>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-button secondary" onclick="closeRedeemGiftCardModal()">Back</button>
             </div>
         </div>
     </div>

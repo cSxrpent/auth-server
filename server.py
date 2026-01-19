@@ -2803,6 +2803,87 @@ def get_all_gift_codes_endpoint():
         log_event(f"Error getting gift codes: {e}", level="error")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/admin/send-gift', methods=['POST'])
+@login_required
+def send_gift_admin():
+    """Admin endpoint to send gifts to users"""
+    try:
+        data = request.json
+        username = data.get('username', '').strip()
+        item = data.get('item', {})
+        message = data.get('message', '').strip()
+        
+        if not username:
+            return jsonify({'error': 'Username is required'}), 400
+        
+        if not item.get('type'):
+            return jsonify({'error': 'Item type is required'}), 400
+        
+        # Prepare product info for sending gift
+        product = {
+            'type': item.get('type'),
+            'name': item.get('name', item.get('type')),
+            'price': float(item.get('price', 0)),
+            'cost': 0  # Admin gifts don't cost gems
+        }
+        
+        # Send the gift via Wolvesville API
+        gift_result = send_wolvesville_gift(username, product, message)
+        
+        if gift_result.get('success') or gift_result.get('status') == 'success':
+            # Record this as a purchase for admin tracking
+            admin_user = session.get('user')
+            db_helper.create_purchase(
+                username=username,
+                items=[product],
+                total_amount=0,
+                message=f"Admin gift from {admin_user}: {message}",
+                coupon_used=None,
+                payment_id=f"admin-gift-{username}-{int(time.time())}"
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': f'Gift sent to {username}',
+                'username': username,
+                'item': item.get('name')
+            }), 200
+        else:
+            error_msg = gift_result.get('error') or 'Failed to send gift'
+            return jsonify({'error': error_msg}), 400
+            
+    except Exception as e:
+        log_event(f"Error sending admin gift: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/gift-history', methods=['GET'])
+@login_required
+def get_gift_history():
+    """Get recent gifts sent by admin"""
+    try:
+        all_purchases = db_helper.get_all_purchases()
+        admin_gifts = []
+        
+        for purchase in all_purchases:
+            if purchase and isinstance(purchase, dict):
+                payment_id = purchase.get('payment_id', '')
+                if 'admin-gift' in str(payment_id):
+                    admin_gifts.append({
+                        'username': purchase.get('username'),
+                        'item': purchase.get('items', [{}])[0].get('name', 'Unknown') if purchase.get('items') else 'Unknown',
+                        'item_name': purchase.get('items', [{}])[0].get('name', 'Unknown') if purchase.get('items') else 'Unknown',
+                        'item_value': purchase.get('items', [{}])[0].get('price', 0) if purchase.get('items') else 0,
+                        'created_at': purchase.get('created_at', 'N/A'),
+                        'date': purchase.get('created_at', 'N/A')
+                    })
+        
+        # Return most recent first, limit to 20
+        admin_gifts.reverse()
+        return jsonify({'gifts': admin_gifts[:20]}), 200
+    except Exception as e:
+        log_event(f"Error getting gift history: {e}", level="error")
+        return jsonify({'gifts': []}), 200
+
 # ==================== PURCHASE HISTORY ENDPOINTS ====================
 
 @app.route('/api/purchases/history', methods=['GET'])

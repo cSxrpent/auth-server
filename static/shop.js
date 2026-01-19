@@ -217,32 +217,45 @@ function searchAndFilterProducts() {
 // ============ GIFT CARDS ============
 let giftCardBalance = 0;
 let appliedGiftCode = null;
+let checkedGiftCode = null;
 
-function showGiftCardModal() {
-    document.getElementById('giftCardModal').style.display = 'block';
+// Gift Card Choice Modal
+function showGiftCardChoiceModal() {
+    document.getElementById('giftCardChoiceModal').style.display = 'flex';
 }
 
-function closeGiftCardModal() {
-    document.getElementById('giftCardModal').style.display = 'none';
+function closeGiftCardChoiceModal() {
+    document.getElementById('giftCardChoiceModal').style.display = 'none';
 }
 
-function buyGiftCard(amount) {
-    if (!amount && !document.getElementById('customAmount').value) {
-        showNotification('❌ Please enter an amount', 'error');
+// Buy Gift Card Page
+function showBuyGiftCardPage() {
+    closeGiftCardChoiceModal();
+    document.getElementById('buyGiftCardModal').style.display = 'flex';
+    document.getElementById('customGiftAmount').value = '';
+}
+
+function closeBuyGiftCardModal() {
+    document.getElementById('buyGiftCardModal').style.display = 'none';
+    showGiftCardChoiceModal();
+}
+
+function addGiftCardToCart(amount) {
+    let finalAmount = amount;
+    
+    if (!finalAmount) {
+        finalAmount = parseFloat(document.getElementById('customGiftAmount').value);
+    }
+    
+    if (!finalAmount || finalAmount <= 0) {
+        showNotification('❌ Please enter a valid amount', 'error');
         return;
     }
     
-    const finalAmount = amount || parseFloat(document.getElementById('customAmount').value);
-    
-    if (finalAmount <= 0) {
-        showNotification('❌ Invalid amount', 'error');
-        return;
-    }
-    
-    // Add gift card to cart with special type
+    // Add gift card to cart
     cart.push({
         type: 'GIFT_CARD',
-        name: `Gift Card €${finalAmount.toFixed(2)}`,
+        name: `🎁 Gift Card €${finalAmount.toFixed(2)}`,
         price: finalAmount,
         quantity: 1,
         category: 'gift_card',
@@ -250,15 +263,34 @@ function buyGiftCard(amount) {
     });
     
     showNotification(`✅ Gift Card €${finalAmount.toFixed(2)} added to cart!`, 'success');
-    closeGiftCardModal();
+    document.getElementById('buyGiftCardModal').style.display = 'none';
     updateCart();
+    
+    // Auto-open cart
+    setTimeout(() => {
+        toggleCart();
+    }, 500);
 }
 
-async function applyGiftCode() {
-    const code = document.getElementById('giftCode').value.trim();
+// Redeem Gift Card Page
+function showRedeemGiftCardPage() {
+    closeGiftCardChoiceModal();
+    document.getElementById('redeemGiftCardModal').style.display = 'flex';
+    document.getElementById('redeemCode').value = '';
+    document.getElementById('redeemStatus').innerHTML = '';
+    document.getElementById('giftCardDetails').style.display = 'none';
+}
+
+function closeRedeemGiftCardModal() {
+    document.getElementById('redeemGiftCardModal').style.display = 'none';
+    showGiftCardChoiceModal();
+}
+
+async function checkGiftCardCode() {
+    const code = document.getElementById('redeemCode').value.trim().toUpperCase();
     
     if (!code) {
-        showNotification('❌ Please enter a gift code', 'error');
+        showNotification('❌ Please enter a gift card code', 'error');
         return;
     }
     
@@ -272,34 +304,42 @@ async function applyGiftCode() {
         const data = await response.json();
         
         if (data.valid) {
+            checkedGiftCode = code;
             giftCardBalance = data.balance;
-            appliedGiftCode = code;
-            
-            // Show balance
-            document.getElementById('giftCodeBalance').style.display = 'block';
-            document.getElementById('balanceAmount').textContent = data.balance.toFixed(2);
-            
-            // Check if balance is sufficient
-            const totals = calculateTotal();
-            if (giftCardBalance < totals.total) {
-                document.getElementById('topUpWarning').style.display = 'block';
-                showNotification(`⚠️ Balance: €${data.balance.toFixed(2)} - Insufficient for €${totals.total.toFixed(2)} total`, 'warning');
-            } else {
-                document.getElementById('topUpWarning').style.display = 'none';
-                showNotification(`✅ Gift code applied! Balance: €${data.balance.toFixed(2)}`, 'success');
-            }
+            document.getElementById('giftCardBalance').textContent = data.balance.toFixed(2);
+            document.getElementById('giftCardDetails').style.display = 'block';
+            document.getElementById('redeemStatus').innerHTML = `<div style="padding: 12px; background: rgba(46,213,115,0.2); border-radius: 8px; color: var(--success); border: 1px solid var(--success);">✅ Valid gift card found!</div>`;
+            showNotification('✅ Gift card is valid!', 'success');
         } else {
+            document.getElementById('giftCardDetails').style.display = 'none';
+            document.getElementById('redeemStatus').innerHTML = `<div style="padding: 12px; background: rgba(255,71,87,0.2); border-radius: 8px; color: var(--danger); border: 1px solid var(--danger);">❌ ${data.message}</div>`;
             showNotification('❌ ' + data.message, 'error');
-            giftCardBalance = 0;
-            appliedGiftCode = null;
-            document.getElementById('giftCodeBalance').style.display = 'none';
-            document.getElementById('topUpWarning').style.display = 'none';
         }
     } catch (error) {
         console.error('Error checking gift code:', error);
         showNotification('❌ Error checking gift code', 'error');
     }
 }
+
+function applyRedeemGiftCard() {
+    if (!checkedGiftCode) {
+        showNotification('❌ Please check a gift card first', 'error');
+        return;
+    }
+    
+    appliedGiftCode = checkedGiftCode;
+    giftCardBalance = parseFloat(document.getElementById('giftCardBalance').textContent);
+    
+    showNotification(`✅ Gift card applied! Balance: €${giftCardBalance.toFixed(2)}`, 'success');
+    document.getElementById('redeemGiftCardModal').style.display = 'none';
+    
+    // Auto-open cart to show options
+    setTimeout(() => {
+        toggleCart();
+    }, 500);
+}
+
+
 
 function showTopUpModal() {
     const totals = calculateTotal();

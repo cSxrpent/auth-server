@@ -2179,6 +2179,263 @@
     fetchTestimonials();
     loadCustomMessage();
     loadBotVersion();
+    
+    // ============ SEND GIFTS SECTION ============
+    
+    // Store all available shop items
+    let allShopItems = [];
+    
+    async function loadShopItems() {
+        try {
+            const response = await fetch('/api/shop/data');
+            const shopData = await response.json();
+            
+            allShopItems = [];
+            
+            // Add base shop items
+            const baseItems = [
+                { type: 'GOLDV2_1', name: 'Gold Pack S - 450 Gems', category: 'gems', value: 2.99 },
+                { type: 'GOLDV2_2', name: 'Gold Pack M - 3400 Gems', category: 'gems', value: 19.99 },
+                { type: 'GOLDV2_3', name: 'Gold Pack L - 9000 Gems', category: 'gems', value: 49.99 },
+                { type: 'BATTLE_PASS', name: 'Battle Pass', category: 'premium', value: 3.99 },
+                { type: 'BATTLE_PASS_BUNDLE', name: 'Battle Pass Bundle', category: 'premium', value: 7.99 },
+                { type: 'LOOT_BOX_1', name: 'Loot Box x3', category: 'lootbox', value: 1.99 },
+                { type: 'LOOT_BOX_2', name: 'Loot Box x30', category: 'lootbox', value: 15.99 },
+                { type: 'LOOT_BOX_3', name: 'Loot Box x100', category: 'lootbox', value: 44.99 }
+            ];
+            allShopItems.push(...baseItems);
+            
+            // Add bundles
+            if (shopData.bundles) {
+                shopData.bundles.forEach(b => {
+                    allShopItems.push({
+                        type: b.type,
+                        name: b.name || b.type,
+                        category: 'bundles',
+                        value: b.price || 0
+                    });
+                });
+            }
+            
+            // Add calendars
+            if (shopData.calendars) {
+                shopData.calendars.forEach(c => {
+                    allShopItems.push({
+                        type: c.id,
+                        name: c.title || c.iconName,
+                        category: 'calendar',
+                        value: c.price || 3.99
+                    });
+                });
+            }
+            
+            // Add skin sets
+            if (shopData.skin_sets) {
+                shopData.skin_sets.forEach(s => {
+                    allShopItems.push({
+                        type: s.type,
+                        name: s.name,
+                        category: 'skinsets',
+                        value: s.price || 2.49
+                    });
+                });
+            }
+            
+            // Add daily skins
+            if (shopData.daily_skins) {
+                shopData.daily_skins.forEach(d => {
+                    allShopItems.push({
+                        type: d.imageName,
+                        name: d.name,
+                        category: 'dailyskins',
+                        value: d.price || 2.49
+                    });
+                });
+            }
+        } catch (error) {
+            console.error('Error loading shop items:', error);
+        }
+    }
+    
+    function updateGiftForm() {
+        const giftType = document.getElementById('giftType').value;
+        let html = '';
+        
+        if (giftType === 'gems') {
+            html = `
+                <div class="form-group">
+                    <label>Gems Package</label>
+                    <select id="giftItem" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);color:#fff">
+                        <option value="">-- Select Package --</option>
+                        <option value="GOLDV2_1">🪙 450 Gems (€2.99 value)</option>
+                        <option value="GOLDV2_2">🪙 3400 Gems (€19.99 value)</option>
+                        <option value="GOLDV2_3">🪙 9000 Gems (€49.99 value)</option>
+                    </select>
+                </div>
+            `;
+        } else if (giftType === 'bundle') {
+            const bundles = allShopItems.filter(i => i.category === 'bundles');
+            let options = '<option value="">-- Select Bundle --</option>';
+            bundles.forEach(b => {
+                options += `<option value="${b.type}">${b.name} (€${b.value.toFixed(2)})</option>`;
+            });
+            html = `
+                <div class="form-group">
+                    <label>Bundle</label>
+                    <select id="giftItem" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);color:#fff">
+                        ${options}
+                    </select>
+                </div>
+            `;
+        } else if (giftType === 'calendar') {
+            const calendars = allShopItems.filter(i => i.category === 'calendar');
+            let options = '<option value="">-- Select Calendar --</option>';
+            calendars.forEach(c => {
+                options += `<option value="${c.type}">${c.name} (€${c.value.toFixed(2)})</option>`;
+            });
+            html = `
+                <div class="form-group">
+                    <label>Calendar</label>
+                    <select id="giftItem" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);color:#fff">
+                        ${options}
+                    </select>
+                </div>
+            `;
+        } else if (giftType === 'premium') {
+            html = `
+                <div class="form-group">
+                    <label>Premium Item</label>
+                    <select id="giftItem" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);color:#fff">
+                        <option value="BATTLE_PASS">👑 Battle Pass (€3.99)</option>
+                        <option value="BATTLE_PASS_BUNDLE">👑 Battle Pass Bundle (€7.99)</option>
+                        <option value="LOOT_BOX_1">🎁 Loot Box x3 (€1.99)</option>
+                        <option value="LOOT_BOX_2">🎁 Loot Box x30 (€15.99)</option>
+                        <option value="LOOT_BOX_3">🎁 Loot Box x100 (€44.99)</option>
+                    </select>
+                </div>
+            `;
+        } else if (giftType === 'custom') {
+            html = `
+                <div class="form-group">
+                    <label>Item Type/ID</label>
+                    <input id="giftItem" placeholder="e.g., BATTLE_PASS or calendar-id" />
+                </div>
+                <div class="form-group">
+                    <label>Item Name (for display)</label>
+                    <input id="giftItemName" placeholder="What should it be called?" />
+                </div>
+                <div class="form-group">
+                    <label>Estimated Value (€)</label>
+                    <input type="number" id="giftItemValue" placeholder="2.99" step="0.01" />
+                </div>
+            `;
+        }
+        
+        document.getElementById('giftFormContainer').innerHTML = html;
+    }
+    
+    function quickSelectGift(itemType) {
+        document.getElementById('giftType').value = 'gems';
+        if (itemType.includes('GOLD')) document.getElementById('giftType').value = 'gems';
+        else if (itemType.includes('BUNDLE')) document.getElementById('giftType').value = 'bundle';
+        else if (itemType.includes('PASS')) document.getElementById('giftType').value = 'premium';
+        else if (itemType.includes('calendar')) document.getElementById('giftType').value = 'calendar';
+        
+        updateGiftForm();
+        document.getElementById('giftItem').value = itemType;
+    }
+    
+    async function sendGift() {
+        const username = document.getElementById('giftUsername').value.trim();
+        const giftType = document.getElementById('giftType').value;
+        const giftItem = document.getElementById('giftItem')?.value.trim();
+        const message = document.getElementById('giftMessage').value.trim();
+        
+        if (!username) {
+            alert('❌ Please enter a recipient username');
+            return;
+        }
+        if (!giftType || !giftItem) {
+            alert('❌ Please select a gift type and item');
+            return;
+        }
+        
+        // Find item info
+        let itemName = giftItem;
+        let itemValue = 0;
+        const foundItem = allShopItems.find(i => i.type === giftItem);
+        if (foundItem) {
+            itemName = foundItem.name;
+            itemValue = foundItem.value;
+        }
+        
+        if (giftType === 'custom') {
+            itemName = document.getElementById('giftItemName')?.value || giftItem;
+            itemValue = parseFloat(document.getElementById('giftItemValue')?.value || 0);
+        }
+        
+        try {
+            const response = await fetch('/api/admin/send-gift', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    username: username,
+                    item: {
+                        type: giftItem,
+                        name: itemName,
+                        price: itemValue
+                    },
+                    message: message
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert(`✅ Gift sent to ${username}!`);
+                document.getElementById('giftUsername').value = '';
+                document.getElementById('giftType').value = '';
+                document.getElementById('giftFormContainer').innerHTML = '';
+                document.getElementById('giftMessage').value = '';
+                fetchGiftHistory();
+            } else {
+                alert(`❌ Error: ${data.error || 'Failed to send gift'}`);
+            }
+        } catch (error) {
+            alert(`❌ Error: ${error.message}`);
+        }
+    }
+    
+    async function fetchGiftHistory() {
+        try {
+            const response = await fetch('/api/admin/gift-history');
+            const data = await response.json();
+            
+            const tbody = document.getElementById('giftHistoryTable')?.querySelector('tbody');
+            if (!tbody) return;
+            
+            if (!data.gifts || data.gifts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">No gifts sent yet</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.gifts.map(gift => `
+                <tr>
+                    <td style="padding:12px">${gift.created_at || gift.date || 'N/A'}</td>
+                    <td style="padding:12px"><strong>${gift.username}</strong></td>
+                    <td style="padding:12px">${gift.item_name || gift.item}</td>
+                    <td style="padding:12px">€${(gift.item_value || 0).toFixed(2)}</td>
+                    <td style="padding:12px"><span style="color:var(--success);font-weight:600">✅ Sent</span></td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            console.error('Error fetching gift history:', error);
+        }
+    }
+    
+    // Load shop items on page load
+    loadShopItems();
+    fetchGiftHistory();
   </script>
 </body>
 </html>
