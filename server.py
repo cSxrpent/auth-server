@@ -2830,68 +2830,6 @@ def get_all_purchases_endpoint():
         log_event(f"Error getting all purchases: {e}", level="error")
         return jsonify({'error': str(e)}), 500
 
-# ==================== ITEM LIKE ENDPOINTS ====================
-
-@app.route('/api/items/like', methods=['POST'])
-def like_item_endpoint():
-    """Like an item"""
-    try:
-        data = request.json
-        item_type = data.get('type', '').strip()
-        item_name = data.get('name', '').strip()
-        ip_address = request.remote_addr
-        
-        if not item_type or not item_name:
-            return jsonify({'error': 'Item type and name required'}), 400
-        
-        success, message = db_helper.like_item(item_type, item_name, ip_address)
-        
-        if success:
-            like_count = db_helper.get_item_likes(item_type, item_name)
-            return jsonify({'success': True, 'likes': like_count}), 200
-        else:
-            return jsonify({'success': False, 'message': message}), 400
-    except Exception as e:
-        log_event(f"Error liking item: {e}", level="error")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/items/likes', methods=['GET'])
-def get_item_likes_endpoint():
-    """Get like count for an item"""
-    try:
-        item_type = request.args.get('type', '').strip()
-        item_name = request.args.get('name', '').strip()
-        
-        if not item_type or not item_name:
-            return jsonify({'error': 'Item type and name required'}), 400
-        
-        ip_address = request.remote_addr
-        likes = db_helper.get_item_likes(item_type, item_name)
-        has_liked = db_helper.has_liked_item(item_type, item_name, ip_address)
-        
-        return jsonify({'likes': likes, 'hasLiked': has_liked}), 200
-    except Exception as e:
-        log_event(f"Error getting item likes: {e}", level="error")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/items/likes-batch', methods=['POST'])
-def get_items_likes_batch_endpoint():
-    """Get like counts for multiple items in one batch call"""
-    try:
-        data = request.json
-        items = data.get('items', [])  # List of {type, name} objects
-        
-        if not items:
-            return jsonify({'error': 'Items array required'}), 400
-        
-        ip_address = request.remote_addr
-        likes_data = db_helper.get_items_likes_batch(items, ip_address)
-        
-        return jsonify({'likes': likes_data}), 200
-    except Exception as e:
-        log_event(f"Error getting batch item likes: {e}", level="error")
-        return jsonify({'error': str(e)}), 500
-
 # ==================== SHOP SETTINGS ENDPOINTS ====================
 
 @app.route('/api/shop/settings', methods=['GET'])

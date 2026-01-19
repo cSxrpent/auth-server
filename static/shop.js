@@ -214,55 +214,6 @@ function searchAndFilterProducts() {
     return filtered;
 }
 
-async function likeItem(itemType, itemName, event) {
-    event.stopPropagation();
-    event.preventDefault();
-    
-    try {
-        const response = await fetch('/api/items/like', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                type: itemType,
-                name: itemName
-            })
-        });
-        
-        const data = await response.json();
-        console.log('Like response:', data);
-        
-        if (data.success) {
-            // Update the like count display
-            const likeBtn = event.target.closest('.like-btn');
-            if (likeBtn) {
-                likeBtn.innerHTML = `👍 ${data.likes}`;
-                likeBtn.classList.add('liked');
-                likeBtn.style.color = 'var(--success)';
-                showNotification('✅ Liked!', 'success');
-            }
-        } else {
-            showNotification('⚠️ ' + data.message, 'info');
-        }
-    } catch (error) {
-        console.error('Error liking item:', error);
-        showNotification('❌ Error liking item', 'error');
-    }
-}
-
-async function getItemLikes(itemType, itemName) {
-    try {
-        const response = await fetch(`/api/items/likes?type=${itemType}&name=${itemName}`);
-        const data = await response.json();
-        return {
-            likes: data.likes,
-            hasLiked: data.hasLiked
-        };
-    } catch (error) {
-        console.error('Error getting item likes:', error);
-        return { likes: 0, hasLiked: false };
-    }
-}
-
 // ============ GIFT CARDS ============
 let giftCardBalance = 0;
 let appliedGiftCode = null;
@@ -473,9 +424,7 @@ function renderProducts(category = 'all') {
                     </div>
                     <div style="margin-top:auto;width:100%">
                         <div class="product-price" style="margin-bottom:12px;font-size:1.5rem;font-weight:700">€${product.price.toFixed(2)}</div>
-                        <button class="like-btn" data-type="${product.type}" data-name="${product.name}" style="width:100%;padding:8px;margin-bottom:8px;font-size:0.9rem;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);border-radius:8px;cursor:pointer;transition:all 0.3s" onclick="likeItem('${product.type}', '${product.name.replace(/'/g, "\\'")}', event)">
-                            👍 0
-                        </button>
+
                         <button class="buy-button" style="width:100%;padding:14px;font-size:1rem;font-weight:600;border-radius:12px" onclick='addToCart(${JSON.stringify(product).replace(/'/g, "&apos;")})'>
                             🛒 Add to Cart
                         </button>
@@ -484,81 +433,8 @@ function renderProducts(category = 'all') {
             </div>
         `;
     }).join('');
-    
-    // Load like counts for all items
-    loadAllLikeCounts();
 }
 
-async function loadAllLikeCounts() {
-    const likeButtons = document.querySelectorAll('.like-btn');
-    
-    // Build list of all items
-    const items = Array.from(likeButtons).map(btn => ({
-        type: btn.dataset.type,
-        name: btn.dataset.name
-    }));
-    
-    if (items.length === 0) return;
-    
-    try {
-        // Fetch all likes in ONE connection
-        const response = await fetch('/api/items/likes-batch', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ items })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            console.warn('Batch endpoint error, falling back to individual requests:', data.error);
-            // Fallback to individual requests
-            loadAllLikeCountsFallback(likeButtons);
-            return;
-        }
-        
-        // Update all buttons with their like counts
-        for (const btn of likeButtons) {
-            const itemType = btn.dataset.type;
-            const itemName = btn.dataset.name;
-            const key = `${itemType}|${itemName}`;
-            
-            if (data.likes[key]) {
-                const likes = data.likes[key];
-                btn.innerHTML = `👍 ${likes.likes}`;
-                if (likes.hasLiked) {
-                    btn.classList.add('liked');
-                }
-            }
-        }
-    } catch (error) {
-        console.warn('Error loading likes batch, falling back to individual requests:', error);
-        // Fallback to individual requests if batch endpoint fails
-        loadAllLikeCountsFallback(likeButtons);
-    }
-}
-
-async function loadAllLikeCountsFallback(likeButtons) {
-    // Fallback: fetch likes individually (old method)
-    for (const btn of likeButtons) {
-        const itemType = btn.dataset.type;
-        const itemName = btn.dataset.name;
-        
-        try {
-            const data = await getItemLikes(itemType, itemName);
-            btn.innerHTML = `👍 ${data.likes}`;
-            if (data.hasLiked) {
-                btn.classList.add('liked');
-            }
-        } catch (error) {
-            console.error('Error loading likes for:', itemType, itemName, error);
-        }
-    }
-}
 
 function tryNextImage(img, fallbackUrls) {
     if (fallbackUrls.length > 0) {

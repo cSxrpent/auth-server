@@ -1460,108 +1460,6 @@ def get_all_purchases():
 
 # ==================== ITEM LIKE FUNCTIONS ====================
 
-def like_item(item_type, item_name, ip_address):
-    """Like an item (one per IP per item)"""
-    try:
-        with get_db() as db:
-            from init_database import ItemLike
-            
-            # Check if already liked
-            existing = db.query(ItemLike).filter_by(
-                item_type=item_type,
-                item_name=item_name,
-                ip_address=ip_address
-            ).first()
-            
-            if existing:
-                return False, "Already liked"
-            
-            like = ItemLike(
-                item_type=item_type,
-                item_name=item_name,
-                ip_address=ip_address
-            )
-            db.add(like)
-            return True, "Liked successfully"
-    except Exception as e:
-        print(f"⚠️ Error liking item: {e}")
-        return False, str(e)
-
-def get_item_likes(item_type, item_name):
-    """Get like count for an item"""
-    try:
-        with get_db() as db:
-            from init_database import ItemLike
-            count = db.query(ItemLike).filter_by(
-                item_type=item_type,
-                item_name=item_name
-            ).count()
-            return count
-    except Exception as e:
-        print(f"⚠️ Error getting item likes: {e}")
-        return 0
-
-def has_liked_item(item_type, item_name, ip_address):
-    """Check if IP has already liked an item"""
-    try:
-        with get_db() as db:
-            from init_database import ItemLike
-            like = db.query(ItemLike).filter_by(
-                item_type=item_type,
-                item_name=item_name,
-                ip_address=ip_address
-            ).first()
-            return like is not None
-    except Exception as e:
-        print(f"⚠️ Error checking like status: {e}")
-        return False
-
-def get_items_likes_batch(items, ip_address=None):
-    """
-    Get like counts for multiple items in a single database connection.
-    Items should be list of dicts with 'type' and 'name' keys.
-    Returns dict mapping 'type|name' to {'likes': count, 'hasLiked': bool}
-    """
-    try:
-        with get_db() as db:
-            from init_database import ItemLike
-            
-            # Fetch all likes for the requested items in one query
-            result = {}
-            
-            for item in items:
-                item_type = item.get('type', '').strip()
-                item_name = item.get('name', '').strip()
-                
-                if not item_type or not item_name:
-                    continue
-                
-                # Get like count
-                count = db.query(ItemLike).filter_by(
-                    item_type=item_type,
-                    item_name=item_name
-                ).count()
-                
-                # Check if current IP has liked (if ip_address provided)
-                has_liked = False
-                if ip_address:
-                    has_liked = db.query(ItemLike).filter_by(
-                        item_type=item_type,
-                        item_name=item_name,
-                        ip_address=ip_address
-                    ).first() is not None
-                
-                key = f"{item_type}|{item_name}"
-                result[key] = {
-                    'likes': count,
-                    'hasLiked': has_liked
-                }
-            
-            return result
-    except Exception as e:
-        print(f"⚠️ Error getting batch item likes: {e}")
-        return {}
-
 # ==================== SHOP SETTINGS FUNCTIONS ====================
 
 def get_shop_settings():
@@ -1666,10 +1564,6 @@ __all__ = [
     'create_purchase',
     'get_user_purchases',
     'get_all_purchases',
-    'like_item',
-    'get_item_likes',
-    'has_liked_item',
-    'get_items_likes_batch',
     'get_shop_settings',
     'update_shop_settings'
 ]
