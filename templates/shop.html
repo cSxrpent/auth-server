@@ -79,15 +79,14 @@
         
         /* Cart Button */
         .cart-button{
-            position:absolute;
+            position:fixed;
             top:20px;
-            right:20px;
             background:linear-gradient(90deg,var(--accent),#7b4bff);
             color:#fff;
             padding:12px 24px;
             border-radius:12px;
             border:none;
-            font-size:1.2rem;
+            font-size:0.95rem;
             cursor:pointer;
             box-shadow:0 8px 30px rgba(0,212,255,0.5);
             transition:all 0.3s;
@@ -97,6 +96,15 @@
             justify-content:center;
             gap:8px;
             font-weight:600;
+        }
+        
+        #cartButton{
+            right:160px;
+        }
+        
+        #giftCardButton{
+            right:20px;
+            font-size:0.85rem;
         }
         .cart-button:hover{transform:scale(1.05);box-shadow:var(--glow)}
         .cart-count{
@@ -688,7 +696,6 @@
             <div class="tab" data-category="dailyskins">🎨 Daily Skins</div>
             <div class="tab" data-category="calendar">📅 Calendars</div>
             <div class="tab" data-category="bundles">📦 Bundles</div>
-            <div class="tab" style="background: linear-gradient(90deg, var(--gold), #ffa500); color: #000;" onclick="showGiftCardModal()">💳 Gift Cards</div>
         </div>
 
         <div id="products" class="products-grid"></div>

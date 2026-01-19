@@ -408,17 +408,9 @@ async function processTopUpPayment() {
 
 function renderProducts(category = 'all') {
     const productsContainer = document.getElementById('products');
-    currentCategory = category;
+    if (!productsContainer) return;
     
-    if (!shopData) {
-        productsContainer.innerHTML = `
-            <div class="empty-state">
-                <div class="icon">⏳</div>
-                <div>Loading shop data...</div>
-            </div>
-        `;
-        return;
-    }
+    currentCategory = category;
     
     // Use search and filter
     const filtered = searchAndFilterProducts();
