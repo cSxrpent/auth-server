@@ -808,20 +808,6 @@
                 <input type="text" id="usernameConfirm" placeholder="Confirm your username" required>
             </div>
             <div class="form-group">
-                <label>Gift Code (Optional - For Gift Cards)</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="giftCode" placeholder="Enter gift code" maxlength="20">
-                    <button type="button" onclick="applyGiftCode()" style="padding: 10px 16px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Check</button>
-                </div>
-                <div id="giftCodeBalance" style="margin-top: 10px; padding: 10px; border-radius: 8px; display: none; background: rgba(46, 213, 115, 0.2); color: var(--success); border: 1px solid var(--success);">
-                    Balance: €<span id="balanceAmount">0.00</span>
-                    <div id="topUpWarning" style="margin-top: 8px; padding: 8px; border-radius: 6px; background: rgba(255, 152, 0, 0.2); color: #ffb74d; display: none; border: 1px solid rgba(255, 152, 0, 0.5);">
-                        ⚠️ Insufficient balance! You can top up your gift card with PayPal.
-                        <button type="button" onclick="showTopUpModal()" style="margin-top: 8px; display: block; width: 100%; padding: 8px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">💳 Top Up with PayPal</button>
-                    </div>
-                </div>
-            </div>
-            <div class="form-group">
                 <label>Gift Message (Optional)</label>
                 <textarea id="message" rows="3" placeholder="Add a personal message..."></textarea>
             </div>

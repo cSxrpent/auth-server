@@ -2227,6 +2227,10 @@ def create_cart_order():
         if final_payment_amount <= 0:
             # Create purchase record directly
             gift_code = gift_card.get('code') if gift_card else None
+            
+            # Filter out gift cards - they don't get sent in-game
+            items_to_send = [item for item in cart if item.get('type') != 'GIFT_CARD' and item.get('category') != 'gift_card']
+            
             db_helper.create_purchase(
                 username=username,
                 items=cart,
@@ -2235,6 +2239,18 @@ def create_cart_order():
                 coupon_used=coupon,
                 payment_id=f"GIFTCARD-{gift_code}" if gift_code else "GIFTCARD"
             )
+            
+            # Only send real items, not gift cards
+            if items_to_send:
+                for item in items_to_send:
+                    for i in range(item.get('quantity', 1)):
+                        try:
+                            send_wolvesville_gift(username, item, message)
+                            # Wait 2 seconds between gifts
+                            if not (item == items_to_send[-1] and i == item.get('quantity', 1) - 1):
+                                time.sleep(2)
+                        except Exception as e:
+                            log_event(f"Failed to send gift {item.get('name')}: {e}", level="error")
             
             # Redeem gift code
             if gift_code:
@@ -2365,11 +2381,14 @@ def cart_payment_success():
             if coupon:
                 coupon_manager.use_coupon(coupon['code'])
             
+            # Filter out gift cards - only send real shop items
+            items_to_send = [item for item in cart if item.get('type') != 'GIFT_CARD' and item.get('category') != 'gift_card']
+            
             # Send gifts with 2-second delays
             results = []
             failed_items = []
             
-            for item in cart:
+            for item in items_to_send:
                 for i in range(item['quantity']):
                     try:
                         # Send gift
@@ -2380,7 +2399,7 @@ def cart_payment_success():
                         })
                         
                         # Wait 2 seconds before next gift (except for last one)
-                        if not (item == cart[-1] and i == item['quantity'] - 1):
+                        if not (item == items_to_send[-1] and i == item['quantity'] - 1):
                             time.sleep(2)
                             
                     except Exception as e:
