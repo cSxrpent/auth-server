@@ -264,7 +264,7 @@ function addGiftCardToCart(amount) {
     
     showNotification(`✅ Gift Card €${finalAmount.toFixed(2)} added to cart!`, 'success');
     document.getElementById('buyGiftCardModal').style.display = 'none';
-    updateCart();
+    updateCartDisplay();
     
     // Auto-open cart
     setTimeout(() => {
@@ -489,7 +489,7 @@ function tryNextImage(img, fallbackUrls) {
 
 function addToCart(product) {
     // Categories that can only be purchased once (no quantity increase)
-    const singlePurchaseCategories = ['bundles', 'calendar', 'dailyskins', 'skinsets', 'premium', 'emote'];
+    const singlePurchaseCategories = ['bundles', 'calendar', 'dailyskins', 'skinsets', 'premium', 'emote', 'gift_card'];
     
     const existingIndex = cart.findIndex(item => 
         item.type === product.type || 
@@ -621,7 +621,7 @@ function updateCartDisplay() {
                         <div class="cart-item-price">€${item.price.toFixed(2)}</div>
                     </div>
                 <div class="cart-item-controls">
-                    ${['bundles', 'calendar', 'dailyskins', 'skinsets', 'premium', 'emote'].includes(item.category) ? 
+                    ${['bundles', 'calendar', 'dailyskins', 'skinsets', 'premium', 'emote', 'gift_card'].includes(item.category) ? 
                         // Single-purchase items: only show remove button
                         `<button onclick="removeFromCart(${index})" class="remove-btn">🗑️</button>` :
                         // Multi-purchase items: show quantity controls
