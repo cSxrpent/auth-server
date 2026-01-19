@@ -1,8 +1,8 @@
-// Global promo configuration
-const GLOBAL_PROMO = {
-    enabled: true,
-    discountPercent: 15,
-    label: "🔥 15% OFF SITEWIDE"
+// Global promo configuration - will be loaded from DB
+let GLOBAL_PROMO = {
+    enabled: false,
+    discountPercent: 0,
+    label: ""
 };
 
 // Loyalty system configuration
@@ -55,6 +55,28 @@ let selectedProduct = null;
 let cart = [];
 let appliedCoupon = null;
 let shopData = null; // Store fetched shop data
+
+// Load shop settings on page load
+async function loadShopSettings() {
+    try {
+        const response = await fetch('/api/shop/settings');
+        const settings = await response.json();
+        GLOBAL_PROMO = {
+            enabled: settings.global_promo_enabled,
+            discountPercent: settings.global_promo_percent,
+            label: settings.global_promo_label || ""
+        };
+        console.log('✅ Shop settings loaded:', GLOBAL_PROMO);
+        
+        // Update promo banner if enabled
+        if (GLOBAL_PROMO.enabled && GLOBAL_PROMO.label) {
+            const banner = document.querySelector('.promo-banner-text');
+            if (banner) banner.textContent = GLOBAL_PROMO.label;
+        }
+    } catch (error) {
+        console.error('Failed to load shop settings:', error);
+    }
+}
 
 // Fetch shop data from API on page load
 async function fetchShopData() {
@@ -165,8 +187,73 @@ function getAllProducts() {
     return products;
 }
 
+// ============ SEARCH & FILTER ============
+function searchAndFilterProducts() {
+    const searchQuery = document.getElementById('searchInput')?.value.toLowerCase() || '';
+    const category = currentCategory || 'all';
+    
+    const allProducts = getAllProducts();
+    
+    // Filter by category first
+    let filtered = category === 'all' 
+        ? allProducts 
+        : allProducts.filter(p => p.category === category);
+    
+    // Then filter by search query
+    if (searchQuery) {
+        filtered = filtered.filter(p => 
+            p.name.toLowerCase().includes(searchQuery) ||
+            (p.type && p.type.toLowerCase().includes(searchQuery))
+        );
+    }
+    
+    return filtered;
+}
+
+async function likeItem(itemType, itemName, event) {
+    event.stopPropagation();
+    
+    try {
+        const response = await fetch('/api/items/like', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                type: itemType,
+                name: itemName
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            // Update the like count display
+            const likeBtn = event.target.closest('.like-btn');
+            if (likeBtn) {
+                likeBtn.innerHTML = `👍 ${data.likes}`;
+                likeBtn.classList.add('liked');
+            }
+        }
+    } catch (error) {
+        console.error('Error liking item:', error);
+    }
+}
+
+async function getItemLikes(itemType, itemName) {
+    try {
+        const response = await fetch(`/api/items/likes?type=${itemType}&name=${itemName}`);
+        const data = await response.json();
+        return {
+            likes: data.likes,
+            hasLiked: data.hasLiked
+        };
+    } catch (error) {
+        console.error('Error getting item likes:', error);
+        return { likes: 0, hasLiked: false };
+    }
+}
+
 function renderProducts(category = 'all') {
     const productsContainer = document.getElementById('products');
+    currentCategory = category;
     
     if (!shopData) {
         productsContainer.innerHTML = `
@@ -178,27 +265,14 @@ function renderProducts(category = 'all') {
         return;
     }
     
-    const allProducts = getAllProducts();
-    
-    if (allProducts.length === 0) {
-        productsContainer.innerHTML = `
-            <div class="empty-state">
-                <div class="icon">📦</div>
-                <div>No products available yet</div>
-            </div>
-        `;
-        return;
-    }
-    
-    const filtered = category === 'all' 
-        ? allProducts 
-        : allProducts.filter(p => p.category === category);
+    // Use search and filter
+    const filtered = searchAndFilterProducts();
 
     if (filtered.length === 0) {
         productsContainer.innerHTML = `
             <div class="empty-state">
-                <div class="icon">${CATEGORY_EMOJIS[category] || '📦'}</div>
-                <div>No ${category} items available</div>
+                <div class="icon">🔍</div>
+                <div>No products found</div>
             </div>
         `;
         return;
@@ -252,7 +326,10 @@ function renderProducts(category = 'all') {
                         ${product.roleCardCount ? `<div style="color:#ff6b9d;font-size:0.9rem;margin-bottom:6px;font-weight:600">${product.roleCardCount}x Role Cards</div>` : ''}
                     </div>
                     <div style="margin-top:auto;width:100%">
-                        <div class="product-price" style="margin-bottom:16px;font-size:1.5rem;font-weight:700">€${product.price.toFixed(2)}</div>
+                        <div class="product-price" style="margin-bottom:12px;font-size:1.5rem;font-weight:700">€${product.price.toFixed(2)}</div>
+                        <button class="like-btn" data-type="${product.type}" data-name="${product.name}" style="width:100%;padding:8px;margin-bottom:8px;font-size:0.9rem;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);border-radius:8px;cursor:pointer;transition:all 0.3s" onclick="likeItem('${product.type}', '${product.name.replace(/'/g, "\\'")}', event)">
+                            👍 0
+                        </button>
                         <button class="buy-button" style="width:100%;padding:14px;font-size:1rem;font-weight:600;border-radius:12px" onclick='addToCart(${JSON.stringify(product).replace(/'/g, "&apos;")})'>
                             🛒 Add to Cart
                         </button>
@@ -261,6 +338,27 @@ function renderProducts(category = 'all') {
             </div>
         `;
     }).join('');
+    
+    // Load like counts for all items
+    loadAllLikeCounts();
+}
+
+async function loadAllLikeCounts() {
+    const likeButtons = document.querySelectorAll('.like-btn');
+    for (const btn of likeButtons) {
+        const itemType = btn.dataset.type;
+        const itemName = btn.dataset.name;
+        
+        try {
+            const data = await getItemLikes(itemType, itemName);
+            btn.innerHTML = `👍 ${data.likes}`;
+            if (data.hasLiked) {
+                btn.classList.add('liked');
+            }
+        } catch (error) {
+            console.error('Error loading likes:', error);
+        }
+    }
 }
 
 function tryNextImage(img, fallbackUrls) {

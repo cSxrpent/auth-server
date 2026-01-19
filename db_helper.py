@@ -2,6 +2,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
+from datetime import datetime
 from init_database import User, Key, Testimonial, UserCredential, UserXP, Stats, LastConnected, Log, RecentConnection
 from sqlalchemy.exc import OperationalError
 
@@ -1362,6 +1363,257 @@ def get_shop_bundles_only():
     except Exception as e:
         print(f"⚠️ Error getting shop bundles: {e}")
         return []
+
+# ==================== GIFT CODE FUNCTIONS ====================
+
+def create_gift_code(amount, expires_at=None):
+    """Create a new gift code"""
+    try:
+        import secrets
+        code = secrets.token_hex(8).upper()
+        
+        with get_db() as db:
+            from init_database import GiftCode
+            new_code = GiftCode(
+                code=code,
+                amount=amount,
+                expires_at=expires_at
+            )
+            db.add(new_code)
+            return code
+    except Exception as e:
+        print(f"⚠️ Error creating gift code: {e}")
+        return None
+
+def get_gift_code(code):
+    """Get a gift code by code"""
+    try:
+        with get_db() as db:
+            from init_database import GiftCode
+            gc = db.query(GiftCode).filter_by(code=code).first()
+            if gc:
+                return {
+                    'code': gc.code,
+                    'amount': float(gc.amount),
+                    'is_redeemed': gc.is_redeemed,
+                    'redeemed_by': gc.redeemed_by,
+                    'expires_at': gc.expires_at
+                }
+            return None
+    except Exception as e:
+        print(f"⚠️ Error getting gift code: {e}")
+        return None
+
+def redeem_gift_code(code, username):
+    """Redeem a gift code"""
+    try:
+        with get_db() as db:
+            from init_database import GiftCode
+            gc = db.query(GiftCode).filter_by(code=code).first()
+            if not gc:
+                return False, "Code not found"
+            if gc.is_redeemed:
+                return False, "Code already redeemed"
+            
+            gc.is_redeemed = True
+            gc.redeemed_by = username
+            gc.redeemed_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            return True, float(gc.amount)
+    except Exception as e:
+        print(f"⚠️ Error redeeming gift code: {e}")
+        return False, str(e)
+
+def get_all_gift_codes():
+    """Get all gift codes for admin"""
+    try:
+        with get_db() as db:
+            from init_database import GiftCode
+            codes = db.query(GiftCode).all()
+            return [
+                {
+                    'code': c.code,
+                    'amount': float(c.amount),
+                    'is_redeemed': c.is_redeemed,
+                    'redeemed_by': c.redeemed_by,
+                    'redeemed_at': c.redeemed_at,
+                    'created_at': c.created_at,
+                    'expires_at': c.expires_at
+                }
+                for c in codes
+            ]
+    except Exception as e:
+        print(f"⚠️ Error getting all gift codes: {e}")
+        return []
+
+# ==================== PURCHASE HISTORY FUNCTIONS ====================
+
+def create_purchase(username, items, total_amount, message=None, coupon_used=None, payment_id=None):
+    """Create a purchase record"""
+    try:
+        with get_db() as db:
+            from init_database import Purchase
+            purchase = Purchase(
+                username=username,
+                items=items,
+                total_amount=total_amount,
+                message=message,
+                coupon_used=coupon_used,
+                payment_id=payment_id
+            )
+            db.add(purchase)
+            return True
+    except Exception as e:
+        print(f"⚠️ Error creating purchase: {e}")
+        return False
+
+def get_user_purchases(username):
+    """Get all purchases for a user"""
+    try:
+        with get_db() as db:
+            from init_database import Purchase
+            purchases = db.query(Purchase).filter_by(username=username).order_by(Purchase.created_at.desc()).all()
+            return [
+                {
+                    'id': p.id,
+                    'items': p.items,
+                    'total_amount': float(p.total_amount),
+                    'message': p.message,
+                    'coupon_used': p.coupon_used,
+                    'created_at': p.created_at,
+                    'payment_id': p.payment_id
+                }
+                for p in purchases
+            ]
+    except Exception as e:
+        print(f"⚠️ Error getting user purchases: {e}")
+        return []
+
+def get_all_purchases():
+    """Get all purchases for admin"""
+    try:
+        with get_db() as db:
+            from init_database import Purchase
+            purchases = db.query(Purchase).order_by(Purchase.created_at.desc()).all()
+            return [
+                {
+                    'id': p.id,
+                    'username': p.username,
+                    'items': p.items,
+                    'total_amount': float(p.total_amount),
+                    'message': p.message,
+                    'coupon_used': p.coupon_used,
+                    'created_at': p.created_at,
+                    'payment_id': p.payment_id
+                }
+                for p in purchases
+            ]
+    except Exception as e:
+        print(f"⚠️ Error getting all purchases: {e}")
+        return []
+
+# ==================== ITEM LIKE FUNCTIONS ====================
+
+def like_item(item_type, item_name, ip_address):
+    """Like an item (one per IP per item)"""
+    try:
+        with get_db() as db:
+            from init_database import ItemLike
+            
+            # Check if already liked
+            existing = db.query(ItemLike).filter_by(
+                item_type=item_type,
+                item_name=item_name,
+                ip_address=ip_address
+            ).first()
+            
+            if existing:
+                return False, "Already liked"
+            
+            like = ItemLike(
+                item_type=item_type,
+                item_name=item_name,
+                ip_address=ip_address
+            )
+            db.add(like)
+            return True, "Liked successfully"
+    except Exception as e:
+        print(f"⚠️ Error liking item: {e}")
+        return False, str(e)
+
+def get_item_likes(item_type, item_name):
+    """Get like count for an item"""
+    try:
+        with get_db() as db:
+            from init_database import ItemLike
+            count = db.query(ItemLike).filter_by(
+                item_type=item_type,
+                item_name=item_name
+            ).count()
+            return count
+    except Exception as e:
+        print(f"⚠️ Error getting item likes: {e}")
+        return 0
+
+def has_liked_item(item_type, item_name, ip_address):
+    """Check if IP has already liked an item"""
+    try:
+        with get_db() as db:
+            from init_database import ItemLike
+            like = db.query(ItemLike).filter_by(
+                item_type=item_type,
+                item_name=item_name,
+                ip_address=ip_address
+            ).first()
+            return like is not None
+    except Exception as e:
+        print(f"⚠️ Error checking like status: {e}")
+        return False
+
+# ==================== SHOP SETTINGS FUNCTIONS ====================
+
+def get_shop_settings():
+    """Get current shop settings"""
+    try:
+        with get_db() as db:
+            from init_database import ShopSettings
+            settings = db.query(ShopSettings).filter_by(id=1).first()
+            if settings:
+                return {
+                    'global_promo_enabled': settings.global_promo_enabled,
+                    'global_promo_percent': settings.global_promo_percent,
+                    'global_promo_label': settings.global_promo_label
+                }
+            return {
+                'global_promo_enabled': False,
+                'global_promo_percent': 0,
+                'global_promo_label': None
+            }
+    except Exception as e:
+        print(f"⚠️ Error getting shop settings: {e}")
+        return {
+            'global_promo_enabled': False,
+            'global_promo_percent': 0,
+            'global_promo_label': None
+        }
+
+def update_shop_settings(global_promo_enabled, global_promo_percent, global_promo_label):
+    """Update shop settings"""
+    try:
+        with get_db() as db:
+            from init_database import ShopSettings
+            settings = db.query(ShopSettings).filter_by(id=1).first()
+            if not settings:
+                settings = ShopSettings(id=1)
+                db.add(settings)
+            
+            settings.global_promo_enabled = global_promo_enabled
+            settings.global_promo_percent = global_promo_percent
+            settings.global_promo_label = global_promo_label
+            settings.updated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            return True
+    except Exception as e:
+        print(f"⚠️ Error updating shop settings: {e}")
+        return False
     
 # ==================== EXPORTS ====================
 
@@ -1413,5 +1665,17 @@ __all__ = [
     'update_user_bot_version',
     'save_all_shop_data',
     'get_shop_data',
-    'get_shop_bundles_only'
+    'get_shop_bundles_only',
+    'create_gift_code',
+    'get_gift_code',
+    'redeem_gift_code',
+    'get_all_gift_codes',
+    'create_purchase',
+    'get_user_purchases',
+    'get_all_purchases',
+    'like_item',
+    'get_item_likes',
+    'has_liked_item',
+    'get_shop_settings',
+    'update_shop_settings'
 ]

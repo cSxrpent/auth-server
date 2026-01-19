@@ -177,6 +177,47 @@ class ShopMetadata(Base):
     id = Column(Integer, primary_key=True, default=1)
     last_updated = Column(String(30), nullable=False)
 
+class GiftCode(Base):
+    __tablename__ = 'gift_codes'
+    
+    code = Column(String(16), primary_key=True)
+    amount = Column(Numeric(10, 2), nullable=False)
+    is_redeemed = Column(Boolean, default=False)
+    redeemed_by = Column(String(255), nullable=True)
+    redeemed_at = Column(String(30), nullable=True)
+    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+    expires_at = Column(String(30), nullable=True)
+
+class Purchase(Base):
+    __tablename__ = 'purchases'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    payment_id = Column(String(255), nullable=True)
+    username = Column(String(255), nullable=False)
+    items = Column(JSON, nullable=False)
+    total_amount = Column(Numeric(10, 2), nullable=False)
+    message = Column(Text, nullable=True)
+    coupon_used = Column(String(255), nullable=True)
+    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+class ItemLike(Base):
+    __tablename__ = 'item_likes'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    item_type = Column(String(100), nullable=False)
+    item_name = Column(String(255), nullable=False)
+    ip_address = Column(String(50), nullable=False)
+    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
+class ShopSettings(Base):
+    __tablename__ = 'shop_settings'
+    
+    id = Column(Integer, primary_key=True, default=1)
+    global_promo_enabled = Column(Boolean, default=False)
+    global_promo_percent = Column(Integer, default=0)
+    global_promo_label = Column(String(255), nullable=True)
+    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+
 def init_database():
     """Initialize database with all tables"""
     DATABASE_URL = os.getenv("DATABASE_URL")

@@ -3,375 +3,338 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shop Management - RXZBot Admin</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+    <title>Shop Manager - Admin</title>
+    <style>
+        :root{
+            --bg:#0a0e1a; --card:#0f1724; --muted:#9aa4b2; --accent:#00d4ff; --danger:#ff4757; --glass: rgba(255,255,255,0.02); --success:#2ed573;
+            --radius:16px; --glow:0 0 20px rgba(0,212,255,0.3); --gold:#ffd700;
+        }
+        *{box-sizing:border-box; margin:0; padding:0;}
+        body{
+            font-family:'Segoe UI',system-ui,Arial;
+            background:linear-gradient(135deg,#071026,#0d1526,#1a1f35);
+            color:#eaf1ff;
+            min-height:100vh;
+            padding:20px;
+        }
+        .wrap{max-width:1400px; margin:0 auto;}
+        header{display:flex; align-items:center; justify-content:space-between; margin-bottom:30px;}
+        h1{font-size:2.5rem; background:linear-gradient(90deg,var(--accent),#7b4bff); background-clip:text; -webkit-background-clip:text; color:transparent;}
+        .back-btn{background:linear-gradient(90deg,var(--accent),#7b4bff); border:none; padding:10px 16px; border-radius:12px; color:#fff; font-weight:600; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:8px;}
+        .back-btn:hover{transform:scale(1.05); box-shadow:var(--glow)}
+        
+        .tabs{display:flex; gap:10px; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px; flex-wrap:wrap;}
+        .tab-btn{background:transparent; border:none; padding:10px 16px; color:var(--muted); cursor:pointer; font-weight:600; position:relative; transition:all 0.3s;}
+        .tab-btn:hover{color:#fff}
+        .tab-btn.active{color:var(--accent)}
+        .tab-btn.active::after{content:''; position:absolute; bottom:-15px; left:0; right:0; height:2px; background:var(--accent);}
+        
+        .content{display:none;}
+        .content.active{display:block;}
+        
+        .card{background:var(--card); border-radius:var(--radius); padding:20px; margin-bottom:20px; border:1px solid rgba(255,255,255,0.05);}
+        
+        .form-group{margin-bottom:15px;}
+        .form-group label{display:block; margin-bottom:8px; color:var(--muted); font-weight:600;}
+        input, textarea, select{width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.02); color:#fff; font-size:14px;}
+        input:focus, textarea:focus, select:focus{outline:none; border-color:var(--accent); box-shadow:0 0 10px rgba(0,212,255,0.3)}
+        
+        .btn{border:none; padding:10px 16px; border-radius:8px; cursor:pointer; font-weight:600; transition:all 0.3s;}
+        .btn-primary{background:linear-gradient(90deg,var(--accent),#7b4bff); color:#fff;}
+        .btn-primary:hover{transform:scale(1.05); box-shadow:var(--glow)}
+        .btn-secondary{background:rgba(255,255,255,0.05); color:var(--muted); border:1px solid rgba(255,255,255,0.1);}
+        .btn-secondary:hover{background:rgba(255,255,255,0.1); color:#fff}
+        .btn-sm{padding:6px 12px; font-size:13px;}
+        .btn-danger{background:rgba(255,71,87,0.2); color:var(--danger); border:1px solid var(--danger);}
+        .btn-danger:hover{background:rgba(255,71,87,0.3)}
+        
+        .settings-grid{display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;}
+        .settings-box{background:rgba(255,255,255,0.02); padding:15px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);}
+        
+        .list-table{width:100%; border-collapse:collapse;}
+        .list-table th{background:rgba(255,255,255,0.05); padding:12px; text-align:left; font-weight:600; color:var(--muted); border-bottom:1px solid rgba(255,255,255,0.1);}
+        .list-table td{padding:12px; border-bottom:1px solid rgba(255,255,255,0.05);}
+        .list-table tr:hover{background:rgba(255,255,255,0.02)}
+        
+        .badge{display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600;}
+        .badge-active{background:rgba(46,213,115,0.2); color:var(--success);}
+        .badge-inactive{background:rgba(255,71,87,0.2); color:var(--danger);}
+        
+        .status-box{background:rgba(255,255,255,0.02); padding:20px; border-radius:12px; text-align:center;}
+        .status-number{font-size:2rem; font-weight:700; color:var(--accent);}
+        .status-label{color:var(--muted); font-size:0.9rem; margin-top:5px;}
+        
+        .success-msg, .error-msg{padding:12px 16px; border-radius:8px; margin-bottom:15px;}
+        .success-msg{background:rgba(46,213,115,0.2); color:var(--success); border-left:4px solid var(--success);}
+        .error-msg{background:rgba(255,71,87,0.2); color:var(--danger); border-left:4px solid var(--danger);}
+        
+        .empty{text-align:center; padding:40px; color:var(--muted);}
+    </style>
 </head>
 <body>
-    <div class="admin-container">
-        <h1>🛍️ Shop Data Management</h1>
-        
-        <div class="admin-section">
-            <div class="section-header">
-                <h2>Shop Sync Status</h2>
-                <button onclick="refreshShopData()" class="btn btn-primary">🔄 Refresh Now</button>
-            </div>
-            
-            <div id="shopStatus" class="info-grid">
-                <div class="info-card">
-                    <div class="info-label">Last Updated</div>
-                    <div id="lastUpdated" class="info-value">Loading...</div>
+    <div class="wrap">
+        <header>
+            <h1>🛍️ Shop Manager</h1>
+            <a href="/admin" class="back-btn">← Back</a>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('settings')">⚙️ Settings</button>
+            <button class="tab-btn" onclick="switchTab('gift-codes')">🎁 Gift Codes</button>
+            <button class="tab-btn" onclick="switchTab('purchases')">💰 Purchases</button>
+            <button class="tab-btn" onclick="switchTab('likes')">👍 Likes</button>
+        </div>
+
+        <!-- SETTINGS TAB -->
+        <div id="settings" class="content active">
+            <div class="card">
+                <h2>Global Promotion Settings</h2>
+                <div id="promoMessage"></div>
+                
+                <div class="settings-grid">
+                    <div class="settings-box">
+                        <div class="form-group">
+                            <label>Promo Status</label>
+                            <select id="promoEnabled" onchange="updatePromoStatus()">
+                                <option value="false">Disabled</option>
+                                <option value="true">Enabled</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-box">
+                        <div class="form-group">
+                            <label>Discount Percent (%)</label>
+                            <input type="number" id="promoPercent" min="0" max="100" placeholder="e.g., 15" onchange="updatePromoStatus()">
+                        </div>
+                    </div>
                 </div>
-                <div class="info-card">
-                    <div class="info-label">Total Bundles</div>
-                    <div id="totalBundles" class="info-value">0</div>
+                
+                <div class="form-group">
+                    <label>Promo Label (emoji + text)</label>
+                    <input type="text" id="promoLabel" placeholder="e.g., 🔥 15% OFF SITEWIDE" onchange="updatePromoStatus()">
                 </div>
-                <div class="info-card">
-                    <div class="info-label">New Items</div>
-                    <div id="newItems" class="info-value">0</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">Skin Sets</div>
-                    <div id="skinSets" class="info-value">0</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">Daily Skins</div>
-                    <div id="dailySkins" class="info-value">0</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">Calendars</div>
-                    <div id="calendars" class="info-value">0</div>
-                </div>
+                
+                <button class="btn btn-primary" onclick="savePromoSettings()">Save Settings</button>
             </div>
         </div>
 
-        <div class="admin-section">
-            <h2>🆕 New Items (Last 7 Days)</h2>
-            <div id="newItemsList" class="items-list">
-                <p class="loading">Loading new items...</p>
+        <!-- GIFT CODES TAB -->
+        <div id="gift-codes" class="content">
+            <div class="card">
+                <h2>Create Gift Code</h2>
+                <div id="giftCodeMessage"></div>
+                
+                <div class="form-group">
+                    <label>Amount (€)</label>
+                    <input type="number" id="giftAmount" min="0.01" step="0.01" placeholder="e.g., 10.00">
+                </div>
+                
+                <div class="form-group">
+                    <label>Expiry Date (optional)</label>
+                    <input type="date" id="giftExpiry">
+                </div>
+                
+                <button class="btn btn-primary" onclick="createGiftCode()">Generate Code</button>
+            </div>
+
+            <div class="card">
+                <h2>All Gift Codes</h2>
+                <div id="giftCodesList">Loading...</div>
             </div>
         </div>
 
-        <div class="admin-section">
-            <h2>📦 All Bundles</h2>
-            <div id="bundlesList" class="items-list">
-                <p class="loading">Loading bundles...</p>
+        <!-- PURCHASES TAB -->
+        <div id="purchases" class="content">
+            <div class="card">
+                <h2>Purchase History</h2>
+                <div id="purchasesList">Loading...</div>
             </div>
         </div>
 
-        <div class="admin-section">
-            <h2>🎨 Current Skin Sets</h2>
-            <div id="skinSetsList" class="items-list">
-                <p class="loading">Loading skin sets...</p>
+        <!-- LIKES TAB -->
+        <div id="likes" class="content">
+            <div class="card">
+                <h2>Item Likes Statistics</h2>
+                <div id="likeStats">Loading...</div>
             </div>
         </div>
-
-        <div class="admin-section">
-            <h2>📅 Available Calendars</h2>
-            <div id="calendarsList" class="items-list">
-                <p class="loading">Loading calendars...</p>
-            </div>
-        </div>
-
-        <div class="admin-section">
-            <h2>ℹ️ Sync Schedule</h2>
-            <div class="info-box">
-                <p><strong>Automatic Sync:</strong> Daily at 1:10 AM CET</p>
-                <p><strong>Token Source:</strong> Using existing token manager (no extra 2captcha costs)</p>
-                <p><strong>Data Sources:</strong></p>
-                <ul>
-                    <li>Bundles: <code>/purchasableItems/gemOffers</code></li>
-                    <li>Skin Sets & Daily Skins: <code>/billing/rotatingLimitedOffers/v2</code></li>
-                    <li>Calendars: <code>/calendars/purchasable</code></li>
-                </ul>
-            </div>
-        </div>
-
-        <p class="back-link"><a href="{{ url_for('admin_page') }}">← Back to Admin</a></p>
     </div>
 
     <script>
-        async function loadShopData() {
-            try {
-                const response = await fetch('/api/shop/data');
-                const data = await response.json();
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            
+            // Load tab data
+            if (tabName === 'gift-codes') loadGiftCodes();
+            if (tabName === 'purchases') loadPurchases();
+            if (tabName === 'likes') loadLikeStats();
+            if (tabName === 'settings') loadPromoSettings();
+        }
 
-                if (data.error) {
-                    showError(data.error);
+        // ============ PROMO SETTINGS ============
+        async function loadPromoSettings() {
+            try {
+                const response = await fetch('/api/shop/settings');
+                const data = await response.json();
+                
+                document.getElementById('promoEnabled').value = data.global_promo_enabled ? 'true' : 'false';
+                document.getElementById('promoPercent').value = data.global_promo_percent || 0;
+                document.getElementById('promoLabel').value = data.global_promo_label || '';
+            } catch (error) {
+                console.error('Error loading promo settings:', error);
+            }
+        }
+
+        async function savePromoSettings() {
+            try {
+                const data = {
+                    global_promo_enabled: document.getElementById('promoEnabled').value === 'true',
+                    global_promo_percent: parseInt(document.getElementById('promoPercent').value) || 0,
+                    global_promo_label: document.getElementById('promoLabel').value
+                };
+                
+                const response = await fetch('/api/admin/shop/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showMessage('promoMessage', '✅ Settings saved successfully!', 'success');
+                } else {
+                    showMessage('promoMessage', '❌ Error: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('promoMessage', '❌ Error saving settings', 'error');
+            }
+        }
+
+        function updatePromoStatus() {
+            // Real-time preview
+        }
+
+        // ============ GIFT CODES ============
+        async function createGiftCode() {
+            const amount = document.getElementById('giftAmount').value;
+            const expiry = document.getElementById('giftExpiry').value;
+            
+            if (!amount) {
+                showMessage('giftCodeMessage', '❌ Please enter an amount', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/gift-codes/create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        amount: parseFloat(amount),
+                        expires_at: expiry || null
+                    })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    showMessage('giftCodeMessage', `✅ Code created: <strong>${data.code}</strong>`, 'success');
+                    document.getElementById('giftAmount').value = '';
+                    document.getElementById('giftExpiry').value = '';
+                    loadGiftCodes();
+                } else {
+                    showMessage('giftCodeMessage', '❌ Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showMessage('giftCodeMessage', '❌ Error creating code', 'error');
+            }
+        }
+
+        async function loadGiftCodes() {
+            try {
+                const response = await fetch('/api/admin/gift-codes');
+                const data = await response.json();
+                
+                if (!data.codes || data.codes.length === 0) {
+                    document.getElementById('giftCodesList').innerHTML = '<div class="empty">No gift codes yet</div>';
                     return;
                 }
-
-                // Update status
-                document.getElementById('lastUpdated').textContent = 
-                    data.last_updated ? new Date(data.last_updated).toLocaleString() : 'Never';
-                document.getElementById('totalBundles').textContent = data.bundles?.length || 0;
-                document.getElementById('newItems').textContent = 
-                    data.bundles?.filter(b => b.isNew).length || 0;
-                document.getElementById('skinSets').textContent = data.skin_sets?.length || 0;
-                document.getElementById('dailySkins').textContent = data.daily_skins?.length || 0;
-                document.getElementById('calendars').textContent = data.calendars?.length || 0;
-
-                // Display new items
-                displayNewItems(data.bundles?.filter(b => b.isNew) || []);
-
-                // Display all bundles
-                displayBundles(data.bundles || []);
-
-                // Display skin sets
-                displaySkinSets(data.skin_sets || []);
-
-                // Display calendars
-                displayCalendars(data.calendars || []);
-
-            } catch (error) {
-                console.error('Error loading shop data:', error);
-                showError('Failed to load shop data');
-            }
-        }
-
-        function displayNewItems(items) {
-            const container = document.getElementById('newItemsList');
-            
-            if (items.length === 0) {
-                container.innerHTML = '<p class="empty">No new items in the last 7 days</p>';
-                return;
-            }
-
-            container.innerHTML = items.map(item => `
-                <div class="item-card new-item">
-                    <div class="item-badge">🆕 NEW</div>
-                    <div class="item-name">${item.name}</div>
-                    <div class="item-details">
-                        <span class="item-price">€${item.price.toFixed(2)}</span>
-                        <span class="item-gems">${item.cost} gems</span>
-                        <span class="item-date">Since ${item.newSince}</span>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function displayBundles(bundles) {
-            const container = document.getElementById('bundlesList');
-            
-            if (bundles.length === 0) {
-                container.innerHTML = '<p class="empty">No bundles available</p>';
-                return;
-            }
-
-            container.innerHTML = bundles.map(bundle => `
-                <div class="item-card ${bundle.isNew ? 'new-item' : ''}">
-                    ${bundle.isNew ? '<div class="item-badge">🆕 NEW</div>' : ''}
-                    <div class="item-name">${bundle.name}</div>
-                    <div class="item-details">
-                        <span class="item-price">€${bundle.price.toFixed(2)}</span>
-                        <span class="item-gems">${bundle.cost} gems</span>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function displaySkinSets(skinSets) {
-            const container = document.getElementById('skinSetsList');
-            
-            if (skinSets.length === 0) {
-                container.innerHTML = '<p class="empty">No skin sets available</p>';
-                return;
-            }
-
-            container.innerHTML = skinSets.map(set => `
-                <div class="item-card">
-                    <div class="item-name">${set.name}</div>
-                    <div class="item-details">
-                        <span class="item-price">€${set.price.toFixed(2)}</span>
-                        <span class="item-gems">${set.cost} gems</span>
-                        <span class="item-expires">Expires: ${new Date(set.expireDate).toLocaleDateString()}</span>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function displayCalendars(calendars) {
-            const container = document.getElementById('calendarsList');
-            
-            if (calendars.length === 0) {
-                container.innerHTML = '<p class="empty">No calendars available</p>';
-                return;
-            }
-
-            container.innerHTML = calendars.map(cal => `
-                <div class="item-card">
-                    <div class="item-name">${cal.title}</div>
-                    <div class="item-details">
-                        <span class="item-price">€${cal.price.toFixed(2)}</span>
-                        <span class="item-gems">${cal.cost} gems</span>
-                        <span class="item-days">${cal.durationInDays} days</span>
-                        ${cal.owned ? '<span class="item-owned">✅ Owned</span>' : ''}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        async function refreshShopData() {
-            const btn = event.target;
-            const originalText = btn.textContent;
-            
-            btn.disabled = true;
-            btn.textContent = '⏳ Refreshing...';
-
-            try {
-                const response = await fetch('/api/shop/refresh', {
-                    method: 'POST'
+                
+                let html = '<table class="list-table"><thead><tr><th>Code</th><th>Amount</th><th>Status</th><th>Redeemed By</th><th>Created</th></tr></thead><tbody>';
+                data.codes.forEach(code => {
+                    html += `<tr>
+                        <td><strong>${code.code}</strong></td>
+                        <td>€${code.amount.toFixed(2)}</td>
+                        <td>${code.is_redeemed ? '<span class="badge badge-inactive">Redeemed</span>' : '<span class="badge badge-active">Available</span>'}</td>
+                        <td>${code.redeemed_by || '-'}</td>
+                        <td>${code.created_at}</td>
+                    </tr>`;
                 });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    alert('✅ Shop data refreshed successfully!');
-                    loadShopData();
-                } else {
-                    alert('❌ Failed to refresh: ' + data.error);
-                }
+                html += '</tbody></table>';
+                document.getElementById('giftCodesList').innerHTML = html;
             } catch (error) {
-                console.error('Error refreshing shop data:', error);
-                alert('❌ Failed to refresh shop data');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = originalText;
+                console.error('Error loading gift codes:', error);
+                document.getElementById('giftCodesList').innerHTML = '<div class="error-msg">Failed to load gift codes</div>';
             }
         }
 
-        function showError(message) {
-            const sections = ['newItemsList', 'bundlesList', 'skinSetsList', 'calendarsList'];
-            sections.forEach(id => {
-                document.getElementById(id).innerHTML = `<p class="error">${message}</p>`;
-            });
+        // ============ PURCHASES ============
+        async function loadPurchases() {
+            try {
+                const response = await fetch('/api/admin/purchases');
+                const data = await response.json();
+                
+                if (!data.purchases || data.purchases.length === 0) {
+                    document.getElementById('purchasesList').innerHTML = '<div class="empty">No purchases yet</div>';
+                    return;
+                }
+                
+                let html = '<table class="list-table"><thead><tr><th>Date</th><th>User</th><th>Items</th><th>Amount</th><th>Coupon</th></tr></thead><tbody>';
+                data.purchases.forEach(purchase => {
+                    const itemCount = purchase.items ? purchase.items.length : 0;
+                    html += `<tr>
+                        <td>${purchase.created_at}</td>
+                        <td>${purchase.username}</td>
+                        <td>${itemCount} item(s)</td>
+                        <td>€${purchase.total_amount.toFixed(2)}</td>
+                        <td>${purchase.coupon_used || '-'}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                document.getElementById('purchasesList').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading purchases:', error);
+                document.getElementById('purchasesList').innerHTML = '<div class="error-msg">Failed to load purchases</div>';
+            }
         }
 
-        // Load data on page load
-        loadShopData();
+        // ============ LIKES ============
+        async function loadLikeStats() {
+            // For now, show a placeholder
+            document.getElementById('likeStats').innerHTML = `
+                <div class="card">
+                    <p>Like statistics coming soon. Tracked per IP address.</p>
+                </div>
+            `;
+        }
+
+        // ============ UTILITIES ============
+        function showMessage(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            const className = type === 'success' ? 'success-msg' : 'error-msg';
+            el.innerHTML = `<div class="${className}">${message}</div>`;
+            setTimeout(() => el.innerHTML = '', 5000);
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadPromoSettings();
+        });
     </script>
-
-    <style>
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .info-card {
-            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 20px;
-        }
-
-        .info-label {
-            color: #9aa4b2;
-            font-size: 0.9rem;
-            margin-bottom: 8px;
-        }
-
-        .info-value {
-            color: #00d4ff;
-            font-size: 1.8rem;
-            font-weight: 700;
-        }
-
-        .items-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 15px;
-        }
-
-        .item-card {
-            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 15px;
-            position: relative;
-        }
-
-        .item-card.new-item {
-            border-color: rgba(255, 215, 0, 0.5);
-            background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.05));
-        }
-
-        .item-badge {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: linear-gradient(135deg, #ffd700, #ffa500);
-            color: #000;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 700;
-        }
-
-        .item-name {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #fff;
-            margin-bottom: 10px;
-        }
-
-        .item-details {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            font-size: 0.9rem;
-        }
-
-        .item-price {
-            color: #00d4ff;
-            font-weight: 700;
-        }
-
-        .item-gems {
-            color: #9aa4b2;
-        }
-
-        .item-date, .item-expires, .item-days {
-            color: #7b4bff;
-        }
-
-        .item-owned {
-            color: #2ed573;
-        }
-
-        .loading, .empty, .error {
-            text-align: center;
-            padding: 40px;
-            color: #9aa4b2;
-        }
-
-        .error {
-            color: #ff4757;
-        }
-
-        .info-box {
-            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 20px;
-            color: #9aa4b2;
-        }
-
-        .info-box strong {
-            color: #fff;
-        }
-
-        .info-box ul {
-            margin-left: 20px;
-            margin-top: 10px;
-        }
-
-        .info-box code {
-            background: rgba(0,212,255,0.1);
-            color: #00d4ff;
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-    </style>
 </body>
 </html>

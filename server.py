@@ -2363,6 +2363,16 @@ def cart_payment_success():
                             'error': str(e)
                         })
             
+            # Create purchase record
+            db_helper.create_purchase(
+                username=username,
+                items=cart,
+                total_amount=purchase_info.get('total', 0),
+                message=message,
+                coupon_used=coupon.get('code') if coupon else None,
+                payment_id=payment_id
+            )
+            
             # Clear session
             session.pop('cart_purchase', None)
             
@@ -2657,6 +2667,176 @@ def get_new_shop_items():
     except Exception as e:
         log_event(f"Error getting new items: {e}", level="error")
         return jsonify({'bundles': [], 'skin_sets': [], 'daily_skins': []}), 500
+
+# ==================== GIFT CODE ENDPOINTS ====================
+
+@app.route('/api/gift-codes/create', methods=['POST'])
+@login_required
+def create_gift_code_endpoint():
+    """Admin creates a gift code"""
+    try:
+        data = request.json
+        amount = data.get('amount', 0)
+        expires_at = data.get('expires_at')
+        
+        if amount <= 0:
+            return jsonify({'error': 'Invalid amount'}), 400
+        
+        code = db_helper.create_gift_code(float(amount), expires_at)
+        
+        if code:
+            log_event(f"Gift code created: {code} for €{amount}")
+            return jsonify({'code': code, 'amount': amount}), 200
+        else:
+            return jsonify({'error': 'Failed to create code'}), 500
+    except Exception as e:
+        log_event(f"Error creating gift code: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/gift-codes/redeem', methods=['POST'])
+def redeem_gift_code_endpoint():
+    """User redeems a gift code"""
+    try:
+        data = request.json
+        code = data.get('code', '').strip().upper()
+        username = data.get('username', '').strip()
+        
+        if not code or not username:
+            return jsonify({'valid': False, 'message': 'Code and username required'}), 400
+        
+        # Check if code exists and is valid
+        gift_code = db_helper.get_gift_code(code)
+        if not gift_code:
+            return jsonify({'valid': False, 'message': 'Invalid gift code'}), 400
+        
+        if gift_code['is_redeemed']:
+            return jsonify({'valid': False, 'message': 'Code already redeemed'}), 400
+        
+        # Redeem the code
+        success, result = db_helper.redeem_gift_code(code, username)
+        if success:
+            log_event(f"Gift code redeemed: {code} by {username} for €{result}")
+            return jsonify({'valid': True, 'amount': result}), 200
+        else:
+            return jsonify({'valid': False, 'message': result}), 400
+    except Exception as e:
+        log_event(f"Error redeeming gift code: {e}", level="error")
+        return jsonify({'valid': False, 'message': 'An error occurred'}), 500
+
+@app.route('/api/admin/gift-codes', methods=['GET'])
+@login_required
+def get_all_gift_codes_endpoint():
+    """Get all gift codes for admin"""
+    try:
+        codes = db_helper.get_all_gift_codes()
+        return jsonify({'codes': codes}), 200
+    except Exception as e:
+        log_event(f"Error getting gift codes: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== PURCHASE HISTORY ENDPOINTS ====================
+
+@app.route('/api/purchases/history', methods=['GET'])
+def get_purchase_history():
+    """Get purchase history for a user"""
+    try:
+        username = request.args.get('username', '').strip()
+        if not username:
+            return jsonify({'error': 'Username required'}), 400
+        
+        purchases = db_helper.get_user_purchases(username)
+        return jsonify({'purchases': purchases}), 200
+    except Exception as e:
+        log_event(f"Error getting purchase history: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/purchases', methods=['GET'])
+@login_required
+def get_all_purchases_endpoint():
+    """Get all purchases for admin"""
+    try:
+        purchases = db_helper.get_all_purchases()
+        return jsonify({'purchases': purchases}), 200
+    except Exception as e:
+        log_event(f"Error getting all purchases: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== ITEM LIKE ENDPOINTS ====================
+
+@app.route('/api/items/like', methods=['POST'])
+def like_item_endpoint():
+    """Like an item"""
+    try:
+        data = request.json
+        item_type = data.get('type', '').strip()
+        item_name = data.get('name', '').strip()
+        ip_address = request.remote_addr
+        
+        if not item_type or not item_name:
+            return jsonify({'error': 'Item type and name required'}), 400
+        
+        success, message = db_helper.like_item(item_type, item_name, ip_address)
+        
+        if success:
+            like_count = db_helper.get_item_likes(item_type, item_name)
+            return jsonify({'success': True, 'likes': like_count}), 200
+        else:
+            return jsonify({'success': False, 'message': message}), 400
+    except Exception as e:
+        log_event(f"Error liking item: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/items/likes', methods=['GET'])
+def get_item_likes_endpoint():
+    """Get like count for an item"""
+    try:
+        item_type = request.args.get('type', '').strip()
+        item_name = request.args.get('name', '').strip()
+        
+        if not item_type or not item_name:
+            return jsonify({'error': 'Item type and name required'}), 400
+        
+        ip_address = request.remote_addr
+        likes = db_helper.get_item_likes(item_type, item_name)
+        has_liked = db_helper.has_liked_item(item_type, item_name, ip_address)
+        
+        return jsonify({'likes': likes, 'hasLiked': has_liked}), 200
+    except Exception as e:
+        log_event(f"Error getting item likes: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== SHOP SETTINGS ENDPOINTS ====================
+
+@app.route('/api/shop/settings', methods=['GET'])
+def get_shop_settings_endpoint():
+    """Get current shop settings"""
+    try:
+        settings = db_helper.get_shop_settings()
+        return jsonify(settings), 200
+    except Exception as e:
+        log_event(f"Error getting shop settings: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/shop/settings', methods=['POST'])
+@login_required
+def update_shop_settings_endpoint():
+    """Update shop settings"""
+    try:
+        data = request.json
+        enabled = data.get('global_promo_enabled', False)
+        percent = data.get('global_promo_percent', 0)
+        label = data.get('global_promo_label')
+        
+        success = db_helper.update_shop_settings(enabled, percent, label)
+        
+        if success:
+            log_event(f"Shop settings updated: promo {percent}% enabled={enabled}")
+            return jsonify({'success': True}), 200
+        else:
+            return jsonify({'error': 'Failed to update settings'}), 500
+    except Exception as e:
+        log_event(f"Error updating shop settings: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
 
 
 # ==================== ADMIN SHOP MANAGEMENT PAGE ====================

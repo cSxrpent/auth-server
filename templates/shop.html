@@ -654,6 +654,17 @@
             <p class="subtitle">Premium items, calendars & bundles delivered instantly</p>
         </header>
 
+        <!-- Search Bar -->
+        <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+            <input type="text" id="searchInput" placeholder="🔍 Search items..." 
+                   style="flex: 1; padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.02); color: #fff; font-size: 14px;"
+                   oninput="renderProducts(currentCategory)">
+            <button onclick="document.getElementById('searchInput').value = ''; renderProducts(currentCategory)" 
+                    style="padding: 12px 16px; border-radius: 12px; border: none; background: linear-gradient(90deg, rgba(255,71,87,0.3), rgba(255,71,87,0.2)); color: var(--muted); cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                Clear
+            </button>
+        </div>
+
         <div class="tabs">
             <div class="tab active" data-category="all">All</div>
             <div class="tab" data-category="coins">🪙 Coins</div>
@@ -737,6 +748,13 @@
             }
         }
         createParticles();
+        
+        // Initialize shop on page load
+        window.addEventListener('DOMContentLoaded', async function() {
+            await loadShopSettings();
+            await fetchShopData();
+            renderProducts('all');
+        });
     </script>
 </body>
 </html>
