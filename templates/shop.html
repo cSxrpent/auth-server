@@ -581,6 +581,11 @@
             background:linear-gradient(135deg,var(--danger),#e84118);
             box-shadow:0 8px 30px rgba(255,71,87,0.4);
         }
+
+        .notification-warning{
+            background:linear-gradient(135deg,#ff9800,#ffa500);
+            box-shadow:0 8px 30px rgba(255,152,0,0.4);
+        }
         
         .notification-info{
             background:linear-gradient(135deg,var(--accent),#0097e6);
@@ -629,8 +634,8 @@
 </head>
 <body>
     <!-- Promo Banner -->
-    <div class="promo-banner">
-        <div class="promo-banner-text">🔥 15% OFF EVERYTHING - LIMITED TIME!</div>
+    <div id="promoBanner" class="promo-banner" style="display:none;">
+        <div class="promo-banner-text" id="promoBannerText">🔥 15% OFF EVERYTHING - LIMITED TIME!</div>
         <div class="promo-banner-subtext">Automatic discount applied at checkout</div>
     </div>
     
@@ -677,9 +682,33 @@
             <div class="tab" data-category="dailyskins">🎨 Daily Skins</div>
             <div class="tab" data-category="calendar">📅 Calendars</div>
             <div class="tab" data-category="bundles">📦 Bundles</div>
+            <div class="tab" style="background: linear-gradient(90deg, var(--gold), #ffa500); color: #000;" onclick="showGiftCardModal()">💳 Gift Cards</div>
         </div>
 
         <div id="products" class="products-grid"></div>
+    </div>
+
+    <!-- Gift Card Modal -->
+    <div id="giftCardModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">💳 Purchase Gift Card</div>
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 20px; color: var(--muted);">Choose a gift card amount:</p>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
+                    <button onclick="buyGiftCard(3)" style="padding: 15px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1rem;">€3</button>
+                    <button onclick="buyGiftCard(5)" style="padding: 15px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1rem;">€5</button>
+                    <button onclick="buyGiftCard(10)" style="padding: 15px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1rem;">€10</button>
+                    <button onclick="buyGiftCard(20)" style="padding: 15px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1rem;">€20</button>
+                </div>
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <input type="number" id="customAmount" min="1" step="0.01" placeholder="Custom amount (€)" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.02); color: #fff;">
+                    <button onclick="buyGiftCard()" style="padding: 12px 16px; background: linear-gradient(90deg, var(--gold), #ffa500); color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Custom</button>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-button secondary" onclick="closeGiftCardModal()">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <!-- Cart Modal -->
@@ -723,12 +752,58 @@
                 <input type="text" id="usernameConfirm" placeholder="Confirm your username" required>
             </div>
             <div class="form-group">
+                <label>Gift Code (Optional - For Gift Cards)</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="giftCode" placeholder="Enter gift code" maxlength="20">
+                    <button type="button" onclick="applyGiftCode()" style="padding: 10px 16px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Check</button>
+                </div>
+                <div id="giftCodeBalance" style="margin-top: 10px; padding: 10px; border-radius: 8px; display: none; background: rgba(46, 213, 115, 0.2); color: var(--success); border: 1px solid var(--success);">
+                    Balance: €<span id="balanceAmount">0.00</span>
+                    <div id="topUpWarning" style="margin-top: 8px; padding: 8px; border-radius: 6px; background: rgba(255, 152, 0, 0.2); color: #ffb74d; display: none; border: 1px solid rgba(255, 152, 0, 0.5);">
+                        ⚠️ Insufficient balance! You can top up your gift card with PayPal.
+                        <button type="button" onclick="showTopUpModal()" style="margin-top: 8px; display: block; width: 100%; padding: 8px; background: linear-gradient(90deg, var(--accent), #7b4bff); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">💳 Top Up with PayPal</button>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
                 <label>Gift Message (Optional)</label>
                 <textarea id="message" rows="3" placeholder="Add a personal message..."></textarea>
             </div>
             <div class="modal-buttons">
                 <button class="modal-button secondary" onclick="closeCheckout()">Cancel</button>
                 <button class="modal-button primary" onclick="completePurchase()">Proceed to Payment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top-Up Modal -->
+    <div id="topUpModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">💳 Top Up Gift Card Balance</div>
+            <div style="margin-bottom: 15px;">
+                <div style="padding: 15px; background: rgba(46, 213, 115, 0.2); border-radius: 8px; border: 1px solid var(--success); color: var(--success);">
+                    <div style="font-size: 0.9rem; color: var(--muted);">Current Balance:</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; margin-top: 5px;">€<span id="currentGiftBalance">0.00</span></div>
+                </div>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <div style="padding: 15px; background: rgba(255, 152, 0, 0.2); border-radius: 8px; border: 1px solid rgba(255, 152, 0, 0.5); color: #ffb74d;">
+                    <div style="font-size: 0.9rem; color: var(--muted);">Amount Needed:</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; margin-top: 5px;">€<span id="amountNeeded">0.00</span></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Top-Up Amount (€)</label>
+                <select id="topUpAmount" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.02); color: #fff; font-size: 14px;">
+                    <option value="5">€5.00</option>
+                    <option value="10">€10.00</option>
+                    <option value="20">€20.00</option>
+                    <option value="50">€50.00</option>
+                </select>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-button secondary" onclick="closeTopUpModal()">Cancel</button>
+                <button class="modal-button primary" onclick="processTopUpPayment()">💳 Pay with PayPal</button>
             </div>
         </div>
     </div>

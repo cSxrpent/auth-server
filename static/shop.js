@@ -68,10 +68,14 @@ async function loadShopSettings() {
         };
         console.log('✅ Shop settings loaded:', GLOBAL_PROMO);
         
-        // Update promo banner if enabled
+        // Update promo banner based on settings
+        const banner = document.getElementById('promoBanner');
         if (GLOBAL_PROMO.enabled && GLOBAL_PROMO.label) {
-            const banner = document.querySelector('.promo-banner-text');
-            if (banner) banner.textContent = GLOBAL_PROMO.label;
+            banner.style.display = 'block';
+            const bannerText = document.getElementById('promoBannerText');
+            if (bannerText) bannerText.textContent = GLOBAL_PROMO.label;
+        } else {
+            banner.style.display = 'none';
         }
     } catch (error) {
         console.error('Failed to load shop settings:', error);
@@ -212,6 +216,7 @@ function searchAndFilterProducts() {
 
 async function likeItem(itemType, itemName, event) {
     event.stopPropagation();
+    event.preventDefault();
     
     try {
         const response = await fetch('/api/items/like', {
@@ -224,16 +229,23 @@ async function likeItem(itemType, itemName, event) {
         });
         
         const data = await response.json();
+        console.log('Like response:', data);
+        
         if (data.success) {
             // Update the like count display
             const likeBtn = event.target.closest('.like-btn');
             if (likeBtn) {
                 likeBtn.innerHTML = `👍 ${data.likes}`;
                 likeBtn.classList.add('liked');
+                likeBtn.style.color = 'var(--success)';
+                showNotification('✅ Liked!', 'success');
             }
+        } else {
+            showNotification('⚠️ ' + data.message, 'info');
         }
     } catch (error) {
         console.error('Error liking item:', error);
+        showNotification('❌ Error liking item', 'error');
     }
 }
 
@@ -249,6 +261,149 @@ async function getItemLikes(itemType, itemName) {
         console.error('Error getting item likes:', error);
         return { likes: 0, hasLiked: false };
     }
+}
+
+// ============ GIFT CARDS ============
+let giftCardBalance = 0;
+let appliedGiftCode = null;
+
+function showGiftCardModal() {
+    document.getElementById('giftCardModal').style.display = 'block';
+}
+
+function closeGiftCardModal() {
+    document.getElementById('giftCardModal').style.display = 'none';
+}
+
+function buyGiftCard(amount) {
+    if (!amount && !document.getElementById('customAmount').value) {
+        showNotification('❌ Please enter an amount', 'error');
+        return;
+    }
+    
+    const finalAmount = amount || parseFloat(document.getElementById('customAmount').value);
+    
+    if (finalAmount <= 0) {
+        showNotification('❌ Invalid amount', 'error');
+        return;
+    }
+    
+    // Add gift card to cart with special type
+    cart.push({
+        type: 'GIFT_CARD',
+        name: `Gift Card €${finalAmount.toFixed(2)}`,
+        price: finalAmount,
+        quantity: 1,
+        category: 'gift_card',
+        giftCardAmount: finalAmount
+    });
+    
+    showNotification(`✅ Gift Card €${finalAmount.toFixed(2)} added to cart!`, 'success');
+    closeGiftCardModal();
+    updateCart();
+}
+
+async function applyGiftCode() {
+    const code = document.getElementById('giftCode').value.trim();
+    
+    if (!code) {
+        showNotification('❌ Please enter a gift code', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/gift-codes/check', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ code })
+        });
+        
+        const data = await response.json();
+        
+        if (data.valid) {
+            giftCardBalance = data.balance;
+            appliedGiftCode = code;
+            
+            // Show balance
+            document.getElementById('giftCodeBalance').style.display = 'block';
+            document.getElementById('balanceAmount').textContent = data.balance.toFixed(2);
+            
+            // Check if balance is sufficient
+            const totals = calculateTotal();
+            if (giftCardBalance < totals.total) {
+                document.getElementById('topUpWarning').style.display = 'block';
+                showNotification(`⚠️ Balance: €${data.balance.toFixed(2)} - Insufficient for €${totals.total.toFixed(2)} total`, 'warning');
+            } else {
+                document.getElementById('topUpWarning').style.display = 'none';
+                showNotification(`✅ Gift code applied! Balance: €${data.balance.toFixed(2)}`, 'success');
+            }
+        } else {
+            showNotification('❌ ' + data.message, 'error');
+            giftCardBalance = 0;
+            appliedGiftCode = null;
+            document.getElementById('giftCodeBalance').style.display = 'none';
+            document.getElementById('topUpWarning').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error checking gift code:', error);
+        showNotification('❌ Error checking gift code', 'error');
+    }
+}
+
+function showTopUpModal() {
+    const totals = calculateTotal();
+    const amountNeeded = Math.max(0, totals.total - giftCardBalance);
+    
+    document.getElementById('currentGiftBalance').textContent = giftCardBalance.toFixed(2);
+    document.getElementById('amountNeeded').textContent = amountNeeded.toFixed(2);
+    
+    // Set top-up amount to the amount needed + 5 for buffer
+    const suggestedTopUp = Math.ceil(amountNeeded / 5) * 5; // Round up to nearest €5
+    document.getElementById('topUpAmount').value = Math.min(suggestedTopUp, 50);
+    
+    document.getElementById('topUpModal').style.display = 'flex';
+}
+
+function closeTopUpModal() {
+    document.getElementById('topUpModal').style.display = 'none';
+}
+
+async function processTopUpPayment() {
+    const topUpAmount = parseFloat(document.getElementById('topUpAmount').value);
+    
+    if (!topUpAmount || topUpAmount <= 0) {
+        showNotification('❌ Please select a valid top-up amount', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/gift-cards/top-up', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                amount: topUpAmount,
+                giftCode: appliedGiftCode
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            showNotification('❌ ' + data.error, 'error');
+            return;
+        }
+        
+        if (data.approval_url) {
+            // Redirect to PayPal to complete top-up
+            window.location.href = data.approval_url;
+        } else {
+            showNotification('❌ Failed to create payment', 'error');
+        }
+    } catch (error) {
+        console.error('Error creating top-up payment:', error);
+        showNotification('❌ Error processing top-up', 'error');
+    }
+}
 }
 
 function renderProducts(category = 'all') {
@@ -703,6 +858,15 @@ async function completePurchase() {
     
     const totals = calculateTotal();
 
+    // Calculate final payment amount after gift card balance
+    let finalPaymentAmount = totals.total;
+    let giftCardUsed = 0;
+    
+    if (giftCardBalance > 0 && appliedGiftCode) {
+        giftCardUsed = Math.min(giftCardBalance, totals.total);
+        finalPaymentAmount = totals.total - giftCardUsed;
+    }
+
     try {
         const response = await fetch('/api/shop/create-cart-order', {
             method: 'POST',
@@ -716,11 +880,18 @@ async function completePurchase() {
                 coupon: appliedCoupon,
                 globalPromo: GLOBAL_PROMO.enabled ? GLOBAL_PROMO : null,
                 total: totals.total,
+                giftCard: appliedGiftCode ? {
+                    code: appliedGiftCode,
+                    balance: giftCardBalance,
+                    used: giftCardUsed
+                } : null,
+                finalPaymentAmount: finalPaymentAmount,
                 breakdown: {
                     subtotal: totals.subtotal,
                     loyaltyDiscount: totals.loyaltyDiscount,
                     promoDiscount: totals.promoDiscount,
-                    couponDiscount: totals.couponDiscount
+                    couponDiscount: totals.couponDiscount,
+                    giftCardDiscount: giftCardUsed
                 }
             })
         });
@@ -731,6 +902,16 @@ async function completePurchase() {
             validateBtn.disabled = false;
             validateBtn.textContent = originalText;
             showNotification('❌ ' + data.error, 'error');
+            return;
+        }
+
+        // Check if payment is needed
+        if (finalPaymentAmount <= 0) {
+            // Full payment covered by gift card
+            showNotification('✅ Purchase completed with gift card!', 'success');
+            setTimeout(() => {
+                window.location.href = '/cart_success.html';
+            }, 1500);
             return;
         }
 
@@ -768,6 +949,9 @@ function showNotification(message, type = 'success') {
 // Initialize page
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Initializing shop...');
+    
+    // Load shop settings (promo banner, etc)
+    await loadShopSettings();
     
     // Fetch shop data from database
     await fetchShopData();

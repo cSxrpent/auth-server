@@ -1423,6 +1423,21 @@ def redeem_gift_code(code, username):
         print(f"⚠️ Error redeeming gift code: {e}")
         return False, str(e)
 
+def update_gift_code_balance(code, new_balance):
+    """Update gift code balance (for top-ups)"""
+    try:
+        with get_db() as db:
+            from init_database import GiftCode
+            gc = db.query(GiftCode).filter_by(code=code).first()
+            if not gc:
+                return False, "Code not found"
+            
+            gc.amount = float(new_balance)
+            return True, "Balance updated"
+    except Exception as e:
+        print(f"⚠️ Error updating gift code balance: {e}")
+        return False, str(e)
+
 def get_all_gift_codes():
     """Get all gift codes for admin"""
     try:

@@ -2217,9 +2217,35 @@ def create_cart_order():
         message = data.get('message', '')
         coupon = data.get('coupon')
         breakdown = data.get('breakdown', {})
+        gift_card = data.get('giftCard')
+        final_payment_amount = data.get('finalPaymentAmount', 0)
         
         if not cart or not username:
             return jsonify({'error': 'Missing required fields'}), 400
+        
+        # If payment is fully covered by gift card, complete purchase without PayPal
+        if final_payment_amount <= 0:
+            # Create purchase record directly
+            gift_code = gift_card.get('code') if gift_card else None
+            db_helper.create_purchase(
+                username=username,
+                items=cart,
+                total_amount=data.get('total', 0),
+                message=message,
+                coupon_used=coupon,
+                payment_id=f"GIFTCARD-{gift_code}" if gift_code else "GIFTCARD"
+            )
+            
+            # Redeem gift code
+            if gift_code:
+                db_helper.redeem_gift_code(gift_code, username)
+                log_event(f"Purchase completed with gift card: {gift_code}, user: {username}")
+            
+            return jsonify({
+                'success': True,
+                'paid_with_gift_card': True,
+                'redirect': url_for('cart_success')
+            }), 200
         
         # Helper function to format currency (CRITICAL FOR PAYPAL)
         def format_price(amount):
@@ -2231,6 +2257,7 @@ def create_cart_order():
         loyalty_discount = breakdown.get('loyaltyDiscount', 0)
         promo_discount = breakdown.get('promoDiscount', 0)
         coupon_discount = breakdown.get('couponDiscount', 0)
+        gift_card_discount = breakdown.get('giftCardDiscount', 0)
         total = data.get('total', 0)
         
         # Store purchase info in session
@@ -2240,6 +2267,7 @@ def create_cart_order():
             'message': message,
             'coupon': coupon,
             'total': total,
+            'gift_card': gift_card,
             'timestamp': time.time()
         }
         
@@ -2272,11 +2300,11 @@ def create_cart_order():
             "transactions": [{
                 "item_list": {"items": items},
                 "amount": {
-                    "total": format_price(total),  # ✅ Format total
+                    "total": format_price(final_payment_amount),  # ✅ Use final payment amount (after gift card)
                     "currency": "EUR",
                     "details": {
                         "subtotal": format_price(paypal_subtotal),  # ✅ Format subtotal
-                        "discount": format_price(paypal_subtotal - total) if total < paypal_subtotal else "0.00"  # ✅ Format discount
+                        "discount": format_price(paypal_subtotal - final_payment_amount) if final_payment_amount < paypal_subtotal else "0.00"  # ✅ Format discount
                     }
                 },
                 "description": f"Cart purchase for {username}"
@@ -2331,6 +2359,7 @@ def cart_payment_success():
             username = purchase_info['username']
             message = purchase_info['message']
             coupon = purchase_info.get('coupon')
+            gift_card = purchase_info.get('gift_card')
             
             # Mark coupon as used if applicable
             if coupon:
@@ -2372,6 +2401,11 @@ def cart_payment_success():
                 coupon_used=coupon.get('code') if coupon else None,
                 payment_id=payment_id
             )
+            
+            # Redeem gift code if used
+            if gift_card and gift_card.get('code'):
+                db_helper.redeem_gift_code(gift_card['code'], username)
+                log_event(f"Gift card redeemed during checkout: {gift_card['code']}, user: {username}")
             
             # Clear session
             session.pop('cart_purchase', None)
@@ -2723,6 +2757,41 @@ def redeem_gift_code_endpoint():
         log_event(f"Error redeeming gift code: {e}", level="error")
         return jsonify({'valid': False, 'message': 'An error occurred'}), 500
 
+@app.route('/api/gift-codes/check', methods=['POST'])
+def check_gift_code_endpoint():
+    """Check if a gift code is valid and return balance"""
+    try:
+        data = request.json
+        code = data.get('code', '').strip().upper()
+        
+        if not code:
+            return jsonify({'valid': False, 'balance': 0, 'message': 'Please enter a code'}), 400
+        
+        # Check if code exists and is valid
+        gift_code = db_helper.get_gift_code(code)
+        if not gift_code:
+            return jsonify({'valid': False, 'balance': 0, 'message': 'Invalid gift code'}), 400
+        
+        if gift_code['is_redeemed']:
+            return jsonify({'valid': False, 'balance': 0, 'message': 'Code already redeemed'}), 400
+        
+        # Check expiry date
+        if gift_code.get('expires_at'):
+            from datetime import datetime
+            expiry_date = datetime.fromisoformat(gift_code['expires_at'])
+            if expiry_date < datetime.now():
+                return jsonify({'valid': False, 'balance': 0, 'message': 'Code has expired'}), 400
+        
+        # Return code details
+        return jsonify({
+            'valid': True,
+            'balance': float(gift_code['amount']),
+            'message': f'Code valid! Balance: €{gift_code["amount"]:.2f}'
+        }), 200
+    except Exception as e:
+        log_event(f"Error checking gift code: {e}", level="error")
+        return jsonify({'valid': False, 'balance': 0, 'message': 'An error occurred'}), 500
+
 @app.route('/api/admin/gift-codes', methods=['GET'])
 @login_required
 def get_all_gift_codes_endpoint():
@@ -2838,6 +2907,122 @@ def update_shop_settings_endpoint():
         log_event(f"Error updating shop settings: {e}", level="error")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/gift-cards/top-up', methods=['POST'])
+def gift_card_top_up_endpoint():
+    """Create a PayPal payment to top up gift card balance"""
+    try:
+        data = request.json
+        amount = data.get('amount')
+        gift_code = data.get('giftCode')
+        
+        if not amount or amount <= 0:
+            return jsonify({'error': 'Invalid amount'}), 400
+        
+        if not gift_code:
+            return jsonify({'error': 'Gift code required'}), 400
+        
+        # Verify gift code exists and is valid
+        code_data = db_helper.get_gift_code(gift_code)
+        if not code_data:
+            return jsonify({'error': 'Invalid gift code'}), 400
+        
+        if code_data['is_redeemed']:
+            return jsonify({'error': 'Code already redeemed'}), 400
+        
+        # Create PayPal payment for top-up
+        from paypalrestsdk import Payment
+        
+        payment = Payment({
+            "intent": "sale",
+            "payer": {
+                "payment_method": "paypal"
+            },
+            "redirect_urls": {
+                "return_url": url_for('shop_top_up_success', _external=True),
+                "cancel_url": url_for('shop_top_up_cancel', _external=True)
+            },
+            "transactions": [{
+                "amount": {
+                    "total": str(amount),
+                    "currency": "EUR",
+                    "details": {
+                        "subtotal": str(amount)
+                    }
+                },
+                "description": f"Gift Card Top-Up: {gift_code}",
+                "invoice_number": f"TOPUP-{gift_code}-{int(time.time())}"
+            }]
+        })
+        
+        if payment.create():
+            # Store top-up in session or database for later redemption
+            session['top_up_amount'] = amount
+            session['top_up_code'] = gift_code
+            session['payment_id'] = payment.id
+            
+            # Get approval URL
+            for link in payment.links:
+                if link.rel == "approval_url":
+                    log_event(f"Gift card top-up initiated: {gift_code}, amount: €{amount}")
+                    return jsonify({'approval_url': link.href}), 200
+            
+            return jsonify({'error': 'No approval URL found'}), 500
+        else:
+            log_event(f"PayPal error for gift card top-up: {payment.error}", level="error")
+            return jsonify({'error': 'Failed to create payment: ' + payment.error.get('message', 'Unknown error')}), 500
+            
+    except Exception as e:
+        log_event(f"Error creating gift card top-up payment: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/shop/top-up/success')
+def shop_top_up_success():
+    """Handle successful gift card top-up payment"""
+    try:
+        payment_id = request.args.get('paymentId')
+        payer_id = request.args.get('PayerID')
+        
+        if not payment_id or not payer_id:
+            return render_template('payment_cancel.html', reason='Missing payment information')
+        
+        # Execute payment
+        from paypalrestsdk import Payment
+        payment = Payment.find(payment_id)
+        
+        if payment.execute({"payer_id": payer_id}):
+            # Add balance to gift code
+            gift_code = session.get('top_up_code')
+            top_up_amount = session.get('top_up_amount')
+            
+            if gift_code and top_up_amount:
+                # Update gift code amount in database
+                code_data = db_helper.get_gift_code(gift_code)
+                new_balance = float(code_data['amount']) + float(top_up_amount)
+                db_helper.update_gift_code_balance(gift_code, new_balance)
+                
+                log_event(f"Gift card top-up completed: {gift_code}, amount: €{top_up_amount}, new balance: €{new_balance}")
+                
+                # Clear session
+                session.pop('top_up_amount', None)
+                session.pop('top_up_code', None)
+                session.pop('payment_id', None)
+                
+            return render_template('payment_success.html', message="Gift Card Balance Updated! ✅")
+        else:
+            log_event(f"PayPal execution error: {payment.error}", level="error")
+            return render_template('payment_cancel.html', reason=payment.error.get('message', 'Unknown error'))
+            
+    except Exception as e:
+        log_event(f"Error processing gift card top-up success: {e}", level="error")
+        return render_template('payment_cancel.html', reason=str(e))
+
+@app.route('/shop/top-up/cancel')
+def shop_top_up_cancel():
+    """Handle cancelled gift card top-up payment"""
+    session.pop('top_up_amount', None)
+    session.pop('top_up_code', None)
+    session.pop('payment_id', None)
+    return render_template('shop_cancel.html')
 
 # ==================== ADMIN SHOP MANAGEMENT PAGE ====================
 
