@@ -404,7 +404,6 @@ async function processTopUpPayment() {
         showNotification('❌ Error processing top-up', 'error');
     }
 }
-}
 
 function renderProducts(category = 'all') {
     const productsContainer = document.getElementById('products');
