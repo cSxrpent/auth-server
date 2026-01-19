@@ -2257,6 +2257,17 @@ def create_cart_order():
                 db_helper.redeem_gift_code(gift_code, username)
                 log_event(f"Purchase completed with gift card: {gift_code}, user: {username}")
             
+            # Store purchase info in session for the success page
+            session['cart_purchase'] = {
+                'cart': cart,
+                'username': username,
+                'message': message,
+                'coupon': coupon,
+                'total': data.get('total', 0),
+                'gift_card': gift_card,
+                'timestamp': time.time()
+            }
+            
             return jsonify({
                 'success': True,
                 'paid_with_gift_card': True,
