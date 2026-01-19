@@ -491,19 +491,46 @@ function renderProducts(category = 'all') {
 
 async function loadAllLikeCounts() {
     const likeButtons = document.querySelectorAll('.like-btn');
-    for (const btn of likeButtons) {
-        const itemType = btn.dataset.type;
-        const itemName = btn.dataset.name;
+    
+    // Build list of all items
+    const items = Array.from(likeButtons).map(btn => ({
+        type: btn.dataset.type,
+        name: btn.dataset.name
+    }));
+    
+    if (items.length === 0) return;
+    
+    try {
+        // Fetch all likes in ONE connection
+        const response = await fetch('/api/items/likes-batch', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ items })
+        });
         
-        try {
-            const data = await getItemLikes(itemType, itemName);
-            btn.innerHTML = `👍 ${data.likes}`;
-            if (data.hasLiked) {
-                btn.classList.add('liked');
-            }
-        } catch (error) {
-            console.error('Error loading likes:', error);
+        const data = await response.json();
+        
+        if (data.error) {
+            console.error('Error loading likes:', data.error);
+            return;
         }
+        
+        // Update all buttons with their like counts
+        for (const btn of likeButtons) {
+            const itemType = btn.dataset.type;
+            const itemName = btn.dataset.name;
+            const key = `${itemType}|${itemName}`;
+            
+            if (data.likes[key]) {
+                const likes = data.likes[key];
+                btn.innerHTML = `👍 ${likes.likes}`;
+                if (likes.hasLiked) {
+                    btn.classList.add('liked');
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error loading likes batch:', error);
     }
 }
 

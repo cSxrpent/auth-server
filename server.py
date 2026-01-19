@@ -2874,6 +2874,24 @@ def get_item_likes_endpoint():
         log_event(f"Error getting item likes: {e}", level="error")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/items/likes-batch', methods=['POST'])
+def get_items_likes_batch_endpoint():
+    """Get like counts for multiple items in one batch call"""
+    try:
+        data = request.json
+        items = data.get('items', [])  # List of {type, name} objects
+        
+        if not items:
+            return jsonify({'error': 'Items array required'}), 400
+        
+        ip_address = request.remote_addr
+        likes_data = db_helper.get_items_likes_batch(items, ip_address)
+        
+        return jsonify({'likes': likes_data}), 200
+    except Exception as e:
+        log_event(f"Error getting batch item likes: {e}", level="error")
+        return jsonify({'error': str(e)}), 500
+
 # ==================== SHOP SETTINGS ENDPOINTS ====================
 
 @app.route('/api/shop/settings', methods=['GET'])
