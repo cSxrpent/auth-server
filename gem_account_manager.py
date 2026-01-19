@@ -330,3 +330,6 @@ class GemAccountManager:
         except Exception as e:
             print(f"❌ send_gift_with_auto_switch error: {e}")
             raise
+
+# Global instance
+gem_account_manager = GemAccountManager()
