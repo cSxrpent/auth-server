@@ -14,7 +14,7 @@ class GemAccountManager:
     def __init__(self):
         self.current_account_index = 0
         self.INITIAL_GEMS = 5000
-        self.RXZBOT_NAME = "RXZBOT"
+        self.RXZBOT_NAME = "micheal163512"
     
     def get_all_gem_accounts(self):
         """Get all gem accounts from database"""
@@ -139,11 +139,10 @@ class GemAccountManager:
         """Change account nickname using Wolvesville API"""
         try:
             print(f"🔄 Changing nickname to: {new_nickname}")
-            
-            # Get tokens for this account (we'll need to implement multi-account token management)
-            # For now, using the main token manager
-            tokens = token_manager.get_valid_tokens()
-            
+
+            # Get tokens for this specific account
+            tokens = token_manager.get_tokens_for_account(email, password)
+
             url = "https://core.api-wolvesville.com/players/self"
             headers = {
                 'Accept': 'application/json',
@@ -155,18 +154,18 @@ class GemAccountManager:
                 'Referer': 'https://www.wolvesville.com/',
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
             }
-            
+
             payload = {'username': new_nickname}
-            
+
             response = requests.put(url, json=payload, headers=headers, timeout=10)
-            
+
             if response.status_code == 200:
                 print(f"✅ Nickname changed to: {new_nickname}")
                 return True
             else:
                 print(f"❌ Failed to change nickname: {response.status_code} - {response.text}")
                 return False
-                
+
         except Exception as e:
             print(f"❌ Error changing nickname: {e}")
             return False
@@ -244,64 +243,84 @@ class GemAccountManager:
                 # Restore nickname before failing
                 self.restore_account_nickname(account['id'])
                 raise Exception(f"Player '{recipient_username}' not found")
-            
-            player_id = player.get('id')
-            
-            # Prepare gift request
-            gift_type = product.get('type')
-            gift_message = message or "Gift from Wolvesville Shop!"
-            
-            body = {
-                'type': gift_type,
-                'giftRecipientId': player_id,
-                'giftMessage': gift_message
-            }
-            
-            # Add calendar ID if it's a calendar
-            if gift_type == 'CALENDAR':
-                calendar_id = product.get('id')
-                if calendar_id:
-                    body['calendarId'] = calendar_id
-            
-            # Get tokens
-            tokens = token_manager.get_valid_tokens()
-            
-            # Send gift
-            headers = {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Authorization': f"Bearer {tokens['bearer']}",
-                'Cf-JWT': tokens['cfJwt'],
-                'ids': '1'
-            }
-            
-            response = requests.post(
-                'https://core.api-wolvesville.com/gemOffers/purchases',
-                json=body,
-                headers=headers,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                # Success! Deduct gems
-                self.deduct_gems(account['id'], gem_cost)
-                
-                # Restore original nickname
-                self.restore_account_nickname(account['id'])
-                
-                print(f"✅ Gift sent successfully!")
-                return response.json()
-            else:
-                # Failed - restore nickname
-                self.restore_account_nickname(account['id'])
-                
-                error_msg = f"API error {response.status_code}: {response.text}"
-                print(f"❌ {error_msg}")
-                raise Exception(error_msg)
-                
-        except Exception as e:
-            print(f"❌ send_gift_with_auto_switch error: {e}")
-            raise
+            try:
+                gem_cost = product.get('cost', 0)
+                print(f"🎁 Preparing to send {product['name']} ({gem_cost} gems) to {recipient_username}")
 
-# Global instance
-gem_account_manager = GemAccountManager()
+                # Find account with enough gems
+                account = self.get_active_account_with_gems(gem_cost)
+                print(f"💎 Selected account #{account['account_number']} | Email: {account['email']} | Gems remaining: {account['gems_remaining']} | Required: {gem_cost}")
+
+                # Switch to this account (changes nickname to RXZBOT)
+                if not self.switch_to_account(account['id']):
+                    raise Exception("Failed to switch to account")
+
+                # Search for recipient
+                player = wolvesville_api.search_player(recipient_username)
+                if not player:
+                    # Restore nickname before failing
+                    self.restore_account_nickname(account['id'])
+                    raise Exception(f"Player '{recipient_username}' not found")
+
+                player_id = player.get('id')
+
+                # Prepare gift request
+                gift_type = product.get('type')
+                gift_message = message or "Gift from Wolvesville Shop!"
+
+                body = {
+                    'type': gift_type,
+                    'giftRecipientId': player_id,
+                    'giftMessage': gift_message
+                }
+
+                # Add calendar ID if it's a calendar
+                if gift_type == 'CALENDAR':
+                    calendar_id = product.get('id')
+                    if calendar_id:
+                        body['calendarId'] = calendar_id
+
+                # Get tokens for this specific gem account
+                tokens = token_manager.get_tokens_for_account(account['email'], account['password'])
+                print(f"🔑 Using tokens for account: {account['email']}")
+
+                # Send gift
+                headers = {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'Authorization': f"Bearer {tokens['bearer']}",
+                    'Cf-JWT': tokens['cfJwt'],
+                    'ids': '1'
+                }
+
+                print(f"📦 Sending POST to Wolvesville API with body: {body} and headers: [Authorization: Bearer {tokens['bearer'][:8]}..., Cf-JWT: {tokens['cfJwt'][:8]}...]")
+
+                response = requests.post(
+                    'https://core.api-wolvesville.com/gemOffers/purchases',
+                    json=body,
+                    headers=headers,
+                    timeout=10
+                )
+
+                print(f"🔄 Wolvesville API response: {response.status_code} {response.text}")
+
+                if response.status_code == 200:
+                    # Success! Deduct gems
+                    self.deduct_gems(account['id'], gem_cost)
+
+                    # Restore original nickname
+                    self.restore_account_nickname(account['id'])
+
+                    print(f"✅ Gift sent successfully!")
+                    return response.json()
+                else:
+                    # Failed - restore nickname
+                    self.restore_account_nickname(account['id'])
+
+                    error_msg = f"API error {response.status_code}: {response.text}"
+                    print(f"❌ {error_msg}")
+                    raise Exception(error_msg)
+
+            except Exception as e:
+                print(f"❌ send_gift_with_auto_switch error: {e}")
+                raise

@@ -2243,12 +2243,14 @@ def create_cart_order():
             )
             
             # Only send real items, not gift cards
+            successful_sends = 0
             if items_to_send:
                 for item in items_to_send:
                     for i in range(item.get('quantity', 1)):
                         try:
                             log_event(f"Sending gift: {item.get('name')} to {username}")
                             send_wolvesville_gift(username, item, message)
+                            successful_sends += 1
                             # Wait 2 seconds between gifts
                             if not (item == items_to_send[-1] and i == item.get('quantity', 1) - 1):
                                 time.sleep(2)
@@ -2276,7 +2278,8 @@ def create_cart_order():
                 'cart_summary': cart_summary,
                 'username': username,
                 'total': data.get('total', 0),
-                'items_sent': len(items_to_send),
+                'items_sent': successful_sends,
+                'total_items': len(items_to_send),
                 'timestamp': time.time()
             }
             session.modified = True  # Ensure session is saved
@@ -2526,18 +2529,31 @@ def cart_success():
     # Use cart_summary from session (reduced size)
     cart_summary = purchase_info.get('cart_summary', [])
     username = purchase_info.get('username', 'Unknown')
-    items_sent = purchase_info.get('items_sent', len(cart_summary))
+    items_sent = purchase_info.get('items_sent', 0)
+    total_items = purchase_info.get('total_items', sum(item.get('quantity', 1) for item in cart_summary))
     
-    # Build results - items were already sent during purchase
+    # Build results - show actual send status
     results = []
-    for item in cart_summary:
-        for i in range(item.get('quantity', 1)):
-            results.append({
-                'item': item.get('name'),
-                'success': True
-            })
+    failed_items = []
+    sent_count = 0
     
-    total_items = sum(item.get('quantity', 1) for item in cart_summary)
+    for item in cart_summary:
+        # Check if this is a gift card (no sending needed)
+        if item.get('category') == 'gift_card':
+            for i in range(item.get('quantity', 1)):
+                results.append({'item': item.get('name'), 'success': True})
+            sent_count += item.get('quantity', 1)
+        else:
+            # Real item - check if it was sent
+            for i in range(item.get('quantity', 1)):
+                if sent_count < items_sent:
+                    results.append({'item': item.get('name'), 'success': True})
+                    sent_count += 1
+                else:
+                    # This item failed to send
+                    results.append({'item': item.get('name'), 'success': False})
+                    if item.get('name') not in failed_items:
+                        failed_items.append(item.get('name'))
     
     # Clear session
     session.pop('cart_purchase', None)
@@ -2550,7 +2566,7 @@ def cart_success():
                          results=results,
                          successful=items_sent,
                          total=total_items,
-                         failed_items=[])
+                         failed_items=failed_items)
 
 
 # ==================== ADMIN COUPON MANAGEMENT ====================

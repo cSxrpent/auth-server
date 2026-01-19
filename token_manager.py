@@ -245,6 +245,24 @@ class TokenManager:
             'bearer': self.tokens['idToken'],
             'cfJwt': self.tokens['cfJwt']
         }
+
+    def get_tokens_for_account(self, email, password):
+        """Get valid tokens for a specific account (used for gem accounts)"""
+        print(f"🔑 Getting tokens for account: {email}")
+
+        # Create a temporary token manager instance for this account
+        temp_manager = TokenManager()
+        temp_manager.email = email
+        temp_manager.password = password
+
+        # Authenticate with this account's credentials
+        if not temp_manager.ensure_authenticated():
+            raise Exception(f"Failed to authenticate with account {email}")
+
+        return {
+            'bearer': temp_manager.tokens['idToken'],
+            'cfJwt': temp_manager.tokens['cfJwt']
+        }
     
     def start_auto_refresh(self):
         """Start automatic token refresh - FIXED to authenticate immediately"""
