@@ -2260,19 +2260,28 @@ def create_cart_order():
                 db_helper.redeem_gift_code(gift_code, username)
                 log_event(f"Purchase completed with gift card: {gift_code}, user: {username}")
             
-            # Store purchase info in session for the success page
+            # Store MINIMAL purchase info in session for the success page (reduce size)
+            # Only store essential data to avoid exceeding cookie size limit
+            cart_summary = []
+            for item in cart:
+                cart_summary.append({
+                    'name': item.get('name'),
+                    'type': item.get('type', 'ITEM'),
+                    'category': item.get('category'),
+                    'quantity': item.get('quantity', 1),
+                    'price': item.get('price', 0)
+                })
+            
             session['cart_purchase'] = {
-                'cart': cart,
+                'cart_summary': cart_summary,
                 'username': username,
-                'message': message,
-                'coupon': coupon,
                 'total': data.get('total', 0),
-                'gift_card': gift_card,
+                'items_sent': len(items_to_send),
                 'timestamp': time.time()
             }
             session.modified = True  # Ensure session is saved
             
-            log_event(f"Gift card purchase stored in session, redirecting to cart_success")
+            log_event(f"Gift card purchase stored in session ({len(cart_summary)} items), redirecting to cart_success")
             
             return jsonify({
                 'success': True,
@@ -2479,10 +2488,10 @@ def cart_success():
     """Handle successful cart purchase (gift card only or after PayPal)"""
     purchase_info = session.get('cart_purchase')
     
-    log_event(f"cart_success endpoint called. Session: {bool(purchase_info)}")
+    log_event(f"cart_success endpoint called. Session exists: {bool(purchase_info)}")
     
     if not purchase_info:
-        log_event(f"No purchase info in session. Session contents: {dict(session)}")
+        log_event(f"No purchase info in session")
         return render_template('shop_error.html', error='Purchase session expired'), 400
     
     # Check session timeout (30 minutes)
@@ -2491,36 +2500,32 @@ def cart_success():
         log_event(f"Purchase session expired (timeout)")
         return render_template('shop_error.html', error='Purchase session expired'), 400
     
-    cart = purchase_info.get('cart', [])
+    # Use cart_summary from session (reduced size)
+    cart_summary = purchase_info.get('cart_summary', [])
     username = purchase_info.get('username', 'Unknown')
-    message = purchase_info.get('message', '')
-    gift_card = purchase_info.get('gift_card')
+    items_sent = purchase_info.get('items_sent', len(cart_summary))
     
-    # Filter out gift cards - only real items were sent
-    items_to_send = [item for item in cart if item.get('type') != 'GIFT_CARD' and item.get('category') != 'gift_card']
-    
-    # Build results - real items would have been sent already
+    # Build results - items were already sent during purchase
     results = []
-    for item in items_to_send:
+    for item in cart_summary:
         for i in range(item.get('quantity', 1)):
             results.append({
                 'item': item.get('name'),
                 'success': True
             })
     
-    total_items = sum(item.get('quantity', 1) for item in cart)
-    successful = len(results)
+    total_items = sum(item.get('quantity', 1) for item in cart_summary)
     
     # Clear session
     session.pop('cart_purchase', None)
     
-    log_event(f"Cart success page displayed: {successful}/{total_items} items for {username}")
+    log_event(f"Cart success page displayed: {items_sent}/{total_items} items sent for {username}")
     
     return render_template('cart_success.html',
                          username=username,
-                         cart=cart,
+                         cart=cart_summary,
                          results=results,
-                         successful=successful,
+                         successful=items_sent,
                          total=total_items,
                          failed_items=[])
 

@@ -115,7 +115,8 @@ function getAllProducts() {
                 products.push({
                     ...bundle,
                     category: 'bundles',
-                    imageUrl: null
+                    imageUrl: null,
+                    cost: bundle.cost || 0  // Ensure cost field exists
                 });
                 return;
             }
@@ -141,7 +142,8 @@ function getAllProducts() {
                     `https://cdn2.wolvesville.com/promos/${bundleNameCamel}.jpg`,
                     `https://cdn2.wolvesville.com/promos/${bundleNameUnderscore}.jpg`,
                     `https://cdn2.wolvesville.com/promos/${bundleNamePlain}.jpg`
-                ]
+                ],
+                cost: bundle.cost || 0  // Ensure cost field exists
             });
         });
     }
@@ -156,7 +158,8 @@ function getAllProducts() {
                 ...skinSet,
                 category: 'skinsets',
                 name: skinSet.name,
-                imageUrl: `https://www.wolvesville.com/static/media/${skinSetName}.png`
+                imageUrl: `https://www.wolvesville.com/static/media/${skinSetName}.png`,
+                cost: skinSet.cost || 0  // Ensure cost field exists
             });
         });
     }
@@ -168,7 +171,8 @@ function getAllProducts() {
                 ...skin,
                 category: 'dailyskins',
                 name: skin.name,
-                imageUrl: skin.imageName ? `https://cdn2.wolvesville.com/promos/${skin.imageName}@2x.jpg` : null
+                imageUrl: skin.imageName ? `https://cdn2.wolvesville.com/promos/${skin.imageName}@2x.jpg` : null,
+                cost: skin.cost || 0  // Ensure cost field exists
             });
         });
     }
@@ -867,11 +871,16 @@ async function completePurchase() {
 
         // Check if payment is needed
         if (finalPaymentAmount <= 0) {
-            // Full payment covered by gift card
+            // Full payment covered by gift card - backend already processed everything
             showNotification('✅ Purchase completed with gift card!', 'success');
+            // Wait a moment for session to be set, then redirect to success page
             setTimeout(() => {
-                window.location.href = '/cart/success';
-            }, 1500);
+                if (data.redirect) {
+                    window.location.href = data.redirect;
+                } else {
+                    window.location.href = '/cart/success';
+                }
+            }, 1000);
             return;
         }
 
