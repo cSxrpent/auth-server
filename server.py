@@ -2231,6 +2231,8 @@ def create_cart_order():
             # Filter out gift cards - they don't get sent in-game
             items_to_send = [item for item in cart if item.get('type') != 'GIFT_CARD' and item.get('category') != 'gift_card']
             
+            log_event(f"Processing gift card purchase: {len(items_to_send)} real items to send")
+            
             db_helper.create_purchase(
                 username=username,
                 items=cart,
@@ -2245,6 +2247,7 @@ def create_cart_order():
                 for item in items_to_send:
                     for i in range(item.get('quantity', 1)):
                         try:
+                            log_event(f"Sending gift: {item.get('name')} to {username}")
                             send_wolvesville_gift(username, item, message)
                             # Wait 2 seconds between gifts
                             if not (item == items_to_send[-1] and i == item.get('quantity', 1) - 1):
@@ -2267,6 +2270,9 @@ def create_cart_order():
                 'gift_card': gift_card,
                 'timestamp': time.time()
             }
+            session.modified = True  # Ensure session is saved
+            
+            log_event(f"Gift card purchase stored in session, redirecting to cart_success")
             
             return jsonify({
                 'success': True,
@@ -2473,12 +2479,16 @@ def cart_success():
     """Handle successful cart purchase (gift card only or after PayPal)"""
     purchase_info = session.get('cart_purchase')
     
+    log_event(f"cart_success endpoint called. Session: {bool(purchase_info)}")
+    
     if not purchase_info:
+        log_event(f"No purchase info in session. Session contents: {dict(session)}")
         return render_template('shop_error.html', error='Purchase session expired'), 400
     
     # Check session timeout (30 minutes)
     if time.time() - purchase_info.get('timestamp', 0) > 1800:
         session.pop('cart_purchase', None)
+        log_event(f"Purchase session expired (timeout)")
         return render_template('shop_error.html', error='Purchase session expired'), 400
     
     cart = purchase_info.get('cart', [])
