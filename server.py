@@ -2302,9 +2302,19 @@ def create_cart_order():
         gift_card_discount = breakdown.get('giftCardDiscount', 0)
         total = data.get('total', 0)
         
-        # Store purchase info in session
+        # Store MINIMAL purchase info in session for PayPal purchases (reduce size)
+        cart_summary = []
+        for item in cart:
+            cart_summary.append({
+                'name': item.get('name'),
+                'type': item.get('type', 'ITEM'),
+                'category': item.get('category'),
+                'quantity': item.get('quantity', 1),
+                'price': item.get('price', 0)
+            })
+        
         session['cart_purchase'] = {
-            'cart': cart,
+            'cart_summary': cart_summary,
             'username': username,
             'message': message,
             'coupon': coupon,
@@ -2312,6 +2322,7 @@ def create_cart_order():
             'gift_card': gift_card,
             'timestamp': time.time()
         }
+        session.modified = True  # Ensure session is saved
         
         # Create PayPal payment items - MUST format each price properly
         items = []
@@ -2397,11 +2408,23 @@ def cart_payment_success():
                 session.pop('cart_purchase', None)
                 return render_template('shop_error.html', error='Purchase session expired'), 400
             
-            cart = purchase_info['cart']
+            # Use cart_summary from session (compressed format)
+            cart_summary = purchase_info.get('cart_summary', [])
             username = purchase_info['username']
             message = purchase_info['message']
             coupon = purchase_info.get('coupon')
             gift_card = purchase_info.get('gift_card')
+            
+            # Reconstruct full cart items list from cart_summary for sending gifts
+            cart = []
+            for item in cart_summary:
+                cart.append({
+                    'name': item.get('name'),
+                    'type': item.get('type', 'ITEM'),
+                    'category': item.get('category'),
+                    'quantity': item.get('quantity', 1),
+                    'price': item.get('price', 0)
+                })
             
             # Mark coupon as used if applicable
             if coupon:
@@ -2462,7 +2485,7 @@ def cart_payment_success():
             
             return render_template('cart_success.html',
                                  username=username,
-                                 cart=cart,
+                                 cart=cart_summary,
                                  results=results,
                                  successful=successful,
                                  total=total_items,

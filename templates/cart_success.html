@@ -15,7 +15,7 @@
         <p class="subtitle">Your purchase has been completed for <strong>{{ username }}</strong></p>
         
         {% set has_gift_cards = cart | selectattr('category', 'equalto', 'gift_card') | list | length > 0 %}
-        {% set has_real_items = cart | selectattr('category', 'not', 'gift_card') | list | length > 0 %}
+        {% set has_real_items = cart | rejectattr('category', 'equalto', 'gift_card') | list | length > 0 %}
         
         <div class="stats-grid">
             <div class="stat-card">
