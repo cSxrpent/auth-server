@@ -48,6 +48,13 @@
                             <span class="success-status">Gift Card Ready</span>
                         </div>
                     </div>
+                    {% if gift_codes %}
+                        {% for gc in gift_codes %}
+                            {% if gc.item == item.name %}
+                            <div style="margin:8px 0;padding:8px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--muted);">Code: <strong style="color:#fff">{{ gc.code }}</strong> (€{{ "%.2f"|format(gc.amount) }})</div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
                     {% else %}
                     {% set item_results = results | selectattr('item', 'equalto', item.name) | list %}
                     {% for i in range(item.quantity) %}

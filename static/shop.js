@@ -40,12 +40,13 @@ const BASE_SHOP_ITEMS = [
     { type: 'LOOT_BOX_1', cost: 320, price: 1.99, name: 'Loot Box x3', category: 'lootbox', lootBoxCount: 3 },
     { type: 'LOOT_BOX_2', cost: 2600, price: 15.99, name: 'Loot Box x30', category: 'lootbox', lootBoxCount: 30 },
     { type: 'LOOT_BOX_3', cost: 7400, price: 44.99, name: 'Loot Box x100', category: 'lootbox', lootBoxCount: 100, isBestValue: true },
-    { type: 'CUSTOM_GAMES', cost: 680, price: 4.49, name: 'Custom Games', category: 'premium' },
+    { type: 'CUSTOM_GAMES', cost: 680, price: 4.99, name: 'Custom Games', category: 'premium' },
     { type: 'CUSTOM_GAMES_PREMIUM', cost: 3100, price: 19.99, name: 'Custom Games Premium', category: 'premium' },
     { type: 'AUTO_DOUBLE_XP', cost: 3100, price: 19.99, name: 'Auto Double XP', category: 'premium' },
     { type: 'TALISMANS_PREMIUM', cost: 3100, price: 19.99, name: 'Talismans Premium', category: 'premium' },
-    { type: 'ROLE_CARDS_1', cost: 85, price: 0.49, name: 'Role Card x1', category: 'rolecards', roleCardCount: 1 },
-    { type: 'ROLE_CARDS_2', cost: 750, price: 4.49, name: 'Role Cards x10', category: 'rolecards', roleCardCount: 10 },
+    { type: 'PROFILE_CUSTOMIZATION', cost: 3100, price: 19.99, name: 'Profile Customization', category: 'premium' },
+    { type: 'ROLE_CARDS_1', cost: 85, price: 0.79, name: 'Role Card x1', category: 'rolecards', roleCardCount: 1 },
+    { type: 'ROLE_CARDS_2', cost: 750, price: 4.99, name: 'Role Cards x10', category: 'rolecards', roleCardCount: 10 },
     { type: 'ROLE_CARDS_MONTHLY_BUNDLE', cost: 1250, price: 7.99, name: 'Role Cards Monthly', category: 'rolecards', minLoyaltyTokenCount: 5, isBestValue: true }
 ];
 

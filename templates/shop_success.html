@@ -157,6 +157,10 @@
         <div class="product-info">
             <h3>{{ product.name }}</h3>
             <p>Price: €{{ "%.2f"|format(product.price) }}</p>
+            {% if gift_code %}
+            <p style="margin-top:10px;color:var(--muted);">Here is your gift card code:</p>
+            <p style="font-size:1.4rem;color:#fff;font-weight:700;">{{ gift_code }}</p>
+            {% endif %}
         </div>
         <p>The gift will appear in the recipient's Wolvesville account shortly.</p>
         <a href="{{ url_for('shop') }}" class="btn">Return to Shop</a>

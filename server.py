@@ -1004,7 +1004,7 @@ def stop_ping_thread():
             return True
         return False
 
-def send_wolvesville_gift(username, product, message):
+def send_wolvesville_gift(player_id_or_username, product, message):
     """
     Send a gift to a Wolvesville user using the gem account manager
     
@@ -1017,11 +1017,20 @@ def send_wolvesville_gift(username, product, message):
         dict: API response from Wolvesville
     """
     try:
+        # Accept either a pre-validated player_id or a username (fallback)
+        player_id = player_id_or_username
+        # If looks like a username (no hyphens typical for uuid), try to resolve
+        if not isinstance(player_id_or_username, str) or '-' not in player_id_or_username:
+            # assume it's a username and attempt to resolve (fallback)
+            player = wolvesville_api.search_player(player_id_or_username)
+            if not player:
+                raise Exception(f"Recipient '{player_id_or_username}' not found")
+            player_id = player.get('id')
+
         # Use the gem account manager with automatic account switching
-        result = gem_account_manager.send_gift_with_auto_switch(username, product, message)
-        
-        log_event(f"Gift sent: {product['name']} to {username} ({product['cost']} gems)")
-        
+        result = gem_account_manager.send_gift_with_auto_switch(player_id, product, message)
+
+        log_event(f"Gift sent: {product['name']} to {player_id} ({product['cost']} gems)")
         return result
             
     except Exception as e:
@@ -2061,18 +2070,42 @@ def create_shop_order():
         data = request.json
         product = data.get('product')
         username = data.get('username')
+        gift_nickname = data.get('giftNickname')
         message = data.get('message', '')
         
-        if not product or not username:
-            return jsonify({'error': 'Missing required fields'}), 400
-        
-        # Store purchase info in session
-        session['shop_purchase'] = {
-            'product': product,
-            'username': username,
-            'message': message,
-            'timestamp': time.time()
-        }
+        if not product:
+            return jsonify({'error': 'Missing product'}), 400
+
+        # If product is a gift card, require a gift nickname to log the purchase
+        if product.get('type') == 'GIFT_CARD' or product.get('category') == 'gift_card':
+            if not gift_nickname:
+                return jsonify({'error': 'Gift nickname is required for gift card purchases'}), 400
+
+            # Store purchase info in session (gift card purchase)
+            session['shop_purchase'] = {
+                'product': product,
+                'username': None,
+                'player_id': None,
+                'gift_nickname': gift_nickname,
+                'message': message,
+                'timestamp': time.time()
+            }
+        else:
+            if not username:
+                return jsonify({'error': 'Missing username'}), 400
+            # Validate recipient BEFORE redirecting to PayPal
+            player = wolvesville_api.search_player(username)
+            if not player:
+                return jsonify({'error': 'Recipient username not found on Wolvesville'}), 400
+
+            # Store purchase info in session (including player id)
+            session['shop_purchase'] = {
+                'product': product,
+                'username': username,
+                'player_id': player.get('id'),
+                'message': message,
+                'timestamp': time.time()
+            }
         
         # Create PayPal payment
         payment = paypalrestsdk.Payment({
@@ -2143,27 +2176,48 @@ def shop_payment_success():
                 return render_template('shop_error.html', error='Purchase session expired'), 400
             
             product = purchase_info['product']
-            username = purchase_info['username']
-            message = purchase_info['message']
-            
-            # Send gift to user
+            username = purchase_info.get('username')
+            player_id = purchase_info.get('player_id')
+            message = purchase_info.get('message')
+
+            # If this is a gift card purchase, create a gift code and show it
             try:
-                result = send_wolvesville_gift(username, product, message)
-                
+                if product.get('type') == 'GIFT_CARD' or product.get('category') == 'gift_card':
+                    amount = float(product.get('price') or product.get('giftCardAmount') or 0)
+                    code = db_helper.create_gift_code(amount)
+                    # Log nickname if provided
+                    gift_nickname = purchase_info.get('gift_nickname')
+                    db_helper.create_purchase(
+                        username=gift_nickname or 'GIFT_CARD_PURCHASE',
+                        items=[product],
+                        total_amount=amount,
+                        message=f"Gift card purchase for nickname: {gift_nickname}",
+                        coupon_used=None,
+                        payment_id=payment.id if hasattr(payment, 'id') else None
+                    )
+                    session.pop('shop_purchase', None)
+                    log_event(f"Gift card created: {code} for nickname: {gift_nickname}")
+                    return render_template('shop_success.html', username=gift_nickname or 'Gift Card', product=product, gift_code=code)
+
+                # Otherwise normal gift flow using pre-validated player_id
+                result = send_wolvesville_gift(player_id, product, message)
+
                 # Clear session
                 session.pop('shop_purchase', None)
-                
+
                 log_event(f"Shop gift sent: {product.get('name')} to {username}")
-                
+
                 return render_template('shop_success.html', 
                                      username=username,
                                      product=product,
                                      result=result)
-                
+
             except Exception as e:
                 log_event(f"Failed to send gift: {e}", level="error")
+                # Inform user to contact developer with purchase details
+                purchase_date = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%SZ')
                 return render_template('shop_error.html', 
-                                     error=f'Payment succeeded but gift delivery failed: {str(e)}'), 500
+                                     error=f"Payment succeeded but gift delivery failed. You've purchased {product.get('name')} on {purchase_date}. Please contact the developer: instagram https://www.instagram.com/rxzbotcom, discord https://discord.gg/rxzbot"), 500
         else:
             log_event(f"PayPal execution failed: {payment.error}", level="error")
             return render_template('shop_error.html', error='Payment execution failed'), 500
@@ -2222,10 +2276,24 @@ def create_cart_order():
         
         if not cart or not username:
             return jsonify({'error': 'Missing required fields'}), 400
+
+        # Validate recipient BEFORE creating PayPal order
+        player = wolvesville_api.search_player(username)
+        if not player:
+            return jsonify({'error': 'Recipient username not found on Wolvesville'}), 400
         
         # If payment is fully covered by gift card, complete purchase without PayPal
         if final_payment_amount <= 0:
             # Create purchase record directly
+            # include player id for later delivery
+            session['shop_purchase'] = {
+                'cart': cart,
+                'username': username,
+                'player_id': player.get('id'),
+                'message': message,
+                'coupon': coupon,
+                'timestamp': time.time()
+            }
             gift_code = gift_card.get('code') if gift_card else None
             
             # Filter out gift cards - they don't get sent in-game
@@ -2249,7 +2317,8 @@ def create_cart_order():
                     for i in range(item.get('quantity', 1)):
                         try:
                             log_event(f"Sending gift: {item.get('name')} to {username}")
-                            send_wolvesville_gift(username, item, message)
+                            # Use pre-validated player_id
+                            send_wolvesville_gift(session['shop_purchase'].get('player_id'), item, message)
                             successful_sends += 1
                             # Wait 2 seconds between gifts
                             if not (item == items_to_send[-1] and i == item.get('quantity', 1) - 1):
@@ -2319,6 +2388,7 @@ def create_cart_order():
         session['cart_purchase'] = {
             'cart_summary': cart_summary,
             'username': username,
+            'player_id': player.get('id'),
             'message': message,
             'coupon': coupon,
             'total': total,
@@ -2463,12 +2533,26 @@ def cart_payment_success():
                             'error': str(e)
                         })
             
-            # Create purchase record
+            # For gift card items, generate gift codes (no in-game actions)
+            gift_codes = []
+            for item in cart:
+                if item.get('category') == 'gift_card':
+                    for i in range(item.get('quantity', 1)):
+                        amount = float(item.get('price') or item.get('giftCardAmount') or 0)
+                        code = db_helper.create_gift_code(amount)
+                        gift_codes.append({'item': item.get('name'), 'code': code, 'amount': amount})
+
+            # Create purchase record (include gift nickname in message if present)
+            note = message
+            gift_nickname = purchase_info.get('gift_nickname') or None
+            if gift_nickname:
+                note = (note or '') + f" | gift_nickname: {gift_nickname}"
+
             db_helper.create_purchase(
-                username=username,
+                username=username or (gift_nickname or 'GIFT_CARD_PURCHASE'),
                 items=cart,
                 total_amount=purchase_info.get('total', 0),
-                message=message,
+                message=note,
                 coupon_used=coupon.get('code') if coupon else None,
                 payment_id=payment_id
             )
@@ -2478,8 +2562,11 @@ def cart_payment_success():
                 db_helper.redeem_gift_code(gift_card['code'], username)
                 log_event(f"Gift card redeemed during checkout: {gift_card['code']}, user: {username}")
             
-            # Clear session
-            session.pop('cart_purchase', None)
+            # Attach gift codes to session so cart_success can display them
+            session['cart_purchase']['gift_codes'] = gift_codes
+            session.modified = True
+
+            # Clear session (cart_success will read cart_purchase then clear)
             
             total_items = sum(item['quantity'] for item in cart)
             successful = len([r for r in results if r['success']])
@@ -2529,6 +2616,7 @@ def cart_success():
     # Use cart_summary from session (reduced size)
     cart_summary = purchase_info.get('cart_summary', [])
     username = purchase_info.get('username', 'Unknown')
+    gift_codes = purchase_info.get('gift_codes', [])
     items_sent = purchase_info.get('items_sent', 0)
     total_items = purchase_info.get('total_items', sum(item.get('quantity', 1) for item in cart_summary))
     
@@ -2566,7 +2654,8 @@ def cart_success():
                          results=results,
                          successful=items_sent,
                          total=total_items,
-                         failed_items=failed_items)
+                         failed_items=failed_items,
+                         gift_codes=gift_codes)
 
 
 # ==================== ADMIN COUPON MANAGEMENT ====================

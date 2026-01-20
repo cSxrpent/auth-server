@@ -250,10 +250,19 @@ class TokenManager:
         """Get valid tokens for a specific account (used for gem accounts)"""
         print(f"🔑 Getting tokens for account: {email}")
 
-        # Create a temporary token manager instance for this account
-        temp_manager = TokenManager()
+        # Create a lightweight temporary TokenManager-like object WITHOUT
+        # running __init__ (which validates environment vars and prints).
+        # This avoids re-validating global env and reduces duplicated logs
+        # and captcha requests when authenticating multiple accounts.
+        temp_manager = object.__new__(TokenManager)
+
+        # Minimal attributes required by authentication methods
+        temp_manager.tokens = {'idToken': None, 'refreshToken': None, 'cfJwt': None}
         temp_manager.email = email
         temp_manager.password = password
+        temp_manager.twocaptcha_key = self.twocaptcha_key
+        temp_manager.lock = threading.Lock()
+        temp_manager.last_refresh = None
 
         # Authenticate with this account's credentials
         if not temp_manager.ensure_authenticated():
