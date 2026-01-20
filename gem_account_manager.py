@@ -334,66 +334,6 @@ class GemAccountManager:
         except Exception as e:
             print(f"❌ send_gift_with_auto_switch error: {e}")
             raise
-                'ids': '1'
-            }
-
-            print(f"📦 Sending POST to Wolvesville API with body: {body} and headers: [Authorization: Bearer {tokens['bearer'][:8]}..., Cf-JWT: {tokens['cfJwt'][:8]}...]")
-
-            response = requests.post(
-                'https://core.api-wolvesville.com/gemOffers/purchases',
-                json=body,
-                headers=headers,
-                timeout=10
-            )
-
-            print(f"🔄 Wolvesville API response: {response.status_code} {response.text}")
-
-            # Try to parse gemCount from the response body (available after purchase attempt)
-            try:
-                resp_json = response.json()
-            except Exception:
-                resp_json = None
-
-            # If response contains gemCount, sync local DB
-            if resp_json and isinstance(resp_json, dict):
-                gem_count = None
-                if 'gemCount' in resp_json:
-                    gem_count = resp_json.get('gemCount')
-                elif 'gems' in resp_json:
-                    gem_count = resp_json.get('gems')
-
-                try:
-                    if gem_count is not None:
-                        real_gems = int(gem_count)
-                        print(f"🔄 Wolvesville returned gemCount: {real_gems} — syncing local account #{account['account_number']}")
-                        self.recharge_account(account['id'], real_gems)
-                        account['gems_remaining'] = real_gems
-                except Exception:
-                    pass
-
-            if response.status_code == 200:
-                # Success! Deduct gems locally if response didn't provide exact count
-                if not (resp_json and ('gemCount' in resp_json or 'gems' in resp_json)):
-                    self.deduct_gems(account['id'], gem_cost)
-
-                # Keep the RXZBOT nickname as requested — do not restore.
-                print(f"✅ Gift sent successfully!")
-                return resp_json or {'status': 'ok'}
-            else:
-                # If we have new gemCount info, we've already synced above
-                # On failure, set nickname back to randomized to avoid holding RXZBOT
-                try:
-                    self.change_account_nickname(account['email'], account['password'], self._random_nickname(account['email']))
-                except Exception:
-                    pass
-
-                error_msg = f"API error {response.status_code}: {response.text}"
-                print(f"❌ {error_msg}")
-                raise Exception(error_msg)
-
-        except Exception as e:
-            print(f"❌ send_gift_with_auto_switch error: {e}")
-            raise
 
 # Global instance
 gem_account_manager = GemAccountManager()

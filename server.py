@@ -2185,6 +2185,11 @@ def shop_payment_success():
                 if product.get('type') == 'GIFT_CARD' or product.get('category') == 'gift_card':
                     amount = float(product.get('price') or product.get('giftCardAmount') or 0)
                     code = db_helper.create_gift_code(amount)
+                    # Verify code creation
+                    if not code:
+                        log_event(f"Failed to create gift code for amount: {amount}", level="error")
+                        return render_template('shop_error.html', error='Payment succeeded but gift code creation failed. Please contact support.'), 500
+
                     # Log nickname if provided
                     gift_nickname = purchase_info.get('gift_nickname')
                     db_helper.create_purchase(

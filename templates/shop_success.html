@@ -159,7 +159,10 @@
             <p>Price: €{{ "%.2f"|format(product.price) }}</p>
             {% if gift_code %}
             <p style="margin-top:10px;color:var(--muted);">Here is your gift card code:</p>
-            <p style="font-size:1.4rem;color:#fff;font-weight:700;">{{ gift_code }}</p>
+            <div style="margin-top:10px;display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;">
+                <p id="gift-code" style="font-size:1.4rem;color:#fff;font-weight:700;margin:0;">{{ gift_code }}</p>
+                <button class="btn" id="copy-btn" type="button" onclick="copyGiftCode()">Copy</button>
+            </div>
             {% endif %}
         </div>
         <p>The gift will appear in the recipient's Wolvesville account shortly.</p>
@@ -195,6 +198,46 @@
         
         createParticles();
         createConfetti();
+    </script>
+    <script>
+        function fallbackCopyTextToClipboard(text) {
+            var textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function copyGiftCode(){
+            const code = {{ gift_code|tojson }};
+            if(!code) return;
+            const btn = document.getElementById('copy-btn');
+            if(navigator.clipboard && navigator.clipboard.writeText){
+                navigator.clipboard.writeText(code).then(()=>{
+                    const prev = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    setTimeout(()=> btn.textContent = prev, 1500);
+                }).catch(()=>{
+                    fallbackCopyTextToClipboard(code);
+                    const prev = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    setTimeout(()=> btn.textContent = prev, 1500);
+                });
+            } else {
+                fallbackCopyTextToClipboard(code);
+                const prev = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(()=> btn.textContent = prev, 1500);
+            }
+        }
     </script>
 </body>
 </html>

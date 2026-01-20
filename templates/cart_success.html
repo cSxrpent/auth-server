@@ -51,7 +51,14 @@
                     {% if gift_codes %}
                         {% for gc in gift_codes %}
                             {% if gc.item == item.name %}
-                            <div style="margin:8px 0;padding:8px;border-radius:8px;background:rgba(0,0,0,0.15);color:var(--muted);">Code: <strong style="color:#fff">{{ gc.code }}</strong> (€{{ "%.2f"|format(gc.amount) }})</div>
+                            <div style="margin:8px 0;padding:8px;border-radius:8px;background:rgba(0,0,0,0.15);display:flex;align-items:center;gap:12px;color:var(--muted);justify-content:space-between;">
+                                <div style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">
+                                    Code: <strong id="gc-{{ loop.index }}" style="color:#fff">{{ gc.code }}</strong> (€{{ "%.2f"|format(gc.amount) }})
+                                </div>
+                                <div>
+                                    <button class="button" type="button" onclick="copyText({{ gc.code|tojson }}, this)">Copy</button>
+                                </div>
+                            </div>
                             {% endif %}
                         {% endfor %}
                     {% endif %}
@@ -107,5 +114,40 @@
         
         <a href="/shop" class="button">← Back to Shop</a>
     </div>
-</body>
+    </body>
+    <script>
+        function fallbackCopyTextToClipboard(text) {
+            var textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try { document.execCommand('copy'); } catch (err) { console.error(err); }
+            document.body.removeChild(textArea);
+        }
+
+        function copyText(text, btn){
+            if(!text) return;
+            if(navigator.clipboard && navigator.clipboard.writeText){
+                navigator.clipboard.writeText(text).then(()=>{
+                    const prev = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    setTimeout(()=> btn.textContent = prev, 1500);
+                }).catch(()=>{
+                    fallbackCopyTextToClipboard(text);
+                    const prev = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    setTimeout(()=> btn.textContent = prev, 1500);
+                });
+            } else {
+                fallbackCopyTextToClipboard(text);
+                const prev = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(()=> btn.textContent = prev, 1500);
+            }
+        }
+    </script>
+    </body>
 </html>
