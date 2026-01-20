@@ -2584,7 +2584,8 @@ def cart_payment_success():
                                  results=results,
                                  successful=successful,
                                  total=total_items,
-                                 failed_items=failed_items)
+                                 failed_items=failed_items,
+                                 gift_codes=gift_codes)
         else:
             log_event(f"PayPal execution failed: {payment.error}", level="error")
             return render_template('shop_error.html', error='Payment execution failed'), 500
