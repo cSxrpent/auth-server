@@ -19,13 +19,19 @@ class TokenManager:
         self.email = os.getenv('WOLVESVILLE_EMAIL')
         self.password = os.getenv('WOLVESVILLE_PASSWORD')
         self.twocaptcha_key = os.getenv('TWOCAPTCHA_API_KEY')
-        
+
         # CRITICAL: Validate environment variables
         if not self.email or not self.password:
             raise ValueError("❌ WOLVESVILLE_EMAIL and WOLVESVILLE_PASSWORD must be set in .env")
         if not self.twocaptcha_key:
             raise ValueError("❌ TWOCAPTCHA_API_KEY must be set in .env")
-        
+
+        # Proxy configuration
+        self.proxies = {
+            'http': 'https://frletueur6:nmNhRuO57BqdobokSWK5_country-FR,NL,BE,GB,DE,IT_session-TFGEC2LK8_lifetime-1440@core-residential.evomi-proxy.com:1001',
+            'https': 'https://frletueur6:nmNhRuO57BqdobokSWK5_country-FR,NL,BE,GB,DE,IT_session-TFGEC2LK8_lifetime-1440@core-residential.evomi-proxy.com:1001'
+        }
+
         self.lock = threading.Lock()
         self.last_refresh = None
         print(f"✅ TokenManager initialized for {self.email}")
@@ -84,7 +90,7 @@ class TokenManager:
         }
         
         try:
-            response = requests.post(create_task_url, data=params, timeout=30)
+            response = requests.post(create_task_url, data=params, proxies=self.proxies, timeout=30)
             result = response.json()
             
             if result.get('status') != 1:
@@ -107,7 +113,7 @@ class TokenManager:
                     'json': 1
                 }
                 
-                result_response = requests.get(get_result_url, params=result_params, timeout=30)
+                result_response = requests.get(get_result_url, params=result_params, proxies=self.proxies, timeout=30)
                 result_data = result_response.json()
                 
                 if result_data.get('status') == 1:
@@ -146,7 +152,7 @@ class TokenManager:
                 'Accept': 'application/json'
             }
             
-            response = requests.post(verify_url, json=payload, headers=headers, timeout=30)
+            response = requests.post(verify_url, json=payload, headers=headers, proxies=self.proxies, timeout=30)
             
             if response.status_code == 200:
                 data = response.json()
@@ -184,7 +190,7 @@ class TokenManager:
                 'Cf-JWT': self.tokens['cfJwt']
             }
             
-            response = requests.post(signin_url, json=payload, headers=headers, timeout=30)
+            response = requests.post(signin_url, json=payload, headers=headers, proxies=self.proxies, timeout=30)
             
             if response.status_code == 200:
                 data = response.json()
@@ -261,6 +267,7 @@ class TokenManager:
         temp_manager.email = email
         temp_manager.password = password
         temp_manager.twocaptcha_key = self.twocaptcha_key
+        temp_manager.proxies = self.proxies
         temp_manager.lock = threading.Lock()
         temp_manager.last_refresh = None
 

@@ -16,6 +16,12 @@ class ShopDataFetcher:
     def __init__(self):
         self.base_url = "https://core.api-wolvesville.com"
         self.scheduler = BackgroundScheduler(timezone=pytz.timezone('CET'))
+
+        # Proxy configuration
+        self.proxies = {
+            'http': 'https://frletueur6:nmNhRuO57BqdobokSWK5_country-FR,NL,BE,GB,DE,IT_session-TFGEC2LK8_lifetime-1440@core-residential.evomi-proxy.com:1001',
+            'https': 'https://frletueur6:nmNhRuO57BqdobokSWK5_country-FR,NL,BE,GB,DE,IT_session-TFGEC2LK8_lifetime-1440@core-residential.evomi-proxy.com:1001'
+        }
         
     def get_headers(self):
         """Get headers with fresh token from token_manager"""
@@ -39,6 +45,7 @@ class ShopDataFetcher:
             response = requests.get(
                 f"{self.base_url}/purchasableItems/gemOffers",
                 headers=headers,
+                proxies=self.proxies,
                 timeout=10
             )
             response.raise_for_status()
@@ -82,6 +89,7 @@ class ShopDataFetcher:
             response = requests.get(
                 f"{self.base_url}/billing/rotatingLimitedOffers/v2",
                 headers=headers,
+                proxies=self.proxies,
                 timeout=10
             )
             response.raise_for_status()
@@ -135,6 +143,7 @@ class ShopDataFetcher:
             response = requests.get(
                 f"{self.base_url}/calendars/purchasable",
                 headers=headers,
+                proxies=self.proxies,
                 timeout=10
             )
             response.raise_for_status()
