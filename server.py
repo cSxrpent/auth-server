@@ -191,7 +191,17 @@ def find_key(keys, key_code):
 
 def search_wolvesville_player(username):
     """Search for player using managed tokens"""
-    return wolvesville_api.search_player(username)
+    log_event(f"Player search initiated for username: '{username}'", level="info")
+    try:
+        result = wolvesville_api.search_player(username)
+        if result:
+            log_event(f"Player search successful for '{username}': ID={result.get('id')}, username={result.get('username')}", level="info")
+        else:
+            log_event(f"Player search failed for '{username}': No result returned", level="warn")
+        return result
+    except Exception as e:
+        log_event(f"Player search error for '{username}': {str(e)}", level="error")
+        raise
 
 def get_wolvesville_player_profile(player_id):
     """Get player profile using managed tokens"""
@@ -2319,6 +2329,15 @@ def create_cart_order():
         player = wolvesville_api.search_player(username)
         if not player:
             return jsonify({'error': 'Recipient username not found on Wolvesville'}), 400
+
+        # Validate cart: prevent duplicate calendars
+        calendar_ids = []
+        for item in cart:
+            if item.get('type') == 'CALENDAR' or item.get('category') == 'calendar':
+                calendar_id = item.get('id') or item.get('calendar_id')
+                if calendar_id in calendar_ids:
+                    return jsonify({'error': f'Duplicate calendar found: {item.get("name", "Unknown Calendar")}. You can only select each calendar once.'}), 400
+                calendar_ids.append(calendar_id)
         
         # If payment is fully covered by gift card, complete purchase without PayPal
         if final_payment_amount <= 0:
