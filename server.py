@@ -45,7 +45,7 @@ from db_helper import (
 from gem_account_manager import gem_account_manager
 from coupon_manager import coupon_manager
 from shop_data_fetcher import shop_data_fetcher
-
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()  # load .env file if it exists (for local development)
 
@@ -60,8 +60,24 @@ else:
 # Configuration
 # -----------------------
 app = Flask(__name__, static_folder="static", template_folder="templates")
-CORS(app)  # allow cross-origin for simple API access
+CORS(app, 
+     resources={
+         r"/*": {
+             "origins": "*",
+             "methods": ["GET", "POST", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization"],
+             "expose_headers": ["Content-Type"],
+             "supports_credentials": False
+         }
+     })
 
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=1,
+    x_proto=1,
+    x_host=1,
+    x_prefix=1
+)
 # Secrets & storage config from env (safer)
 app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key_replace_in_prod")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change_me_locally")
@@ -1216,6 +1232,23 @@ def api_logs():
     except Exception as e:
         print(f"Error fetching logs: {e}")
         return jsonify([])
+
+@app.route("/debug/logs", methods=["GET", "POST"])
+def debug_logs():
+    """Temporary endpoint to view ALL logs with password protection"""
+    if request.method == "POST":
+        password = request.form.get("password", "").strip()
+        if password == "Tarik6607":
+            try:
+                # Get ALL logs from database (no limit)
+                logs = db_helper.get_recent_logs(limit=10000)  # Large limit to get most logs
+                return render_template("debug_logs.html", logs=logs)
+            except Exception as e:
+                return f"Error fetching logs: {e}", 500
+        else:
+            return render_template("debug_logs.html", error="Incorrect password", logs=None)
+
+    return render_template("debug_logs.html", logs=None)
 
 @app.route("/api/recent", methods=["GET"])
 @login_required
