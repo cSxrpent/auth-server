@@ -281,17 +281,23 @@ class TokenManager:
         }
     
     def start_auto_refresh(self):
-        """Start automatic token refresh - FIXED to authenticate immediately"""
-        # Authenticate IMMEDIATELY on startup
+        """Start automatic token refresh - authenticate in background to avoid blocking server startup"""
         print("🚀 Starting token manager...")
-        try:
-            if not self.ensure_authenticated():
-                print("⚠️ Warning: Initial authentication failed!")
+
+        def initial_authentication():
+            """Perform initial authentication in background thread"""
+            try:
+                if not self.ensure_authenticated():
+                    print("⚠️ Warning: Initial authentication failed!")
+                    print("   Will retry on first API call")
+            except Exception as e:
+                print(f"⚠️ Warning: Initial authentication error: {e}")
                 print("   Will retry on first API call")
-        except Exception as e:
-            print(f"⚠️ Warning: Initial authentication error: {e}")
-            print("   Will retry on first API call")
-        
+
+        # Start initial authentication in background thread
+        auth_thread = threading.Thread(target=initial_authentication, daemon=True)
+        auth_thread.start()
+
         def periodic_refresh():
             while True:
                 time.sleep(50 * 60)  # Every 50 minutes
@@ -300,11 +306,9 @@ class TokenManager:
                     self.refresh_tokens()
                 except Exception as e:
                     print(f"⚠️ Periodic refresh error: {e}")
-        
+
         # Start periodic refresh thread
         refresh_thread = threading.Thread(target=periodic_refresh, daemon=True)
-        refresh_thread.start()
-        print("✅ Automatic token refresh started (every 50 minutes)")
 
 # Global token manager instance
 token_manager = TokenManager()

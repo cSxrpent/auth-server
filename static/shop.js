@@ -495,11 +495,18 @@ function tryNextImage(img, fallbackUrls) {
 function addToCart(product) {
     // Categories that can only be purchased once (no quantity increase)
     const singlePurchaseCategories = ['bundles', 'calendar', 'dailyskins', 'skinsets', 'premium', 'emote', 'gift_card'];
-    
-    const existingIndex = cart.findIndex(item => 
-        item.type === product.type || 
-        (item.id && item.id === product.id)
-    );
+
+    // For items with unique IDs (like calendars), check ID first
+    // For items without IDs, check type
+    const existingIndex = cart.findIndex(item => {
+        if (product.id && item.id) {
+            // Both items have IDs - check if they're the same unique item
+            return item.id === product.id;
+        } else {
+            // Fallback to type checking for items without IDs
+            return item.type === product.type;
+        }
+    });
     
     if (existingIndex >= 0) {
         // Check if this is a single-purchase item
