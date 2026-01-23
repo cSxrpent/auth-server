@@ -90,7 +90,7 @@ PAYPAL_TEST_MODE = os.getenv("PAYPAL_TEST_MODE", "false").lower() == "true"  # S
 TESTIMONIALS_FILE = "testimonials.json"  # testimonials storage
 
 # Configure Flask for proper URL generation behind proxy
-app.config['SERVER_NAME'] = os.getenv('SERVER_NAME', 'rxzbot.com')
+# app.config['SERVER_NAME'] = os.getenv('SERVER_NAME', 'rxzbot.com')
 app.config['PREFERRED_URL_SCHEME'] = os.getenv('PREFERRED_URL_SCHEME', 'https')
 
 paypalrestsdk.configure({
