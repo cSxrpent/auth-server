@@ -862,7 +862,15 @@
                     const xp = await xpRes.json();
                     // XP object: {daily: {}, weekly: {}, monthly: {}}
                     const today = new Date().toISOString().slice(0,10);
-                    const week = new Date().toISOString().slice(0,8); // approximate
+                    // Calculate week key to match server format (YYYY-WWW)
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const start = new Date(year, 0, 1);
+                    const diff = now - start;
+                    const oneDay = 1000 * 60 * 60 * 24;
+                    const day = Math.floor(diff / oneDay);
+                    const weekNum = Math.floor((day + start.getDay()) / 7);
+                    const week = `${year}-W${weekNum.toString().padStart(2, '0')}`;
                     const month = new Date().toISOString().slice(0,7);
                     document.getElementById('xp-daily').textContent = (xp.daily && xp.daily[today])?xp.daily[today].toLocaleString():0;
                     document.getElementById('xp-weekly').textContent = (xp.weekly && xp.weekly[week])?xp.weekly[week].toLocaleString():0;

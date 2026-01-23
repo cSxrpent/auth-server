@@ -89,6 +89,10 @@ PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
 PAYPAL_TEST_MODE = os.getenv("PAYPAL_TEST_MODE", "false").lower() == "true"  # Skip actual PayPal calls for testing
 TESTIMONIALS_FILE = "testimonials.json"  # testimonials storage
 
+# Configure Flask for proper URL generation behind proxy
+app.config['SERVER_NAME'] = os.getenv('SERVER_NAME', 'rxzbot.com')
+app.config['PREFERRED_URL_SCHEME'] = os.getenv('PREFERRED_URL_SCHEME', 'https')
+
 paypalrestsdk.configure({
     "mode": PAYPAL_MODE,
     "client_id": PAYPAL_CLIENT_ID,
