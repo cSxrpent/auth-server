@@ -93,18 +93,6 @@ class CustomMessage(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     message = Column(Text, nullable=True)
 
-class GemAccount(Base):
-    __tablename__ = 'gem_accounts'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account_number = Column(Integer, unique=True, nullable=False, index=True)
-    email = Column(String(255), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
-    current_nickname = Column(String(255), nullable=False)  # Current username (RXZBOT or bugsbot{N})
-    gems_remaining = Column(Integer, default=5000)
-    is_active = Column(Boolean, default=True)
-    last_used = Column(String(30), nullable=True)  # Last time this account was used
-    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
 class BotSettings(Base):
     __tablename__ = 'bot_settings'
@@ -113,110 +101,6 @@ class BotSettings(Base):
     latest_bot_version = Column(String(20), nullable=False, default='0.6.9')
     updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
-class ShopBundle(Base):
-    __tablename__ = 'shop_bundles'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    type = Column(String(100), unique=True, nullable=False, index=True)
-    cost = Column(Integer, nullable=False)
-    price = Column(Numeric(10, 2), nullable=False)
-    name = Column(String(255), nullable=False)
-    image = Column(String(255))
-    is_new = Column(Boolean, default=False)
-    new_since = Column(String(10))
-    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-
-class ShopSkinSet(Base):
-    __tablename__ = 'shop_skin_sets'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    type = Column(String(100), nullable=False)
-    cost = Column(Integer, nullable=False)
-    price = Column(Numeric(10, 2), nullable=False)
-    name = Column(String(255), nullable=False)
-    expire_date = Column(String(50))
-    item_sets = Column(JSON)
-    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-
-class ShopDailySkin(Base):
-    __tablename__ = 'shop_daily_skins'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    type = Column(String(100), nullable=False)
-    cost = Column(Integer, nullable=False)
-    price = Column(Numeric(10, 2), nullable=False)
-    name = Column(String(255), nullable=False)
-    image_name = Column(String(255))
-    image_color = Column(String(50))
-    expire_date = Column(String(50))
-    avatar_item_ids = Column(JSON)
-    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-
-class ShopCalendar(Base):
-    __tablename__ = 'shop_calendars'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    calendar_id = Column(String(100), unique=True, nullable=False, index=True)
-    title = Column(String(255), nullable=False)
-    cost = Column(Integer, nullable=False)
-    price = Column(Numeric(10, 2), nullable=False)
-    description = Column(Text)
-    image_name = Column(String(255))
-    icon_name = Column(String(255))
-    duration_in_days = Column(Integer)
-    owned = Column(Boolean, default=False)
-    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-
-class ShopMetadata(Base):
-    __tablename__ = 'shop_metadata'
-    
-    id = Column(Integer, primary_key=True, default=1)
-    last_updated = Column(String(30), nullable=False)
-
-class GiftCode(Base):
-    __tablename__ = 'gift_codes'
-    
-    code = Column(String(16), primary_key=True)
-    amount = Column(Numeric(10, 2), nullable=False)
-    is_redeemed = Column(Boolean, default=False)
-    redeemed_by = Column(String(255), nullable=True)
-    redeemed_at = Column(String(30), nullable=True)
-    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-    expires_at = Column(String(30), nullable=True)
-
-class Purchase(Base):
-    __tablename__ = 'purchases'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    payment_id = Column(String(255), nullable=True)
-    username = Column(String(255), nullable=False)
-    items = Column(JSON, nullable=False)
-    total_amount = Column(Numeric(10, 2), nullable=False)
-    message = Column(Text, nullable=True)
-    coupon_used = Column(String(255), nullable=True)
-    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-
-class ItemLike(Base):
-    __tablename__ = 'item_likes'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    item_type = Column(String(100), nullable=False)
-    item_name = Column(String(255), nullable=False)
-    ip_address = Column(String(50), nullable=False)
-    created_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-
-class ShopSettings(Base):
-    __tablename__ = 'shop_settings'
-    
-    id = Column(Integer, primary_key=True, default=1)
-    global_promo_enabled = Column(Boolean, default=False)
-    global_promo_percent = Column(Integer, default=0)
-    global_promo_label = Column(String(255), nullable=True)
-    updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
 def init_database():
     """Initialize database with all tables"""
