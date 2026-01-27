@@ -101,6 +101,17 @@ class BotSettings(Base):
     latest_bot_version = Column(String(20), nullable=False, default='0.6.9')
     updated_at = Column(String(30), default=lambda: datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
+class PasswordReset(Base):
+    __tablename__ = 'password_resets'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), nullable=False, index=True)
+    reset_code = Column(String(6), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False)
+    used_at = Column(DateTime, nullable=True)
+
 
 def init_database():
     """Initialize database with all tables"""

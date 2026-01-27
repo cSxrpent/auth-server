@@ -22,6 +22,11 @@ import hmac
 import hashlib
 import base64
 import html
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
 from wolvesville_api import wolvesville_api
 from token_manager import token_manager
 import db_helper
@@ -1030,168 +1035,6 @@ def stop_ping_thread():
             log_event("Stopped ping thread")
             return True
         return False
-
-def send_wolvesville_gift(player_id_or_username, product, message):
-    """
-    Send a gift to a Wolvesville user using the gem account manager
-    
-    Args:
-        username: Wolvesville username
-        product: Product dict with 'type', 'name', 'price', 'cost', etc.
-        message: Gift message
-    
-    Returns:
-        dict: API response from Wolvesville
-    """
-    try:
-        # Accept either a pre-validated player_id or a username (fallback)
-        player_id = player_id_or_username
-        # If looks like a username (no hyphens typical for uuid), try to resolve
-        if not isinstance(player_id_or_username, str) or '-' not in player_id_or_username:
-            # assume it's a username and attempt to resolve (fallback)
-            player = wolvesville_api.search_player(player_id_or_username)
-            if not player:
-                raise Exception(f"Recipient '{player_id_or_username}' not found")
-            player_id = player.get('id')
-
-        # Use the gem account manager with automatic account switching
-        result = gem_account_manager.send_gift_with_auto_switch(player_id, product, message)
-
-        log_event(f"Gift sent: {product['name']} to {player_id} ({product['cost']} gems)")
-        return result
-            
-    except Exception as e:
-        log_event(f"send_wolvesville_gift error: {e}", level="error")
-        raise
-
-@app.route('/admin/gem-accounts')
-@login_required
-def admin_gem_accounts():
-    """Admin page for managing gem accounts"""
-    return render_template('admin_gem_accounts.html')
-
-@app.route('/api/gem-accounts', methods=['GET'])
-@login_required
-def api_get_gem_accounts():
-    """Get all gem accounts"""
-    accounts = gem_account_manager.get_all_gem_accounts()
-    # Don't send passwords to frontend
-    for acc in accounts:
-        acc.pop('password', None)
-    return jsonify(accounts)
-
-@app.route('/api/gem-accounts/add', methods=['POST'])
-@login_required
-def api_add_gem_account():
-    """Add a new gem account"""
-    body = request.get_json() or {}
-    account_number = body.get('account_number')
-    email = body.get('email')
-    password = body.get('password')
-    
-    if not all([account_number, email, password]):
-        return jsonify({'error': 'Missing required fields'}), 400
-    
-    if gem_account_manager.add_gem_account(account_number, email, password):
-        log_event(f"Gem account added: #{account_number} ({email})")
-        return jsonify({'success': True, 'message': 'Account added successfully'})
-    else:
-        return jsonify({'error': 'Failed to add account (may already exist)'}), 400
-
-@app.route('/api/gem-accounts/recharge', methods=['POST'])
-@login_required
-def api_recharge_gem_account():
-    """Recharge an account's gems"""
-    body = request.get_json() or {}
-    account_id = body.get('account_id')
-    gems_amount = body.get('gems_amount', 5000)
-    
-    if not account_id:
-        return jsonify({'error': 'Account ID required'}), 400
-    
-    if gem_account_manager.recharge_account(account_id, gems_amount):
-        log_event(f"Gem account #{account_id} recharged to {gems_amount} gems")
-        return jsonify({'success': True, 'message': 'Account recharged'})
-    else:
-        return jsonify({'error': 'Failed to recharge account'}), 400
-
-@app.route('/api/gem-accounts/toggle', methods=['POST'])
-@login_required
-def api_toggle_gem_account():
-    """Enable/disable a gem account"""
-    body = request.get_json() or {}
-    account_id = body.get('account_id')
-    is_active = body.get('is_active')
-    
-    if not account_id or is_active is None:
-        return jsonify({'error': 'Missing required fields'}), 400
-    
-    try:
-        with db_helper.get_db() as db:
-            from init_database import GemAccount
-            
-            account = db.query(GemAccount).filter_by(id=account_id).first()
-            if not account:
-                return jsonify({'error': 'Account not found'}), 404
-            
-            account.is_active = is_active
-            db.commit()
-            
-            status = 'enabled' if is_active else 'disabled'
-            log_event(f"Gem account #{account.account_number} {status}")
-            
-            return jsonify({'success': True, 'message': f'Account {status}'})
-            
-    except Exception as e:
-        log_event(f"Error toggling gem account: {e}", level="error")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/gem-accounts/delete', methods=['POST'])
-@login_required
-def api_delete_gem_account():
-    """Delete a gem account"""
-    body = request.get_json() or {}
-    account_id = body.get('account_id')
-    
-    if not account_id:
-        return jsonify({'error': 'Account ID required'}), 400
-    
-    try:
-        with db_helper.get_db() as db:
-            from init_database import GemAccount
-            
-            account = db.query(GemAccount).filter_by(id=account_id).first()
-            if not account:
-                return jsonify({'error': 'Account not found'}), 404
-            
-            account_number = account.account_number
-            db.delete(account)
-            db.commit()
-            
-            log_event(f"Gem account #{account_number} deleted")
-            
-            return jsonify({'success': True, 'message': 'Account deleted'})
-            
-    except Exception as e:
-        log_event(f"Error deleting gem account: {e}", level="error")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/gem-accounts/stats', methods=['GET'])
-@login_required
-def api_gem_accounts_stats():
-    """Get gem accounts statistics"""
-    accounts = gem_account_manager.get_all_gem_accounts()
-    
-    total_gems = sum(acc['gems_remaining'] for acc in accounts)
-    active_accounts = len([acc for acc in accounts if acc['is_active']])
-    total_accounts = len(accounts)
-    
-    return jsonify({
-        'total_accounts': total_accounts,
-        'active_accounts': active_accounts,
-        'total_gems': total_gems,
-        'average_gems': total_gems // total_accounts if total_accounts > 0 else 0
-    })
     
 @app.route("/api/ping", methods=["POST"])
 @login_required
@@ -1509,6 +1352,7 @@ def loginuser():
             return render_template('loginuser.html', error="Invalid email or password")
     
     return render_template('loginuser.html')
+
 
 @app.route('/dashboard')
 def dashboard():
@@ -2191,6 +2035,401 @@ def search_wolvesville_player(username):
 def get_wolvesville_player_profile(player_id):
     """Get player profile using managed tokens"""
     return wolvesville_api.get_player_profile(player_id)
+
+
+# ========== FORGOT PASSWORD ROUTES ==========
+
+def init_brevo_client():
+    """Initialize Brevo (Sendinblue) API client"""
+    api_key = os.getenv("BREVO_API_KEY")
+    if not api_key:
+        print("❌ BREVO_API_KEY not set in environment!")
+        return None
+    
+    configuration = sib_api_v3_sdk.Configuration()
+    configuration.api_key['api-key'] = api_key
+    api_client = sib_api_v3_sdk.ApiClient(configuration)
+    return sib_api_v3_sdk.TransactionalEmailsApi(api_client)
+
+def generate_reset_code():
+    """Generate a random 6-digit code"""
+    return ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+
+def generate_reset_token():
+    """Generate a secure token for email verification"""
+    return secrets.token_urlsafe(32)
+
+def send_password_reset_email(email, reset_code):
+    """Send password reset email with 6-digit code using Brevo"""
+    try:
+        api_instance = init_brevo_client()
+        if not api_instance:
+            log_event(f"Failed to initialize Brevo client for {email}", level="error")
+            return False
+        
+        sender_name = os.getenv("BREVO_SENDER_NAME", "RXZBot")
+        sender_email = os.getenv("BREVO_SENDER_EMAIL", "noreply@rxzbot.com")
+        
+        email_obj = sib_api_v3_sdk.SendSmtpEmail(
+            sender={"name": sender_name, "email": sender_email},
+            to=[{"email": email}],
+            subject="RXZBot password reset request",
+            html_content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    body {{
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        margin: 0;
+                        padding: 0;
+                        background-color: #0a0e1a;
+                    }}
+                    .container {{
+                        background: linear-gradient(135deg, #0a0e1a, #0d1526, #1a1f35);
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 20px;
+                    }}
+                    .card {{
+                        background: linear-gradient(135deg, #0f1724 0%, #0d1520 100%);
+                        border: 1px solid rgba(0, 212, 255, 0.12);
+                        border-radius: 16px;
+                        padding: 40px;
+                        max-width: 520px;
+                        width: 100%;
+                        color: #eaf1ff;
+                        box-shadow: 0 0 40px rgba(0, 212, 255, 0.06);
+                    }}
+                    h1 {{
+                        color: #00d4ff;
+                        margin: 0 0 8px 0;
+                        font-size: 26px;
+                    }}
+                    .subtitle {{
+                        color: #9aa4b2;
+                        font-size: 14px;
+                        margin-bottom: 28px;
+                    }}
+                    .info {{
+                        color: #d0d8e8;
+                        font-size: 14px;
+                        line-height: 1.6;
+                        margin: 18px 0;
+                    }}
+                    .code-box {{
+                        background: linear-gradient(
+                            135deg,
+                            rgba(0,212,255,0.12),
+                            rgba(0,212,255,0.05)
+                        );
+                        border: 2px solid rgba(0,212,255,0.35);
+                        border-radius: 12px;
+                        padding: 28px;
+                        text-align: center;
+                        margin: 28px 0;
+                    }}
+                    .code {{
+                        font-size: 34px;
+                        font-weight: 700;
+                        color: #00d4ff;
+                        letter-spacing: 8px;
+                        margin: 0;
+                    }}
+                    .timer {{
+                        color: #ffa502;
+                        font-weight: 600;
+                        margin-top: 14px;
+                        font-size: 13px;
+                    }}
+                    .security {{
+                        margin: 28px 0;
+                    }}
+                    .security-item {{
+                        display: flex;
+                        align-items: center;
+                        margin-bottom: 10px;
+                        color: #b5bcc8;
+                        font-size: 13px;
+                    }}
+                    .security-icon {{
+                        color: #00d4ff;
+                        margin-right: 10px;
+                        font-weight: bold;
+                    }}
+                    .warning {{
+                        background: rgba(255,71,87,0.08);
+                        border-left: 4px solid #ff4757;
+                        padding: 14px;
+                        border-radius: 6px;
+                        margin: 22px 0;
+                        color: #ffb3b3;
+                        font-size: 12px;
+                    }}
+                    .footer {{
+                        text-align: center;
+                        color: #7a8294;
+                        font-size: 12px;
+                        margin-top: 32px;
+                        border-top: 1px solid rgba(255,255,255,0.06);
+                        padding-top: 18px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="card">
+                        <h1>Password Reset Request</h1>
+                        <p class="subtitle">Secure account recovery for RXZBot</p>
+
+                        <p class="info">Hello,</p>
+
+                        <p class="info">
+                            We received a request to reset the password associated with your RXZBot account.
+                            Please use the verification code below to continue.
+                        </p>
+
+                        <div class="code-box">
+                            <p class="code">{reset_code}</p>
+                            <div class="timer">This code expires in 5 minutes</div>
+                        </div>
+
+                        <div class="security">
+                            <div class="security-item">
+                                <span class="security-icon">✓</span>
+                                <span>This code can only be used once</span>
+                            </div>
+                            <div class="security-item">
+                                <span class="security-icon">✓</span>
+                                <span>Automatically expires after 5 minutes</span>
+                            </div>
+                            <div class="security-item">
+                                <span class="security-icon">✓</span>
+                                <span>No changes are made without this code</span>
+                            </div>
+                        </div>
+
+                        <div class="warning">
+                            <strong>Didn’t request this?</strong><br>
+                            If you did not initiate a password reset, you can safely ignore this email.
+                            Your account will remain unchanged.
+                        </div>
+
+                        <p class="info">
+                            Enter this code on the RXZBot password reset page to choose a new password.
+                        </p>
+
+                        <div class="footer">
+                            <p>© 2026 RXZBot. All rights reserved.</p>
+                            <p>This is an automated security message. Please do not reply.</p>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+        )
+        
+        response = api_instance.send_transac_email(email_obj)
+        log_event(f"Password reset email sent to {email}", level="info")
+        return True
+        
+    except ApiException as e:
+        log_event(f"Brevo API error sending reset email to {email}: {e}", level="error")
+        return False
+    except Exception as e:
+        log_event(f"Error sending reset email to {email}: {str(e)}", level="error")
+        return False
+
+@app.route('/forgot-password', methods=['GET'])
+def forgot_password_page():
+    """Display the forgot password page"""
+    return render_template('forgot_password.html')
+
+@app.route('/api/forgot-password/request', methods=['POST'])
+def forgot_password_request():
+    """Step 1: Request password reset - send code to email"""
+    try:
+        data = request.get_json() or {}
+        email = data.get('email', '').strip()
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        reset_token = generate_reset_token()
+        
+        # Check if user exists
+        user = db_helper.get_user_by_email(email)
+        if not user:
+            # For security, don't reveal if email exists or not
+            # Always return success to prevent account enumeration
+            log_event(f"Password reset requested for non-existent email: {email}", level="warn")
+            return jsonify({
+                'message': 'If an account exists with this email, you will receive a code shortly.',
+                'token': reset_token,
+                'email_exists': False
+            }), 200
+        
+        # Generate reset code
+        reset_code = generate_reset_code()
+        
+        # Save to database with 5-minute expiry
+        from init_database import PasswordReset
+        expiry_time = datetime.utcnow() + timedelta(minutes=5)
+        
+        try:
+            with db_helper.get_db() as db:
+                # Delete any previous unused codes for this email
+                db.query(PasswordReset).filter(
+                    PasswordReset.email == email,
+                    PasswordReset.used == False
+                ).delete()
+                
+                # Create new reset record
+                pwd_reset = PasswordReset(
+                    email=email,
+                    reset_code=reset_code,
+                    expires_at=expiry_time,
+                    used=False
+                )
+                db.add(pwd_reset)
+        except Exception as e:
+            log_event(f"Database error during password reset request: {str(e)}", level="error")
+            return jsonify({'error': 'Database error. Please try again later.'}), 500
+        
+        # Send email with code
+        email_sent = send_password_reset_email(email, reset_code)
+        
+        if email_sent:
+            log_event(f"Password reset code sent to {email}", level="info")
+            return jsonify({
+                'message': 'If an account exists with this email, you will receive a code shortly.',
+                'token': reset_token,
+                'email_exists': True
+            }), 200
+        else:
+            log_event(f"Failed to send reset code to {email}", level="error")
+            return jsonify({
+                'message': 'If an account exists with this email, you will receive a code shortly.',
+                'token': reset_token,
+                'email_exists': True
+            }), 200
+            
+    except Exception as e:
+        log_event(f"Error in password reset request: {str(e)}", level="error")
+        return jsonify({'error': 'An error occurred. Please try again later.'}), 500
+
+@app.route('/api/forgot-password/verify', methods=['POST'])
+def forgot_password_verify():
+    """Step 2: Verify the 6-digit code"""
+    try:
+        data = request.get_json() or {}
+        email = data.get('email', '').strip()
+        code = data.get('code', '').strip()
+        token = data.get('token', '').strip()
+        
+        if not email or not code or not token:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        if not code.isdigit() or len(code) != 6:
+            return jsonify({'error': 'Invalid code format'}), 400
+        
+        # Check if code is valid
+        from init_database import PasswordReset
+        try:
+            with db_helper.get_db() as db:
+                reset_record = db.query(PasswordReset).filter(
+                    PasswordReset.email == email,
+                    PasswordReset.reset_code == code,
+                    PasswordReset.used == False,
+                    PasswordReset.expires_at > datetime.utcnow()
+                ).first()
+                
+                if not reset_record:
+                    log_event(f"Invalid or expired reset code for {email}", level="warn")
+                    return jsonify({'error': 'Invalid or expired code'}), 401
+                
+                # Mark as used after successful verification
+                reset_record.used = True
+                reset_record.used_at = datetime.utcnow()
+                
+                log_event(f"Password reset code verified for {email}", level="info")
+                return jsonify({
+                    'message': 'Code verified successfully',
+                    'verified_token': generate_reset_token()
+                }), 200
+                
+        except Exception as e:
+            log_event(f"Database error during code verification: {str(e)}", level="error")
+            return jsonify({'error': 'Verification error. Please try again.'}), 500
+            
+    except Exception as e:
+        log_event(f"Error in password verification: {str(e)}", level="error")
+        return jsonify({'error': 'An error occurred. Please try again later.'}), 500
+
+@app.route('/api/forgot-password/reset', methods=['POST'])
+def forgot_password_reset():
+    """Step 3: Reset the password with new password"""
+    try:
+        data = request.get_json() or {}
+        email = data.get('email', '').strip()
+        new_password = data.get('password', '')
+        token = data.get('token', '').strip()
+        
+        if not email or not new_password or not token:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Validate password strength
+        if len(new_password) < 8:
+            return jsonify({'error': 'Password must be at least 8 characters long'}), 400
+        
+        if not any(c.isupper() for c in new_password):
+            return jsonify({'error': 'Password must contain at least one uppercase letter'}), 400
+        
+        if not any(c.islower() for c in new_password):
+            return jsonify({'error': 'Password must contain at least one lowercase letter'}), 400
+        
+        if not any(c.isdigit() for c in new_password):
+            return jsonify({'error': 'Password must contain at least one number'}), 400
+        
+        if not any(c in '!@#$%^&*()_+-=[]{};\'"\\|,.<>/?`~' for c in new_password):
+            return jsonify({'error': 'Password must contain at least one special character'}), 400
+        
+        # Check if user exists
+        user = db_helper.get_user_by_email(email)
+        if not user:
+            log_event(f"Password reset attempted for non-existent email: {email}", level="warn")
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Hash new password
+        password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        # Update password in database
+        from init_database import UserCredential
+        try:
+            with db_helper.get_db() as db:
+                cred = db.query(UserCredential).filter_by(email=email).first()
+                if cred:
+                    cred.password = password_hash
+                    log_event(f"Password reset successful for {email}", level="info")
+                    return jsonify({
+                        'message': 'Password reset successfully',
+                        'email': email
+                    }), 200
+                else:
+                    return jsonify({'error': 'User credentials not found'}), 404
+                    
+        except Exception as e:
+            log_event(f"Database error during password reset: {str(e)}", level="error")
+            return jsonify({'error': 'Error resetting password. Please try again.'}), 500
+            
+    except Exception as e:
+        log_event(f"Error in password reset: {str(e)}", level="error")
+        return jsonify({'error': 'An error occurred. Please try again later.'}), 500
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))

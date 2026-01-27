@@ -10,3 +10,4 @@ sqlalchemy
 gunicorn==20.1.0
 APScheduler==3.10.4
 pytz==2023.3
+sib-api-v3-sdk==7.6.0

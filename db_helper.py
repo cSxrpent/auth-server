@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 from datetime import datetime
-from init_database import User, Key, Testimonial, UserCredential, UserXP, Stats, LastConnected, Log, RecentConnection
+from init_database import User, Key, Testimonial, UserCredential, UserXP, Stats, LastConnected, Log, RecentConnection, PasswordReset
 from sqlalchemy.exc import OperationalError
 
 # Database connection with PROPER pool configuration
