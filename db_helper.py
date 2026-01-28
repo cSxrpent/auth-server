@@ -1394,41 +1394,29 @@ def get_all_gift_codes():
 
 # ==================== PURCHASE HISTORY FUNCTIONS ====================
 
-def create_purchase(username, items, total_amount, message=None, coupon_used=None, payment_id=None):
-    """Create a purchase record"""
+def create_paypal_purchase(username, email, item, amount, currency="USD"):
+    """Create a PayPal purchase record in the Purchase table"""
     try:
-        import json as _json
         with get_db() as db:
             from init_database import Purchase
-            # Ensure items is a Python object (SQLAlchemy JSON column expects a JSON-serializable object)
-            safe_items = items
-            if isinstance(items, str):
-                try:
-                    safe_items = _json.loads(items)
-                except Exception:
-                    safe_items = items
-
-            # Serialize coupon_used to string if it's a dict
-            safe_coupon = coupon_used
-            if isinstance(coupon_used, (dict, list)):
-                try:
-                    safe_coupon = _json.dumps(coupon_used)
-                except Exception:
-                    safe_coupon = str(coupon_used)
-
             purchase = Purchase(
                 username=username,
-                items=safe_items,
-                total_amount=total_amount,
-                message=message,
-                coupon_used=safe_coupon,
-                payment_id=payment_id
+                email=email,
+                platform="PayPal",
+                item=item,
+                currency=currency,
+                price=amount,
+                status="Completed",  # PayPal is instant
+                access_key=None,  # Not applicable for PayPal
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
             )
             db.add(purchase)
-            return True
+            db.commit()
+            return {"success": True, "purchase_id": purchase.id}
     except Exception as e:
-        print(f"⚠️ Error creating purchase: {e}")
-        return False
+        print(f"⚠️ Error creating PayPal purchase: {e}")
+        return {"success": False, "error": str(e)}
 
 def get_user_purchases(username):
     """Get all purchases for a user"""
@@ -1598,6 +1586,30 @@ def get_all_purchases_for_admin():
             ]
     except Exception as e:
         print(f"⚠️ Error getting purchases: {e}")
+        return []
+
+def get_all_paypal_purchases():
+    """Get all PayPal purchases for admin panel"""
+    try:
+        with get_db() as db:
+            from init_database import Purchase
+            purchases = db.query(Purchase).filter_by(platform="PayPal").order_by(Purchase.created_at.desc()).all()
+            return [
+                {
+                    'id': p.id,
+                    'username': p.username,
+                    'email': p.email,
+                    'item': p.item,
+                    'price': p.price,
+                    'currency': p.currency,
+                    'status': p.status,
+                    'created_at': p.created_at.strftime("%Y-%m-%d %H:%M:%S") if p.created_at else None,
+                    'updated_at': p.updated_at.strftime("%Y-%m-%d %H:%M:%S") if p.updated_at else None
+                }
+                for p in purchases
+            ]
+    except Exception as e:
+        print(f"⚠️ Error getting PayPal purchases: {e}")
         return []
 
 def update_purchase_status(purchase_id, new_status):

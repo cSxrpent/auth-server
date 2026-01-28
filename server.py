@@ -46,7 +46,8 @@ from db_helper import (
     get_user_by_player_id, update_user_player_id, update_user_nickname,
     get_custom_message, set_custom_message,
     get_latest_bot_version, set_latest_bot_version, update_user_bot_version,
-    create_purchase, get_purchase, get_all_purchases_for_admin, update_purchase_status, update_purchase_with_key, get_pending_purchases
+    create_purchase, get_purchase, get_all_purchases_for_admin, update_purchase_status, update_purchase_with_key, get_pending_purchases,
+    create_paypal_purchase, get_all_paypal_purchases
 )
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -533,6 +534,30 @@ def payment_success():
 
         activate_license(username, item)
         token = generate_download_token(username, item)
+        
+        # Track PayPal purchase
+        prices = {
+            "test": {"amount": "0.05", "description": "Test Purchase"},
+            "1month": {"amount": "2.00", "description": "1 Month Subscription"},
+            "2months": {"amount": "4.00", "description": "2 Months Subscription"},
+            "3months": {"amount": "5.00", "description": "3 Months Subscription"},
+            "1year": {"amount": "10.00", "description": "1 Year Subscription"},
+            "lifetime": {"amount": "20.00", "description": "Lifetime bot with updates"},
+            "custombot": {"amount": "25.00", "description": "Custom Bot"}
+        }
+        price = prices.get(item, {}).get("amount", "0.00")
+        
+        # Get payer email from PayPal
+        payer_email = payment.payer.payer_info.email if hasattr(payment, 'payer') and hasattr(payment.payer, 'payer_info') else "unknown@paypal.com"
+        
+        # Create purchase record
+        create_paypal_purchase(
+            username=username,
+            email=payer_email,
+            item=item,
+            amount=price,
+            currency="USD"
+        )
 
         return render_template(
             "payment_success.html",
@@ -1269,6 +1294,16 @@ def api_get_purchases():
         print(f"❌ Error fetching purchases: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route("/api/admin/paypal-purchases", methods=["GET"])
+@admin_required
+def api_get_paypal_purchases():
+    """Get all PayPal purchases for admin panel"""
+    try:
+        paypal_purchases = get_all_paypal_purchases()
+        return jsonify({"success": True, "purchases": paypal_purchases}), 200
+    except Exception as e:
+        print(f"❌ Error fetching PayPal purchases: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/admin/purchase/<int:purchase_id>/status", methods=["PUT"])
 @admin_required

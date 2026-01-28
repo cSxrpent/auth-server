@@ -118,10 +118,10 @@ class Purchase(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, index=True)
-    platform = Column(String(50), nullable=False)  # Instagram or Discord
+    platform = Column(String(50), nullable=False)  # Instagram, Discord, or PayPal
     item = Column(String(255), nullable=False)  # e.g. "1 Month"
-    currency = Column(String(50), nullable=False)  # roses or gems
-    price = Column(String(255), nullable=False)  # e.g. "350 🌹" or "380 Gems"
+    currency = Column(String(50), nullable=False)  # roses, gems, or USD
+    price = Column(String(255), nullable=False)  # e.g. "350 🌹" or "380 Gems" or "2.00"
     status = Column(String(50), default="Awaiting user contact")  # Status tracking
     access_key = Column(String(255), nullable=True)  # Generated key after approval
     created_at = Column(DateTime, default=datetime.utcnow)
