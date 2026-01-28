@@ -771,9 +771,13 @@ def login():
         password = request.form.get("password", "")
         if hmac.compare_digest(password, ADMIN_PASSWORD):
             session["logged_in"] = True
-            return redirect(url_for("admin_page"))
+            # After successful login, stay on /administrateur which now shows the dashboard
+            return redirect(url_for("login"))
         else:
             error = "Incorrect password."
+    # If admin already logged in, show the dashboard on /administrateur
+    if session.get("logged_in"):
+        return render_template("admin.html")
     return render_template("login.html", error=error)
 
 
@@ -785,11 +789,6 @@ def index():
 def test_page():
     return render_template("index.html", show_test=True)
 
-@app.route("/admin")
-@admin_required
-def admin_page():
-    return render_template("admin.html")
-
 @app.route("/admin/add", methods=["POST"])
 @admin_required
 def admin_add():
@@ -798,7 +797,7 @@ def admin_add():
     duration = request.form.get("duration", "").strip()
 
     if not username:
-        return redirect(url_for("admin_page"))
+        return redirect(url_for("login"))
 
     if not expires and duration:
         try:
@@ -818,7 +817,7 @@ def admin_add():
         users.append({"username": username, "expires": expires})
     save_res = save_users(users)
     log_event(f"web add: {username} expires {expires}")
-    return redirect(url_for("admin_page"))
+    return redirect(url_for("login"))
 
 @app.route("/admin/delete/<username>", methods=["GET"])
 @admin_required
@@ -827,7 +826,7 @@ def admin_delete(username):
     users = [u for u in users if u["username"].lower() != username.lower()]
     save_res = save_users(users)
     log_event(f"web delete: {username}")
-    return redirect(url_for("admin_page"))
+    return redirect(url_for("login"))
 
 @app.route("/api/users", methods=["GET"])
 @admin_required
@@ -962,7 +961,7 @@ def static_files(path):
 # -----------------------
 # Background ping to admin (enhanced)
 # -----------------------
-PING_ADMIN_URL = os.getenv("PING_ADMIN_URL", "https://rxzbot.com/admin")
+PING_ADMIN_URL = os.getenv("PING_ADMIN_URL", "https://rxzbot.com/administrateur")
 try:
     PING_ADMIN_INTERVAL = int(os.getenv("PING_ADMIN_INTERVAL", "300"))
 except Exception:
@@ -2005,7 +2004,7 @@ def send_password_reset_email(email, reset_code):
                         padding: 40px;
                         max-width: 520px;
                         width: 100%;
-                        color: #eaf1ff;
+                                               color: #eaf1ff;
                         box-shadow: 0 0 40px rgba(0,  212, 255, 0.06);
                     }}
                     h1 {{
