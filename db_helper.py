@@ -163,6 +163,32 @@ def find_key(keys, key_code):
             return k
     return None
 
+def create_key(code, duration, created):
+    """Create a new activation key directly in database"""
+    try:
+        with get_db() as db:
+            new_key = Key(
+                code=code,
+                duration=duration,
+                created=created,
+                used=False,
+                used_by=None,
+                used_at=None
+            )
+            db.add(new_key)
+            db.flush()  # ✅ FLUSH before returning to ensure DB visibility
+            return {
+                "code": new_key.code,
+                "duration": new_key.duration,
+                "created": new_key.created,
+                "used": new_key.used,
+                "used_by": new_key.used_by,
+                "used_at": new_key.used_at
+            }
+    except Exception as e:
+        print(f"⚠️ Error creating key: {e}")
+        return None
+
 # ==================== TESTIMONIAL FUNCTIONS ====================
 
 def load_testimonials():
@@ -1513,7 +1539,7 @@ def update_shop_settings(global_promo_enabled, global_promo_percent, global_prom
 
 # ==================== ROSES/GEMS PURCHASE FUNCTIONS ====================
 
-def create_purchase(username, email, platform, item, currency, price):
+def create_purchase(username, email, platform, item, currency, price, duration=None):
     """Create a new Roses/Gems purchase entry"""
     try:
         with get_db() as db:
@@ -1525,6 +1551,7 @@ def create_purchase(username, email, platform, item, currency, price):
                 item=item,
                 currency=currency,
                 price=price,
+                duration=duration,
                 status="Awaiting user contact",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -1552,6 +1579,7 @@ def get_purchase(purchase_id):
                     'item': purchase.item,
                     'currency': purchase.currency,
                     'price': purchase.price,
+                    'duration': purchase.duration,
                     'status': purchase.status,
                     'access_key': purchase.access_key,
                     'created_at': purchase.created_at.strftime("%Y-%m-%d %H:%M:%S") if purchase.created_at else None,
@@ -1577,6 +1605,7 @@ def get_all_purchases_for_admin():
                     'item': p.item,
                     'currency': p.currency,
                     'price': p.price,
+                    'duration': p.duration,
                     'status': p.status,
                     'access_key': p.access_key,
                     'created_at': p.created_at.strftime("%Y-%m-%d %H:%M:%S") if p.created_at else None,

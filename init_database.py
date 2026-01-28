@@ -122,6 +122,7 @@ class Purchase(Base):
     item = Column(String(255), nullable=False)  # e.g. "1 Month"
     currency = Column(String(50), nullable=False)  # roses, gems, or USD
     price = Column(String(255), nullable=False)  # e.g. "350 🌹" or "380 Gems" or "2.00"
+    duration = Column(Integer, nullable=True)  # Duration in days (e.g., 30, 60, 90, 365000)
     status = Column(String(50), default="Awaiting user contact")  # Status tracking
     access_key = Column(String(255), nullable=True)  # Generated key after approval
     created_at = Column(DateTime, default=datetime.utcnow)

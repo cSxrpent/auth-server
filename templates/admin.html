@@ -608,6 +608,7 @@
                 <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Username</th>
                 <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Email</th>
                 <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Item</th>
+                <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Duration</th>
                 <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Currency</th>
                 <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Price</th>
                 <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Platform</th>
@@ -618,7 +619,7 @@
             </thead>
             <tbody id="rosesGemsTable">
               <tr>
-                <td colspan="9" style="text-align:center;padding:30px;color:var(--muted)">Loading purchases...</td>
+                <td colspan="10" style="text-align:center;padding:30px;color:var(--muted)">Loading purchases...</td>
               </tr>
             </tbody>
           </table>
@@ -2290,6 +2291,7 @@
             if (response.ok) {
                 toast(`✓ Status updated to: ${newStatus}`);
                 loadPurchases();
+                loadRosesGemsPurchases();
             } else {
                 const data = await response.json();
                 toast(`Error: ${data.error}`);
@@ -2303,20 +2305,9 @@
     let approvalModal = null;
     async function showApprovalModal(purchaseId, email, username, item) {
         try {
-            // Call backend to generate key
-            const response = await fetch('/api/keys/generate', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({duration: 365})
-            });
+            // Generate 6-character access key locally
+            const accessKey = generateAccessKey();
             
-            const data = await response.json();
-            if (!response.ok) {
-                alert('Error generating key: ' + (data.error || 'Unknown error'));
-                return;
-            }
-            
-            const accessKey = data.key.code;
             approvalModal = {purchaseId, email, username, item, accessKey};
             
             alert(`Purchase ID: ${purchaseId}\nUsername: ${username}\nEmail: ${email}\nItem: ${item}\n\nGenerated Key: ${accessKey}\n\nClick OK to send the key and mark as completed.`);
@@ -2348,6 +2339,7 @@
             if (response.ok) {
                 toast('✓ Key sent successfully! Purchase marked as completed.');
                 loadPurchases();
+                loadRosesGemsPurchases();
             } else {
                 toast(`Error: ${data.error}`);
             }
@@ -2672,6 +2664,7 @@
                     <td style="padding:12px">${purchase.username}</td>
                     <td style="padding:12px;font-size:0.9rem">${purchase.email}</td>
                     <td style="padding:12px">${purchase.item}</td>
+                    <td style="padding:12px">${purchase.duration ? purchase.duration + ' days' : 'N/A'}</td>
                     <td style="padding:12px;text-transform:capitalize">${purchase.currency}</td>
                     <td style="padding:12px">${purchase.price}</td>
                     <td style="padding:12px;text-transform:capitalize">${purchase.platform}</td>
@@ -2687,7 +2680,7 @@
             document.getElementById('pendingRosesGemsBtn').style.display = pendingCount > 0 ? 'inline-block' : 'none';
         } catch (error) {
             console.error('Error loading roses/gems purchases:', error);
-            document.getElementById('rosesGemsTable').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--danger)">Error loading purchases</td></tr>';
+            document.getElementById('rosesGemsTable').innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--danger)">Error loading purchases</td></tr>';
         }
     }
 

@@ -1366,11 +1366,13 @@
         const item = this.dataset.item;
         const currency = this.dataset.currency;
         const price = this.dataset.price;
+        const duration = this.dataset.duration ? parseInt(this.dataset.duration) : null;
         
         currentPurchaseData = {
           item: item,
           currency: currency,
-          price: price
+          price: price,
+          duration: duration
         };
 
         document.getElementById('summaryItem').textContent = `${item} (${currency})`;
@@ -1431,7 +1433,8 @@
             platform: selectedPlatform,
             item: currentPurchaseData.item,
             currency: currentPurchaseData.currency,
-            price: currentPurchaseData.price
+            price: currentPurchaseData.price,
+            duration: currentPurchaseData.duration
           })
         });
 

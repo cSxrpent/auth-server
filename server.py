@@ -32,7 +32,7 @@ from token_manager import token_manager
 import db_helper
 from db_helper import (
     load_users, save_users, find_user,
-    load_keys, save_keys, find_key,
+    load_keys, save_keys, find_key, create_key,
     load_testimonials, save_testimonials,
     get_user_by_email, create_user, verify_user_password,
     get_user_accounts, add_account_to_user, remove_account_from_user,
@@ -360,23 +360,21 @@ def api_generate_key():
         return jsonify({"error": "Invalid duration"}), 400
     
     # Generate unique key
-    keys = load_keys()
     key_code = generate_key()
     
-    # Ensure uniqueness
+    # Ensure uniqueness by checking database
+    keys = load_keys()
     while find_key(keys, key_code):
         key_code = generate_key()
     
-    # Create key object
-    new_key = {
-        "code": key_code,
-        "duration": duration,
-        "created": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d %H:%M:%SZ"),
-        "used": False
-    }
+    # Create timestamp
+    created = (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d %H:%M:%SZ")
     
-    keys.append(new_key)
-    save_keys(keys)
+    # Create key in database
+    new_key = create_key(key_code, duration, created)
+    
+    if not new_key:
+        return jsonify({"error": "Failed to create key"}), 500
     
     log_event(f"key generated: {key_code} for {duration} days")
     
@@ -1259,6 +1257,7 @@ def api_create_purchase():
         item = (body.get("item") or "").strip()
         currency = (body.get("currency") or "").strip()
         price = (body.get("price") or "").strip()
+        duration = body.get("duration")  # Duration in days
         
         if not all([username, email, platform, item, currency, price]):
             return jsonify({"success": False, "error": "Missing required fields"}), 400
@@ -1269,10 +1268,19 @@ def api_create_purchase():
         if currency not in ["roses", "gems"]:
             return jsonify({"success": False, "error": "Invalid currency"}), 400
         
-        result = create_purchase(username, email, platform, item, currency, price)
+        # Validate duration if provided
+        if duration is not None:
+            try:
+                duration = int(duration)
+                if duration <= 0:
+                    duration = None
+            except (ValueError, TypeError):
+                duration = None
+        
+        result = create_purchase(username, email, platform, item, currency, price, duration)
         
         if result["success"]:
-            log_event(f"Purchase created: {username} - {item} ({currency}) via {platform}", level="info")
+            log_event(f"Purchase created: {username} - {item} ({currency}) via {platform} - {duration} days" if duration else f"Purchase created: {username} - {item} ({currency}) via {platform}", level="info")
             return jsonify({"success": True, "purchase_id": result["purchase_id"]}), 201
         else:
             return jsonify({"success": False, "error": result.get("error", "Failed to create purchase")}), 500
@@ -1354,6 +1362,11 @@ def api_approve_purchase(purchase_id):
         
         if not email_sent:
             return jsonify({"success": False, "error": "Failed to send email"}), 500
+        
+        # Create the key in the Key table so it can be redeemed
+        # Use purchase duration if available, otherwise default to 30 days
+        key_duration = purchase.get("duration") or 30
+        create_key(access_key, key_duration, (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d %H:%M:%SZ"))
         
         # Update purchase with key and mark as completed
         result = update_purchase_with_key(purchase_id, access_key)
