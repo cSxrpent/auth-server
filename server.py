@@ -164,6 +164,38 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
+# New strict decorators
+def admin_required(f):
+    """Decorator for admin-only routes.
+    - Redirects to admin login for HTML requests
+    - Returns JSON 403 for API requests
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            is_api = request.path.startswith('/api/') or request.is_json or 'application/json' in request.headers.get('Accept', '')
+            if is_api:
+                return jsonify({"error": "admin_required"}), 403
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def user_required(f):
+    """Decorator for logged-in user routes.
+    - Redirects to user login for HTML requests
+    - Returns JSON 401 for API requests
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user_id"):
+            is_api = request.path.startswith('/api/') or request.is_json or 'application/json' in request.headers.get('Accept', '')
+            if is_api:
+                return jsonify({"error": "not_authenticated"}), 401
+            return redirect(url_for("loginuser"))
+        return f(*args, **kwargs)
+    return decorated
+
 # Storage integration — runtime storage is DB-backed via `db_helper`
 
 USERS_FILE = "users.json"  # local fallback file
@@ -309,14 +341,14 @@ def testimonial_success():
 # -----------------------
 
 @app.route("/api/keys", methods=["GET"])
-@login_required
+@admin_required
 def api_get_keys():
     """Get all activation keys"""
     keys = load_keys()
     return jsonify(keys)
 
 @app.route("/api/keys/generate", methods=["POST"])
-@login_required
+@admin_required
 def api_generate_key():
     """Generate a new activation key"""
     body = request.get_json() or {}
@@ -349,7 +381,7 @@ def api_generate_key():
     return jsonify({"message": "Key generated", "key": new_key}), 200
 
 @app.route("/api/keys/delete", methods=["POST"])
-@login_required
+@admin_required
 def api_delete_key():
     """Delete an activation key"""
     body = request.get_json() or {}
@@ -659,7 +691,7 @@ def verify_download_token(token):
 
 
 @app.route("/debug")
-@login_required
+@admin_required
 def debug():
     """Debug route to check configuration"""
     
@@ -732,7 +764,7 @@ def auth():
 # Admin web UI (login + dashboard)
 # ------------------------------------
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route("/administrateur", methods=["GET", "POST"])
 def login():
     error = None
     if request.method == "POST":
@@ -754,12 +786,12 @@ def test_page():
     return render_template("index.html", show_test=True)
 
 @app.route("/admin")
-@login_required
+@admin_required
 def admin_page():
     return render_template("admin.html")
 
 @app.route("/admin/add", methods=["POST"])
-@login_required
+@admin_required
 def admin_add():
     username = request.form.get("username", "").strip()
     expires = request.form.get("expires", "").strip()
@@ -789,7 +821,7 @@ def admin_add():
     return redirect(url_for("admin_page"))
 
 @app.route("/admin/delete/<username>", methods=["GET"])
-@login_required
+@admin_required
 def admin_delete(username):
     users = load_users()
     users = [u for u in users if u["username"].lower() != username.lower()]
@@ -797,11 +829,8 @@ def admin_delete(username):
     log_event(f"web delete: {username}")
     return redirect(url_for("admin_page"))
 
-# -----------------------
-# Modern AJAX endpoints for admin page
-# -----------------------
 @app.route("/api/users", methods=["GET"])
-@login_required
+@admin_required
 def api_get_users():
     users = load_users()
     last_conn = load_last_connected()
@@ -810,7 +839,7 @@ def api_get_users():
     return jsonify(users)
 
 @app.route("/api/add", methods=["POST"])
-@login_required
+@admin_required
 def api_add():
     body = request.get_json() or {}
     username = (body.get("username") or "").strip()
@@ -839,7 +868,7 @@ def api_add():
     return jsonify({"message": "ok", "username": username, "expires": expires, "save_result": save_res}), 200
 
 @app.route("/api/delete", methods=["POST"])
-@login_required
+@admin_required
 def api_delete():
     body = request.get_json() or {}
     username = (body.get("username") or "").strip()
@@ -864,7 +893,7 @@ def api_delete():
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/extend", methods=["POST"])
-@login_required
+@admin_required
 def api_extend():
     """Extend an existing user's access by X days"""
     body = request.get_json() or {}
@@ -1037,7 +1066,7 @@ def stop_ping_thread():
         return False
     
 @app.route("/api/ping", methods=["POST"])
-@login_required
+@admin_required
 def api_ping():
     """Trigger a manual ping"""
     try:
@@ -1058,12 +1087,12 @@ def api_ping():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/ping/status", methods=["GET"])
-@login_required
+@admin_required
 def api_ping_status():
     return jsonify(PING_STATE)
 
 @app.route("/api/ping/toggle", methods=["POST"])
-@login_required
+@admin_required
 def api_ping_toggle():
     body = request.get_json() or {}
     enabled = body.get("enabled")
@@ -1077,7 +1106,7 @@ def api_ping_toggle():
         return jsonify({"ok": stopped, "enabled": False}), 200
 
 @app.route("/api/logs", methods=["GET"])
-@login_required
+@admin_required
 def api_logs():
     """Get recent logs from database"""
     try:
@@ -1087,25 +1116,18 @@ def api_logs():
         print(f"Error fetching logs: {e}")
         return jsonify([])
 
-@app.route("/debug/logs", methods=["GET", "POST"])
+@app.route("/debug/logs", methods=["GET"])
+@admin_required
 def debug_logs():
-    """Temporary endpoint to view ALL logs with password protection"""
-    if request.method == "POST":
-        password = request.form.get("password", "").strip()
-        if password == "Tarik6607":
-            try:
-                # Get ALL logs from database (no limit)
-                logs = db_helper.get_recent_logs(limit=10000)  # Large limit to get most logs
-                return render_template("debug_logs.html", logs=logs)
-            except Exception as e:
-                return f"Error fetching logs: {e}", 500
-        else:
-            return render_template("debug_logs.html", error="Incorrect password", logs=None)
-
-    return render_template("debug_logs.html", logs=None)
+    """Admin-only debug logs view"""
+    try:
+        logs = db_helper.get_recent_logs(limit=10000)  # Large limit to get most logs
+        return render_template("debug_logs.html", logs=logs)
+    except Exception as e:
+        return f"Error fetching logs: {e}", 500
 
 @app.route("/api/recent", methods=["GET"])
-@login_required
+@admin_required
 def api_recent():
     """Recent connection attempts from database"""
     try:
@@ -1116,16 +1138,12 @@ def api_recent():
         return jsonify([])
 
 @app.route("/api/stats", methods=["GET"])
-@login_required
+@admin_required
 def api_stats():
     """Return user connection stats"""
     stats = load_stats()
     sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
     return jsonify(sorted_stats)
-
-    # -----------------------
-# Testimonials API
-# -----------------------
 
 @app.route("/api/testimonials", methods=["GET"])
 def api_get_testimonials():
@@ -1144,7 +1162,7 @@ def api_get_testimonials():
     return jsonify(approved)
 
 @app.route("/api/testimonials/add", methods=["POST"])
-@login_required
+@admin_required
 def api_add_testimonial():
     """Add a new testimonial"""
     body = request.get_json() or {}
@@ -1175,7 +1193,7 @@ def api_add_testimonial():
         "comment": comment,
         "anonymous": anonymous,
         "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d"),
-        "approve": True
+        "approved": True
     }
     
     testimonials.append(new_testimonial)
@@ -1186,7 +1204,7 @@ def api_add_testimonial():
     return jsonify({"message": "ok", "testimonial": new_testimonial}), 200
 
 @app.route("/api/testimonials/delete", methods=["POST"])
-@login_required
+@admin_required
 def api_delete_testimonial():
     """Delete a testimonial"""
     body = request.get_json() or {}
@@ -1203,89 +1221,8 @@ def api_delete_testimonial():
     
     return jsonify({"message": "deleted"}), 200
 
-@app.route("/api/testimonials/submit", methods=["POST"])
-def api_submit_testimonial():
-    """Public endpoint for users to submit testimonials (pending approval) + 3 days bonus"""
-    body = request.get_json() or {}
-    username = (body.get("username") or "").strip()
-    rating = body.get("rating", 5)
-    comment = (body.get("comment") or "").strip()
-    anonymous = body.get("anonymous", False)
-    
-    # Validation
-    if not username:
-        return jsonify({"error": "Username is required"}), 400
-    if not comment:
-        return jsonify({"error": "Comment is required"}), 400
-    if len(comment) < 10:
-        return jsonify({"error": "Review must be at least 10 characters"}), 400
-    if len(comment) > 500:
-        return jsonify({"error": "Review must be less than 500 characters"}), 400
-    if not isinstance(rating, int) or rating < 1 or rating > 5:
-        return jsonify({"error": "Invalid rating"}), 400
-    
-    # Check if user exists
-    users = load_users()
-    user = find_user(users, username)
-    if not user:
-        return jsonify({"error": "User not found. Please use your registered username."}), 404
-    
-    testimonials = load_testimonials()
-    
-    # Check if user already submitted a review (ONE REVIEW PER USER MAX)
-    existing = next((t for t in testimonials if t.get('username', '').lower() == username.lower()), None)
-    if existing:
-        return jsonify({"error": "You have already submitted a review. Thank you!"}), 400
-    
-    # Generate unique ID
-    import uuid
-    testimonial_id = str(uuid.uuid4())[:8]
-    
-    new_testimonial = {
-        "id": testimonial_id,
-        "username": username,
-        "rating": rating,
-        "comment": comment,
-        "anonymous": anonymous,
-        "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d"),
-        "approved": False  # PENDING - admin must approve
-    }
-    
-    testimonials.append(new_testimonial)
-    save_testimonials(testimonials)
-    
-    # 🎁 BONUS: Add 3 days to user's license as a thank you!
-    try:
-        today = datetime.now()
-        current_expires = datetime.strptime(user["expires"], "%Y-%m-%d")
-        
-        # If license is still valid, extend from expiry date
-        if current_expires > today:
-            new_expires = current_expires + timedelta(days=3)
-        else:
-            # If expired, add 3 days from today
-            new_expires = today + timedelta(days=3)
-        
-        user["expires"] = new_expires.strftime("%Y-%m-%d")
-        save_users(users)
-        
-        log_event(f"testimonial bonus: {username} got +3 days (new expiry: {user['expires']})")
-    except Exception as e:
-        log_event(f"Error adding bonus to {username}: {e}", level="error")
-    
-    # Get client IP
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-    log_event(f"testimonial submitted (pending): {username} ({rating}★) from {ip}")
-    
-    return jsonify({
-        "success": True,
-        "message": "Thank you! Your review has been submitted.",
-        "bonus": "+3 days added to your license!",
-        "redirect": "/testimonial-success"
-    }), 200
-
 @app.route("/api/testimonials/approve", methods=["POST"])
-@login_required
+@admin_required
 def api_approve_testimonial():
     """Approve a pending testimonial"""
     body = request.get_json() or {}
@@ -1337,7 +1274,8 @@ def register():
     
     return render_template('register.html')
 
-@app.route('/loginuser', methods=['GET', 'POST'])
+# User login (now available at /login)
+@app.route('/login', methods=['GET', 'POST'])
 def loginuser():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -1355,19 +1293,15 @@ def loginuser():
 
 
 @app.route('/dashboard')
+@user_required
 def dashboard():
     # Minimal, fast dashboard render. Heavy data is lazy-loaded via API endpoints.
-    if 'user_id' not in session:
-        return redirect(url_for('loginuser'))
-
     return render_template('dashboard.html', email=session.get('user_email'))
 
 @app.route('/api/license/pause', methods=['POST'])
+@user_required
 def pause_license():
     """Pause license for an account"""
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'error': 'Not logged in'}), 401
-
     data = request.json
     username = data.get('username')
     if not username:
@@ -1392,11 +1326,9 @@ def pause_license():
     return jsonify({'success': False, 'error': 'License already paused'}), 400
 
 @app.route('/api/license/resume', methods=['POST'])
+@user_required
 def resume_license():
     """Resume paused license"""
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'error': 'Not logged in'}), 401
-
     data = request.json
     username = data.get('username')
     if not username:
@@ -1422,11 +1354,9 @@ def resume_license():
     return jsonify({'success': False, 'error': 'License not paused'}), 400
 
 @app.route('/api/license/extend', methods=['POST'])
+@user_required
 def extend_license_user():
     """Extend license - redirects to payment page"""
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'error': 'Not logged in'}), 401
-    
     data = request.json
     username = data.get('username')
     
@@ -1437,22 +1367,11 @@ def extend_license_user():
     session['payment_username'] = username
     
     return jsonify({'success': True, 'redirect': '/buy/1month'})
-    
-from flask import render_template, request, session, redirect, url_for, jsonify
-import secrets
-import requests
-import db_helper
-
-# Store verification codes temporarily (in production, use Redis or database)
-verification_sessions = {}
 
 @app.route('/add_account', methods=['GET', 'POST'])
+@user_required
 def add_account():
     """Route to add a Wolvesville account to user's dashboard"""
-    # Check if user is logged in
-    if 'user_email' not in session:
-        return redirect(url_for('loginuser'))
-    
     user_email = session['user_email']
     
     if request.method == 'GET':
@@ -1514,23 +1433,20 @@ def add_account():
     # Redirect to the same route with GET to show verification step
     return redirect(url_for('add_account'))
 
-
 @app.route('/verify_account', methods=['POST'])
+@user_required
 def verify_account():
     """Verify account ownership by checking bio"""
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'error': 'Not logged in'}), 401
-    
     user_email = session['user_email']
     
     # Get verification data from FLASK SESSION
     if 'verification_data' not in session:
         return jsonify({'success': False, 'error': 'No verification session found. Please start over.'}), 400
-    
+
     verification_data = session['verification_data']
     username = verification_data['username']
     expected_code = verification_data['code']
-    
+
     try:
         # Import the API helper
         from wolvesville_api import wolvesville_api
@@ -1643,21 +1559,17 @@ def add_xp():
 
 
 @app.route('/api/dashboard/accounts', methods=['GET'])
-@login_required
+@user_required
 def api_dashboard_accounts():
     """Return accounts owned by the authenticated user (DB only)."""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
     email = session['user_id']
     accounts = db_helper.get_user_accounts(email)
     return jsonify(accounts)
 
 @app.route('/api/dashboard/unlink', methods=['POST'])
+@user_required
 def api_dashboard_unlink():
     """Unlink account from user's dashboard"""
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'error': 'Not logged in'}), 401
-    
     data = request.json
     username = data.get('username')
     
@@ -1681,10 +1593,8 @@ def api_dashboard_unlink():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/dashboard/license/<username>', methods=['GET'])
-@login_required
+@user_required
 def api_dashboard_license(username):
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
     email = session['user_id']
     accounts = db_helper.get_user_accounts(email)
     if username not in accounts:
@@ -1694,12 +1604,9 @@ def api_dashboard_license(username):
         return jsonify({'error': 'License not found'}), 404
     return jsonify(lic)
 
-
 @app.route('/api/dashboard/xp/<username>', methods=['GET'])
-@login_required
+@user_required
 def api_dashboard_xp(username):
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
     email = session['user_id']
     accounts = db_helper.get_user_accounts(email)
     if username not in accounts:
@@ -1707,13 +1614,10 @@ def api_dashboard_xp(username):
     xp = db_helper.get_user_xp(username)
     return jsonify(xp)
 
-
 @app.route('/api/dashboard/profile/<username>', methods=['GET'])
-@login_required
+@user_required
 def api_dashboard_profile(username):
     # This endpoint is the only one allowed to call Wolvesville API
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
     email = session['user_id']
     accounts = db_helper.get_user_accounts(email)
     if username not in accounts:
@@ -1911,14 +1815,14 @@ def authv2():
 
 
 @app.route("/api/custom-message", methods=["GET"])
-@login_required
+@admin_required
 def api_custom_message_get():
     """Get the global custom message"""
     msg = db_helper.get_custom_message()
     return jsonify({"message": msg}), 200
 
 @app.route("/api/custom-message/set", methods=["POST"])
-@login_required
+@admin_required
 def api_custom_message_set():
     """Set the global custom message"""
     body = request.get_json() or {}
@@ -1933,7 +1837,7 @@ def api_custom_message_set():
         return jsonify({"error": "Failed to save message"}), 500
 
 @app.route("/api/custom-message/clear", methods=["POST"])
-@login_required
+@admin_required
 def api_custom_message_clear():
     """Clear the global custom message"""
     if db_helper.set_custom_message(""):
@@ -1944,14 +1848,14 @@ def api_custom_message_clear():
         return jsonify({"error": "Failed to clear message"}), 500
 
 @app.route("/api/bot-version", methods=["GET"])
-@login_required
+@admin_required
 def api_bot_version_get():
     """Get the latest bot version"""
     version = db_helper.get_latest_bot_version()
     return jsonify({"latest_version": version}), 200
 
 @app.route("/api/bot-version/set", methods=["POST"])
-@login_required
+@admin_required
 def api_bot_version_set():
     """Set the latest bot version"""
     body = request.get_json() or {}
@@ -1973,7 +1877,7 @@ def api_bot_version_set():
         return jsonify({"error": "Failed to save version"}), 500
 
 @app.route("/api/users/bot-versions", methods=["GET"])
-@login_required
+@admin_required
 def api_users_bot_versions():
     """Get bot version statistics for all users"""
     try:
@@ -1997,7 +1901,7 @@ def api_users_bot_versions():
                 {"version": v or "Unknown", "count": c}
                 for v, c in version_stats
             ]
-            
+
             return jsonify(results), 200
     except Exception as e:
         log_event(f"Error getting bot version stats: {e}", level="error")
@@ -2102,7 +2006,7 @@ def send_password_reset_email(email, reset_code):
                         max-width: 520px;
                         width: 100%;
                         color: #eaf1ff;
-                        box-shadow: 0 0 40px rgba(0, 212, 255, 0.06);
+                        box-shadow: 0 0 40px rgba(0,  212, 255, 0.06);
                     }}
                     h1 {{
                         color: #00d4ff;
@@ -2429,9 +2333,3 @@ def forgot_password_reset():
     except Exception as e:
         log_event(f"Error in password reset: {str(e)}", level="error")
         return jsonify({'error': 'An error occurred. Please try again later.'}), 500
-
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 10000))
-    print(f"🚀 Starting server on port {port}")
-    app.run(host="0.0.0.0", port=port, debug=True)

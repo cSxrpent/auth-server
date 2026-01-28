@@ -736,7 +736,7 @@
         async function loadAccounts(){
             try{
                 const res = await fetch('/api/dashboard/accounts');
-                if(res.status === 401) return window.location = '/loginuser';
+                if(res.status === 401) return window.location = '/login';
                 const accounts = await res.json();
                 const container = document.getElementById('accounts-list');
                 container.innerHTML = '';
