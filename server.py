@@ -45,7 +45,8 @@ from db_helper import (
     save_recent_connection, get_recent_connections,
     get_user_by_player_id, update_user_player_id, update_user_nickname,
     get_custom_message, set_custom_message,
-    get_latest_bot_version, set_latest_bot_version, update_user_bot_version
+    get_latest_bot_version, set_latest_bot_version, update_user_bot_version,
+    create_purchase, get_purchase, get_all_purchases_for_admin, update_purchase_status, update_purchase_with_key, get_pending_purchases
 )
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -958,17 +959,7 @@ def api_extend():
 def static_files(path):
     return send_from_directory("static", path)
 
-# -----------------------
-# Background ping to admin (enhanced)
-# -----------------------
-PING_ADMIN_URL = os.getenv("PING_ADMIN_URL", "https://rxzbot.com/administrateur")
-try:
-    PING_ADMIN_INTERVAL = int(os.getenv("PING_ADMIN_INTERVAL", "300"))
-except Exception:
-    PING_ADMIN_INTERVAL = 300
-PING_ADMIN_ENABLED = os.getenv("PING_ADMIN_ENABLED", "1").lower() in ("1", "true", "yes", "on")
-
-# In-memory logs and ping state
+# In-memory logs
 LOGS = deque(maxlen=500)
 RECENT_CONN = deque(maxlen=300)
 
@@ -1007,102 +998,6 @@ def record_connection(username, ip, status):
         last_conn = load_last_connected()
         last_conn[username] = ts
         save_last_connected(last_conn)
-
-PING_STATE = {
-    "enabled": PING_ADMIN_ENABLED,
-    "url": PING_ADMIN_URL,
-    "interval": PING_ADMIN_INTERVAL,
-    "last_time": None,
-    "last_code": None,
-    "last_error": None
-}
-
-_ping_stop_event = threading.Event()
-_ping_thread = None
-_ping_lock = threading.Lock()
-
-def _ping_admin_loop(url, interval, stop_event):
-    session_req = requests.Session()
-    while not stop_event.is_set():
-        now = datetime.utcnow() + CET_OFFSET
-        try:
-            start = time.time()
-            r = session_req.get(url, timeout=10)
-            elapsed = time.time() - start
-            PING_STATE["last_time"] = now.isoformat() + "Z"
-            PING_STATE["last_code"] = r.status_code
-            PING_STATE["last_error"] = None
-            log_event(f"ping -> {url} {r.status_code} ({elapsed:.2f}s)")
-        except Exception as e:
-            PING_STATE["last_time"] = now.isoformat() + "Z"
-            PING_STATE["last_code"] = None
-            PING_STATE["last_error"] = str(e)
-            log_event(f"ping error -> {e}", level="error")
-        stop_event.wait(interval)
-
-def start_ping_thread():
-    global _ping_thread, _ping_stop_event
-    with _ping_lock:
-        if _ping_thread and _ping_thread.is_alive():
-            return False
-        _ping_stop_event = threading.Event()
-        _ping_thread = threading.Thread(target=_ping_admin_loop, args=(PING_ADMIN_URL, PING_ADMIN_INTERVAL, _ping_stop_event), daemon=True)
-        _ping_thread.start()
-        PING_STATE["enabled"] = True
-        log_event(f"Started ping thread: {PING_ADMIN_URL} every {PING_ADMIN_INTERVAL}s")
-        return True
-
-def stop_ping_thread():
-    global _ping_thread, _ping_stop_event
-    with _ping_lock:
-        if _ping_thread and _ping_thread.is_alive():
-            _ping_stop_event.set()
-            _ping_thread.join(timeout=2)
-            _ping_thread = None
-            PING_STATE["enabled"] = False
-            log_event("Stopped ping thread")
-            return True
-        return False
-    
-@app.route("/api/ping", methods=["POST"])
-@admin_required
-def api_ping():
-    """Trigger a manual ping"""
-    try:
-        session_req = requests.Session()
-        start = time.time()
-        r = session_req.get(PING_ADMIN_URL, timeout=10)
-        elapsed = time.time() - start
-        PING_STATE["last_time"] = datetime.utcnow().isoformat() + "Z"
-        PING_STATE["last_code"] = r.status_code
-        PING_STATE["last_error"] = None
-        log_event(f"manual ping -> {PING_ADMIN_URL} {r.status_code} ({elapsed:.2f}s)")
-        return jsonify({"ok": True, "status": r.status_code, "elapsed": elapsed}), 200
-    except Exception as e:
-        PING_STATE["last_time"] = datetime.utcnow().isoformat() + "Z"
-        PING_STATE["last_code"] = None
-        PING_STATE["last_error"] = str(e)
-        log_event(f"manual ping error -> {e}", level="error")
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-@app.route("/api/ping/status", methods=["GET"])
-@admin_required
-def api_ping_status():
-    return jsonify(PING_STATE)
-
-@app.route("/api/ping/toggle", methods=["POST"])
-@admin_required
-def api_ping_toggle():
-    body = request.get_json() or {}
-    enabled = body.get("enabled")
-    if enabled is None:
-        return jsonify({"error":"missing 'enabled' parameter"}), 400
-    if enabled:
-        started = start_ping_thread()
-        return jsonify({"ok": started, "enabled": True}), 200
-    else:
-        stopped = stop_ping_thread()
-        return jsonify({"ok": stopped, "enabled": False}), 200
 
 @app.route("/api/logs", methods=["GET"])
 @admin_required
@@ -1159,6 +1054,87 @@ def api_get_testimonials():
     approved = [t for t in testimonials if t.get('approved', False) == True]
     approved.sort(key=lambda x: x.get('date', ''), reverse=True)
     return jsonify(approved)
+
+@app.route("/api/testimonials/submit", methods=["POST"])
+def api_submit_testimonial():
+    """Public endpoint for users to submit testimonials (pending approval) + 3 days bonus"""
+    body = request.get_json() or {}
+    username = (body.get("username") or "").strip()
+    rating = body.get("rating", 5)
+    comment = (body.get("comment") or "").strip()
+    anonymous = body.get("anonymous", False)
+    
+    # Validation
+    if not username:
+        return jsonify({"error": "Username is required"}), 400
+    if not comment:
+        return jsonify({"error": "Comment is required"}), 400
+    if len(comment) < 10:
+        return jsonify({"error": "Review must be at least 10 characters"}), 400
+    if len(comment) > 500:
+        return jsonify({"error": "Review must be less than 500 characters"}), 400
+    if not isinstance(rating, int) or rating < 1 or rating > 5:
+        return jsonify({"error": "Invalid rating"}), 400
+    
+    # Check if user exists
+    users = load_users()
+    user = find_user(users, username)
+    if not user:
+        return jsonify({"error": "User not found. Please use your registered username."}), 404
+    
+    testimonials = load_testimonials()
+    
+    # Check if user already submitted a review (ONE REVIEW PER USER MAX)
+    existing = next((t for t in testimonials if t.get('username', '').lower() == username.lower()), None)
+    if existing:
+        return jsonify({"error": "You have already submitted a review. Thank you!"}), 400
+    
+    # Generate unique ID
+    import uuid
+    testimonial_id = str(uuid.uuid4())[:8]
+    
+    new_testimonial = {
+        "id": testimonial_id,
+        "username": username,
+        "rating": rating,
+        "comment": comment,
+        "anonymous": anonymous,
+        "date": (datetime.utcnow() + CET_OFFSET).strftime("%Y-%m-%d"),
+        "approved": False  # PENDING - admin must approve
+    }
+    
+    testimonials.append(new_testimonial)
+    save_testimonials(testimonials)
+    
+    # 🎁 BONUS: Add 3 days to user's license as a thank you!
+    try:
+        today = datetime.now()
+        current_expires = datetime.strptime(user["expires"], "%Y-%m-%d")
+        
+        # If license is still valid, extend from expiry date
+        if current_expires > today:
+            new_expires = current_expires + timedelta(days=3)
+        else:
+            # If expired, add 3 days from today
+            new_expires = today + timedelta(days=3)
+        
+        user["expires"] = new_expires.strftime("%Y-%m-%d")
+        save_users(users)
+        
+        log_event(f"testimonial bonus: {username} got +3 days (new expiry: {user['expires']})")
+    except Exception as e:
+        log_event(f"Error adding bonus to {username}: {e}", level="error")
+    
+    # Get client IP
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    log_event(f"testimonial submitted (pending): {username} ({rating}★) from {ip}")
+    
+    return jsonify({
+        "success": True,
+        "message": "Thank you! Your review has been submitted.",
+        "bonus": "+3 days added to your license!",
+        "redirect": "/testimonial-success"
+    }), 200
 
 @app.route("/api/testimonials/add", methods=["POST"])
 @admin_required
@@ -1243,11 +1219,123 @@ def api_approve_testimonial():
     
     return jsonify({"message": "approved"}), 200
 
+
+# ==================== PURCHASE ROUTES (Roses/Gems) ====================
+
+@app.route("/api/create-purchase", methods=["POST"])
+def api_create_purchase():
+    """Create a new Roses/Gems purchase"""
+    try:
+        body = request.get_json() or {}
+        
+        username = (body.get("username") or "").strip()
+        email = (body.get("email") or "").strip()
+        platform = (body.get("platform") or "").strip()
+        item = (body.get("item") or "").strip()
+        currency = (body.get("currency") or "").strip()
+        price = (body.get("price") or "").strip()
+        
+        if not all([username, email, platform, item, currency, price]):
+            return jsonify({"success": False, "error": "Missing required fields"}), 400
+        
+        if platform not in ["Instagram", "Discord"]:
+            return jsonify({"success": False, "error": "Invalid platform"}), 400
+        
+        if currency not in ["roses", "gems"]:
+            return jsonify({"success": False, "error": "Invalid currency"}), 400
+        
+        result = create_purchase(username, email, platform, item, currency, price)
+        
+        if result["success"]:
+            log_event(f"Purchase created: {username} - {item} ({currency}) via {platform}", level="info")
+            return jsonify({"success": True, "purchase_id": result["purchase_id"]}), 201
+        else:
+            return jsonify({"success": False, "error": result.get("error", "Failed to create purchase")}), 500
+            
+    except Exception as e:
+        print(f"❌ Error creating purchase: {e}")
+        log_event(f"Error creating purchase: {e}", level="error")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/purchases", methods=["GET"])
+@admin_required
+def api_get_purchases():
+    """Get all purchases for admin panel"""
+    try:
+        purchases = get_all_purchases_for_admin()
+        return jsonify({"success": True, "purchases": purchases}), 200
+    except Exception as e:
+        print(f"❌ Error fetching purchases: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/purchase/<int:purchase_id>/status", methods=["PUT"])
+@admin_required
+def api_update_purchase_status(purchase_id):
+    """Update purchase status"""
+    try:
+        body = request.get_json() or {}
+        new_status = (body.get("status") or "").strip()
+        
+        if new_status not in ["Awaiting user contact", "Awaiting transaction", "Completed"]:
+            return jsonify({"success": False, "error": "Invalid status"}), 400
+        
+        result = update_purchase_status(purchase_id, new_status)
+        
+        if result["success"]:
+            log_event(f"Purchase {purchase_id} status updated to: {new_status}", level="info")
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 404
+            
+    except Exception as e:
+        print(f"❌ Error updating purchase: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/purchase/<int:purchase_id>/approve", methods=["POST"])
+@admin_required
+def api_approve_purchase(purchase_id):
+    """Approve purchase and send key via email"""
+    try:
+        body = request.get_json() or {}
+        access_key = (body.get("access_key") or "").strip()
+        
+        if not access_key:
+            return jsonify({"success": False, "error": "Access key is required"}), 400
+        
+        purchase = get_purchase(purchase_id)
+        if not purchase:
+            return jsonify({"success": False, "error": "Purchase not found"}), 404
+        
+        # Send email with key
+        email_sent = send_purchase_key_email(
+            email=purchase["email"],
+            username=purchase["username"],
+            item=purchase["item"],
+            access_key=access_key
+        )
+        
+        if not email_sent:
+            return jsonify({"success": False, "error": "Failed to send email"}), 500
+        
+        # Update purchase with key and mark as completed
+        result = update_purchase_with_key(purchase_id, access_key)
+        
+        if result["success"]:
+            log_event(f"Purchase {purchase_id} approved - Key: {access_key} sent to {purchase['email']}", level="info")
+            return jsonify({"success": True, "message": "Purchase approved and key sent via email"}), 200
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        print(f"❌ Error approving purchase: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # Start background ping if configured
-if PING_ADMIN_ENABLED:
-    start_ping_thread()
-else:
-    print("ℹ️ ping_admin is disabled (PING_ADMIN_ENABLED not set)")
+# Start background ping if configured
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -1907,6 +1995,32 @@ def api_users_bot_versions():
         return jsonify({"error": str(e)}), 500
 
 # -----------------------
+# Shutdown Handler
+# -----------------------
+import atexit
+import signal
+
+def cleanup_on_exit():
+    """Clean up resources on server shutdown"""
+    try:
+        print("\n🛑 Server shutting down...")
+        token_manager.stop_auto_refresh()
+        print("✅ Cleanup complete")
+    except Exception as e:
+        print(f"⚠️ Error during cleanup: {e}")
+
+# Register cleanup on exit
+atexit.register(cleanup_on_exit)
+
+# Also handle SIGINT and SIGTERM for graceful shutdown
+def signal_handler(sig, frame):
+    cleanup_on_exit()
+    exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+# -----------------------
 # Run
 # -----------------------
 # Initialize token manager BEFORE starting Flask
@@ -2147,6 +2261,223 @@ def send_password_reset_email(email, reset_code):
         log_event(f"Error sending reset email to {email}: {str(e)}", level="error")
         return False
 
+
+def send_purchase_key_email(email, username, item, access_key):
+    """Send access key email after purchase approval"""
+    try:
+        api_instance = init_brevo_client()
+        if not api_instance:
+            log_event(f"Failed to initialize Brevo client for {email}", level="error")
+            return False
+        
+        sender_name = os.getenv("BREVO_SENDER_NAME", "RXZBot")
+        sender_email = os.getenv("BREVO_SENDER_EMAIL", "noreply@rxzbot.com")
+        
+        email_obj = sib_api_v3_sdk.SendSmtpEmail(
+            sender={"name": sender_name, "email": sender_email},
+            to=[{"email": email}],
+            subject="Your RXZBot Access Key",
+            html_content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    body {{
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        margin: 0;
+                        padding: 0;
+                        background-color: #0a0e1a;
+                    }}
+                    .container {{
+                        background: linear-gradient(135deg, #0a0e1a, #0d1526, #1a1f35);
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 20px;
+                    }}
+                    .card {{
+                        background: linear-gradient(135deg, #0f1724 0%, #0d1520 100%);
+                        border: 1px solid rgba(0, 212, 255, 0.12);
+                        border-radius: 16px;
+                        padding: 40px;
+                        max-width: 520px;
+                        width: 100%;
+                        color: #eaf1ff;
+                        box-shadow: 0 0 40px rgba(0, 212, 255, 0.06);
+                    }}
+                    h1 {{
+                        color: #00d4ff;
+                        margin: 0 0 8px 0;
+                        font-size: 28px;
+                    }}
+                    .subtitle {{
+                        color: #9aa4b2;
+                        font-size: 14px;
+                        margin-bottom: 28px;
+                    }}
+                    .info {{
+                        color: #d0d8e8;
+                        font-size: 14px;
+                        line-height: 1.8;
+                        margin: 18px 0;
+                    }}
+                    .key-box {{
+                        background: linear-gradient(
+                            135deg,
+                            rgba(0,212,255,0.12),
+                            rgba(0,212,255,0.05)
+                        );
+                        border: 2px solid rgba(0,212,255,0.35);
+                        border-radius: 12px;
+                        padding: 28px;
+                        text-align: center;
+                        margin: 28px 0;
+                    }}
+                    .access-key {{
+                        font-family: 'Courier New', monospace;
+                        font-size: 32px;
+                        font-weight: 700;
+                        color: #00d4ff;
+                        letter-spacing: 4px;
+                        margin: 0;
+                        word-break: break-all;
+                    }}
+                    .key-label {{
+                        color: #9aa4b2;
+                        font-weight: 600;
+                        margin-top: 14px;
+                        font-size: 12px;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                    }}
+                    .item-info {{
+                        background: rgba(0,212,255,0.08);
+                        border-left: 4px solid #00d4ff;
+                        padding: 16px;
+                        border-radius: 6px;
+                        margin: 22px 0;
+                        color: #d0d8e8;
+                        font-size: 13px;
+                    }}
+                    .item-info strong {{
+                        color: #00d4ff;
+                        display: block;
+                        margin-bottom: 6px;
+                    }}
+                    .steps {{
+                        margin: 28px 0;
+                    }}
+                    .step {{
+                        display: flex;
+                        margin-bottom: 14px;
+                        color: #d0d8e8;
+                        font-size: 13px;
+                    }}
+                    .step-number {{
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 28px;
+                        height: 28px;
+                        background: #00d4ff;
+                        color: #0a0e1a;
+                        border-radius: 50%;
+                        font-weight: 700;
+                        margin-right: 12px;
+                        flex-shrink: 0;
+                    }}
+                    .support {{
+                        background: rgba(46,213,115,0.08);
+                        border-left: 4px solid #2ed573;
+                        padding: 14px;
+                        border-radius: 6px;
+                        margin: 22px 0;
+                        color: #b5bcc8;
+                        font-size: 12px;
+                    }}
+                    .support strong {{
+                        color: #2ed573;
+                    }}
+                    .footer {{
+                        text-align: center;
+                        color: #7a8294;
+                        font-size: 12px;
+                        margin-top: 32px;
+                        border-top: 1px solid rgba(255,255,255,0.06);
+                        padding-top: 18px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="card">
+                        <h1>🎉 Your Access Key</h1>
+                        <p class="subtitle">Welcome to RXZBot, {username}!</p>
+
+                        <p class="info">Thank you for your purchase! Your payment has been approved and your access key is ready to use.</p>
+
+                        <div class="key-box">
+                            <p class="access-key">{access_key}</p>
+                            <p class="key-label">Your Activation Key</p>
+                        </div>
+
+                        <div class="item-info">
+                            <strong>📦 Purchased Item:</strong>
+                            {item}
+                        </div>
+
+                        <div class="steps">
+                            <div class="step">
+                                <span class="step-number">1</span>
+                                <span>Copy your access key from above</span>
+                            </div>
+                            <div class="step">
+                                <span class="step-number">2</span>
+                                <span>Visit <strong>rxzbot.com/redeem</strong> to activate</span>
+                            </div>
+                            <div class="step">
+                                <span class="step-number">3</span>
+                                <span>Paste your key and click Redeem</span>
+                            </div>
+                            <div class="step">
+                                <span class="step-number">4</span>
+                                <span>Your account will be activated instantly</span>
+                            </div>
+                        </div>
+
+                        <div class="support">
+                            <strong>💬 Need Help?</strong><br>
+                            Contact us on Instagram (@rxzbotcom) or Discord (.gg/rxzbot) if you have any issues.
+                        </div>
+
+                        <p class="info" style="color: #9aa4b2; font-size: 12px;">
+                            <strong>Important:</strong> Keep your access key safe and don't share it with anyone.
+                        </p>
+
+                        <div class="footer">
+                            <p>© 2026 RXZBot. All rights reserved.</p>
+                            <p>This is an automated message. Please do not reply to this email.</p>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+        )
+        
+        response = api_instance.send_transac_email(email_obj)
+        log_event(f"Purchase key email sent to {email} for {item}", level="info")
+        return True
+        
+    except ApiException as e:
+        log_event(f"Brevo API error sending purchase key email to {email}: {e}", level="error")
+        return False
+    except Exception as e:
+        log_event(f"Error sending purchase key email to {email}: {str(e)}", level="error")
+        return False
+
 @app.route('/forgot-password', methods=['GET'])
 def forgot_password_page():
     """Display the forgot password page"""
@@ -2332,3 +2663,8 @@ def forgot_password_reset():
     except Exception as e:
         log_event(f"Error in password reset: {str(e)}", level="error")
         return jsonify({'error': 'An error occurred. Please try again later.'}), 500
+
+
+# Start Flask server
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=False)

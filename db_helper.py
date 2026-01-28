@@ -1522,6 +1522,140 @@ def update_shop_settings(global_promo_enabled, global_promo_percent, global_prom
     except Exception as e:
         print(f"⚠️ Error updating shop settings: {e}")
         return False
+
+# ==================== ROSES/GEMS PURCHASE FUNCTIONS ====================
+
+def create_purchase(username, email, platform, item, currency, price):
+    """Create a new Roses/Gems purchase entry"""
+    try:
+        with get_db() as db:
+            from init_database import Purchase
+            purchase = Purchase(
+                username=username,
+                email=email,
+                platform=platform,
+                item=item,
+                currency=currency,
+                price=price,
+                status="Awaiting user contact",
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            db.add(purchase)
+            db.flush()
+            purchase_id = purchase.id
+            return {"success": True, "purchase_id": purchase_id}
+    except Exception as e:
+        print(f"⚠️ Error creating purchase: {e}")
+        return {"success": False, "error": str(e)}
+
+def get_purchase(purchase_id):
+    """Get a single purchase by ID"""
+    try:
+        with get_db() as db:
+            from init_database import Purchase
+            purchase = db.query(Purchase).filter_by(id=purchase_id).first()
+            if purchase:
+                return {
+                    'id': purchase.id,
+                    'username': purchase.username,
+                    'email': purchase.email,
+                    'platform': purchase.platform,
+                    'item': purchase.item,
+                    'currency': purchase.currency,
+                    'price': purchase.price,
+                    'status': purchase.status,
+                    'access_key': purchase.access_key,
+                    'created_at': purchase.created_at.strftime("%Y-%m-%d %H:%M:%S") if purchase.created_at else None,
+                    'updated_at': purchase.updated_at.strftime("%Y-%m-%d %H:%M:%S") if purchase.updated_at else None
+                }
+            return None
+    except Exception as e:
+        print(f"⚠️ Error getting purchase: {e}")
+        return None
+
+def get_all_purchases_for_admin():
+    """Get all purchases for admin panel"""
+    try:
+        with get_db() as db:
+            from init_database import Purchase
+            purchases = db.query(Purchase).order_by(Purchase.created_at.desc()).all()
+            return [
+                {
+                    'id': p.id,
+                    'username': p.username,
+                    'email': p.email,
+                    'platform': p.platform,
+                    'item': p.item,
+                    'currency': p.currency,
+                    'price': p.price,
+                    'status': p.status,
+                    'access_key': p.access_key,
+                    'created_at': p.created_at.strftime("%Y-%m-%d %H:%M:%S") if p.created_at else None,
+                    'updated_at': p.updated_at.strftime("%Y-%m-%d %H:%M:%S") if p.updated_at else None
+                }
+                for p in purchases
+            ]
+    except Exception as e:
+        print(f"⚠️ Error getting purchases: {e}")
+        return []
+
+def update_purchase_status(purchase_id, new_status):
+    """Update purchase status"""
+    try:
+        with get_db() as db:
+            from init_database import Purchase
+            purchase = db.query(Purchase).filter_by(id=purchase_id).first()
+            if purchase:
+                purchase.status = new_status
+                purchase.updated_at = datetime.utcnow()
+                return {"success": True, "purchase": get_purchase(purchase_id)}
+            return {"success": False, "error": "Purchase not found"}
+    except Exception as e:
+        print(f"⚠️ Error updating purchase status: {e}")
+        return {"success": False, "error": str(e)}
+
+def update_purchase_with_key(purchase_id, access_key):
+    """Update purchase with access key and mark as completed"""
+    try:
+        with get_db() as db:
+            from init_database import Purchase
+            purchase = db.query(Purchase).filter_by(id=purchase_id).first()
+            if purchase:
+                purchase.access_key = access_key
+                purchase.status = "Completed"
+                purchase.updated_at = datetime.utcnow()
+                return {"success": True, "purchase": get_purchase(purchase_id)}
+            return {"success": False, "error": "Purchase not found"}
+    except Exception as e:
+        print(f"⚠️ Error updating purchase with key: {e}")
+        return {"success": False, "error": str(e)}
+
+def get_pending_purchases():
+    """Get all pending purchases (not Completed)"""
+    try:
+        with get_db() as db:
+            from init_database import Purchase
+            purchases = db.query(Purchase).filter(Purchase.status != "Completed").order_by(Purchase.created_at.desc()).all()
+            return [
+                {
+                    'id': p.id,
+                    'username': p.username,
+                    'email': p.email,
+                    'platform': p.platform,
+                    'item': p.item,
+                    'currency': p.currency,
+                    'price': p.price,
+                    'status': p.status,
+                    'access_key': p.access_key,
+                    'created_at': p.created_at.strftime("%Y-%m-%d %H:%M:%S") if p.created_at else None,
+                    'updated_at': p.updated_at.strftime("%Y-%m-%d %H:%M:%S") if p.updated_at else None
+                }
+                for p in purchases
+            ]
+    except Exception as e:
+        print(f"⚠️ Error getting pending purchases: {e}")
+        return []
     
 # ==================== EXPORTS ====================
 

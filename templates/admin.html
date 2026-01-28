@@ -98,6 +98,16 @@
     .gems-high{color:var(--success);font-weight:bold}
     .status-active{color:var(--success);font-weight:bold}
     .status-inactive{color:var(--danger);font-weight:bold}
+    
+    /* Purchase Status Styles */
+    .status-badge{display:inline-block;padding:6px 12px;border-radius:16px;font-size:0.85rem;font-weight:600}
+    .status-awaiting-contact{background:rgba(154,164,178,0.2);color:#9aa4b2;border:1px solid rgba(154,164,178,0.3)}
+    .status-awaiting-transaction{background:rgba(255,193,7,0.2);color:#ffc107;border:1px solid rgba(255,193,7,0.3)}
+    .status-completed{background:rgba(46,213,115,0.2);color:var(--success);border:1px solid var(--success)}
+    .btn-status-action{background:linear-gradient(90deg,var(--accent),#7b4bff);border:none;padding:6px 12px;border-radius:6px;color:#fff;cursor:pointer;font-size:0.85rem;font-weight:600;transition:all 0.3s}
+    .btn-status-action:hover{transform:scale(1.05);box-shadow:0 0 10px rgba(0,212,255,0.3)}
+    .btn-status-action:disabled{opacity:0.5;cursor:not-allowed}
+    .purchase-actions{display:flex;gap:6px;flex-wrap:wrap}
     .form-group label{display:block;margin-bottom:8px;color:var(--gold);font-weight:600;font-size:0.9rem}
   </style>
 </head>
@@ -110,6 +120,9 @@
         <div class="small muted">Complete management dashboard</div>
       </div>
       <div style="display:flex;gap:10px;align-items:center">
+        <button id="pendingRosesGemsBtn" class="btn-pending" style="display:none" onclick="switchSection('roses-gems')">
+          <span id="rosesGemsBadge">0</span> Roses & Gems Pending
+        </button>
         <button id="pendingTestimonialsBtn" class="btn-pending" style="display:none" onclick="switchSection('testimonials')">
           <span id="pendingBadge">0</span> Pending Reviews
         </button>
@@ -125,13 +138,14 @@
       <button class="nav-btn" data-section="send-gifts">🎁 Send Gifts</button>
       <button class="nav-btn" data-section="coupons">🎫 Coupons</button>
       <button class="nav-btn" data-section="gem-accounts">💎 Gem Accounts</button>
+      <button class="nav-btn" data-section="roses-gems">🌹 Roses & Gems</button>
       <button class="nav-btn" data-section="connectivity">🌐 Connectivity</button>
       <button class="nav-btn" data-section="testimonials">⭐ Testimonials</button>
       <button class="nav-btn" data-section="stats">📊 Stats</button>
       <button class="nav-btn" data-section="debug">🔧 Debug</button>
     </nav>
 
-    <!-- Main Section -->
+    
     <div id="main" class="section active">
       <div class="card">
         <h2 style="margin-top:0;color:var(--accent)">Dashboard Summary</h2>
@@ -173,7 +187,7 @@
       </div>
     </div>
 
-    <!-- Users Section (unchanged from original) -->
+    
     <div id="users" class="section">
       <div class="card">
         <div class="grid">
@@ -232,7 +246,7 @@
       </div>
     </div>
 
-    <!-- Keys Section (unchanged) -->
+    
     <div id="keys" class="section">
       <div class="card">
         <div class="grid">
@@ -272,9 +286,9 @@
       </div>
     </div>
 
-    <!-- NEW: Shop Management Section -->
+    
     <div id="shop-management" class="section">
-      <!-- Shop Management Tabs -->
+      
       <div style="display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:15px;flex-wrap:wrap">
         <button class="tab-btn" style="background:transparent;border:none;padding:10px 16px;color:var(--accent);cursor:pointer;font-weight:600;position:relative" onclick="switchShopTab('settings')">⚙️ Settings</button>
         <button class="tab-btn" style="background:transparent;border:none;padding:10px 16px;color:var(--muted);cursor:pointer;font-weight:600;position:relative" onclick="switchShopTab('gift-codes')">🎁 Gift Codes</button>
@@ -282,7 +296,7 @@
         <button class="tab-btn" style="background:transparent;border:none;padding:10px 16px;color:var(--muted);cursor:pointer;font-weight:600;position:relative" onclick="switchShopTab('likes')">👍 Likes</button>
       </div>
 
-      <!-- Settings Tab -->
+      
       <div id="shop-settings" class="content" style="display:block">
         <div class="card">
           <h2 style="margin-top:0;color:var(--accent)">Global Promotion Settings</h2>
@@ -316,7 +330,7 @@
         </div>
       </div>
 
-      <!-- Gift Codes Tab -->
+      
       <div id="shop-gift-codes" class="content" style="display:none">
         <div class="card">
           <h2 style="margin-top:0;color:var(--accent)">Create Gift Code</h2>
@@ -341,15 +355,38 @@
         </div>
       </div>
 
-      <!-- Purchases Tab -->
+      
       <div id="shop-purchases" class="content" style="display:none">
         <div class="card">
-          <h2 style="margin-top:0;color:var(--accent)">Purchase History</h2>
-          <div id="purchasesList">Loading...</div>
+          <h2 style="margin-top:0;color:var(--accent)">🌹 Roses & Gems Purchases</h2>
+          <p style="color:var(--muted);margin:10px 0">Manage all customer purchases for Roses and Gems</p>
+          <div class="list">
+            <table id="purchasesTable">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Platform</th>
+                  <th>Item</th>
+                  <th>Price</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="purchasesTableBody">
+                <tr><td colspan="8" style="text-align:center;color:var(--muted)">Loading purchases...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="purchasesEmpty" style="display:none;text-align:center;padding:40px;color:var(--muted)">
+            <div style="font-size:2rem;margin-bottom:12px">📭</div>
+            <div>No purchases yet</div>
+          </div>
         </div>
       </div>
 
-      <!-- Likes Tab -->
+      
       <div id="shop-likes" class="content" style="display:none">
         <div class="card">
           <h2 style="margin-top:0;color:var(--accent)">Item Likes Statistics</h2>
@@ -358,7 +395,7 @@
       </div>
     </div>
 
-    <!-- Coupons Section -->
+    
     <div id="coupons" class="section">
       <div class="card">
         <div class="grid">
@@ -393,7 +430,7 @@
       </div>
     </div>
 
-    <!-- Gem Accounts Section -->
+    
     <div id="gem-accounts" class="section">
       <div class="card">
         <div class="grid">
@@ -429,7 +466,7 @@
       </div>
     </div>
 
-    <!-- NEW: Send Gifts Section -->
+    
     <div id="send-gifts" class="section">
       <div class="card">
         <h2 style="margin-top:0;color:var(--accent)">🎁 Send Free Gifts</h2>
@@ -457,7 +494,7 @@
                 </select>
               </div>
               
-              <!-- Dynamic form based on gift type -->
+              
               <div id="giftFormContainer"></div>
               
               <div class="form-group">
@@ -506,7 +543,7 @@
         </div>
       </div>
       
-      <!-- Recent Gifts History -->
+      
       <div class="card" style="margin-top:20px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
           <h3 style="margin:0">📜 Recent Gifts Sent</h3>
@@ -523,8 +560,8 @@
       </div>
     </div>
 
-    <!-- Connectivity, Testimonials, Stats, Debug sections remain unchanged from original -->
-    <!-- Connectivity Section -->
+    
+    
     <div id="connectivity" class="section">
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -557,7 +594,38 @@
       </div>
     </div>
 
-    <!-- Testimonials Section -->
+    
+    <div id="roses-gems" class="section">
+      <div class="card">
+        <h2>🌹 Roses & Gems Purchases</h2>
+        <p style="color:var(--muted);margin-bottom:20px">Manage manual payment purchases</p>
+        
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:2px solid var(--accent)">
+                <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Username</th>
+                <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Email</th>
+                <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Item</th>
+                <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Currency</th>
+                <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Price</th>
+                <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Platform</th>
+                <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Status</th>
+                <th style="text-align:left;padding:12px;color:var(--accent);font-weight:600">Date</th>
+                <th style="text-align:center;padding:12px;color:var(--accent);font-weight:600">Action</th>
+              </tr>
+            </thead>
+            <tbody id="rosesGemsTable">
+              <tr>
+                <td colspan="9" style="text-align:center;padding:30px;color:var(--muted)">Loading purchases...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    
     <div id="testimonials" class="section">
       <div class="card">
         <div class="grid">
@@ -604,7 +672,7 @@
       </div>
     </div>
 
-    <!-- Stats Section -->
+    
     <div id="stats" class="section">
       <div class="card">
         <h2 style="margin-top:0;color:var(--accent)">📊 Usage Statistics</h2>
@@ -615,7 +683,7 @@
       </div>
     </div>
 
-    <!-- Debug Section -->
+    
     <div id="debug" class="section">
       <div class="card">
         <h2 style="margin-top:0;color:var(--accent)">🔧 Debug Information</h2>
@@ -624,7 +692,7 @@
         <button onclick="loadDebug()" style="margin-top:10px;background:var(--accent);border:none;padding:8px 16px;border-radius:6px;color:#000;font-weight:600;cursor:pointer">Refresh</button>
       </div>
       
-      <!-- Custom Message Section -->
+      
       <div class="card" style="margin-top:20px">
         <h2 style="margin-top:0;color:var(--accent)">📢 Custom Authentication Message</h2>
         <p class="small muted" style="margin-bottom:16px">Set a custom message that will be shown to all users when they authenticate</p>
@@ -642,7 +710,7 @@
         </div>
       </div>
 
-      <!-- Bot Version Management Section -->
+      
       <div class="card" style="margin-top:20px">
         <h2 style="margin-top:0;color:var(--accent)">🤖 Bot Version Management</h2>
         <p class="small muted" style="margin-bottom:16px">Set the latest bot version. Users will see "upToDate: false" if their version is outdated.</p>
@@ -665,7 +733,7 @@
           <div id="botVersionStatus" style="margin-top:8px;font-weight:600;color:var(--muted)"></div>
         </div>
         
-        <!-- Version Statistics -->
+        
         <div style="margin-top:30px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.1)">
           <h3 style="margin-top:0">📊 User Version Statistics</h3>
           <button class="primary" onclick="loadBotVersionStats()" style="margin-bottom:15px">🔄 Refresh Stats</button>
@@ -899,6 +967,8 @@
         fetchGemAccounts();
       } else if(section === 'send-gifts') {
         fetchGiftHistory();
+      } else if(section === 'roses-gems') {
+        loadRosesGemsPurchases();
       }
     }
 
@@ -2126,37 +2196,117 @@
         }
     }
 
+    async function loadLikeStats() {
+        document.getElementById('likeStats').innerHTML = '<p>Like statistics coming soon. Tracked per IP address.</p>';
+    }
+
     async function loadPurchases() {
         try {
             const response = await fetch('/api/admin/purchases');
             const data = await response.json();
-            
-            if (!data.purchases || data.purchases.length === 0) {
-                document.getElementById('purchasesList').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No purchases yet</div>';
+
+            if (!data.success || !data.purchases || data.purchases.length === 0) {
+                document.getElementById('purchasesEmpty').style.display = 'block';
+                document.getElementById('purchasesTable').style.display = 'none';
                 return;
             }
-            
-            let html = '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:rgba(255,255,255,0.05)"><th style="padding:12px;text-align:left;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.1)">Date</th><th style="padding:12px;text-align:left;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.1)">User</th><th style="padding:12px;text-align:left;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.1)">Items</th><th style="padding:12px;text-align:left;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.1)">Amount</th><th style="padding:12px;text-align:left;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.1)">Coupon</th></tr></thead><tbody>';
+
+            document.getElementById('purchasesEmpty').style.display = 'none';
+            document.getElementById('purchasesTable').style.display = 'table';
+
+            const tbody = document.getElementById('purchasesTableBody');
+            tbody.innerHTML = '';
+
             data.purchases.forEach(purchase => {
-                const itemCount = purchase.items ? purchase.items.length : 0;
-                html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
-                    <td style="padding:12px">${purchase.created_at}</td>
-                    <td style="padding:12px">${purchase.username}</td>
-                    <td style="padding:12px">${itemCount} item(s)</td>
-                    <td style="padding:12px">€${purchase.total_amount.toFixed(2)}</td>
-                    <td style="padding:12px">${purchase.coupon_used || '-'}</td>
-                </tr>`;
+                const statusClass = 'status-' + purchase.status.toLowerCase().replace(/ /g, '-');
+                const date = new Date(purchase.created_at).toLocaleDateString();
+                
+                let actionButtons = '';
+                if (purchase.status === 'Awaiting user contact') {
+                    actionButtons = `<button class="btn-status-action" onclick="updatePurchaseStatus(${purchase.id}, 'Awaiting transaction')">Mark Transaction</button>`;
+                } else if (purchase.status === 'Awaiting transaction') {
+                    actionButtons = `<button class="btn-status-action" onclick="showApprovalModal(${purchase.id}, '${purchase.email}', '${purchase.username}', '${purchase.item}')">Approve & Send Key</button>`;
+                } else {
+                    actionButtons = '<span style="color:var(--success);font-weight:600">✓ Completed</span>';
+                }
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${purchase.username}</td>
+                    <td style="font-size:0.9rem">${purchase.email}</td>
+                    <td>${purchase.platform}</td>
+                    <td>${purchase.item}</td>
+                    <td>${purchase.price}</td>
+                    <td><span class="status-badge ${statusClass}">${purchase.status}</span></td>
+                    <td>${date}</td>
+                    <td class="purchase-actions">${actionButtons}</td>
+                `;
+                tbody.appendChild(row);
             });
-            html += '</tbody></table>';
-            document.getElementById('purchasesList').innerHTML = html;
         } catch (error) {
             console.error('Error loading purchases:', error);
-            document.getElementById('purchasesList').innerHTML = '<div style="background:rgba(255,71,87,0.2);color:var(--danger);padding:12px 16px;border-radius:8px;border-left:4px solid var(--danger)">Failed to load purchases</div>';
+            document.getElementById('purchasesTableBody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger)">Error loading purchases</td></tr>';
         }
     }
 
-    async function loadLikeStats() {
-        document.getElementById('likeStats').innerHTML = '<p>Like statistics coming soon. Tracked per IP address.</p>';
+    async function updatePurchaseStatus(purchaseId, newStatus) {
+        try {
+            const response = await fetch(`/api/admin/purchase/${purchaseId}/status`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({status: newStatus})
+            });
+
+            if (response.ok) {
+                toast(`✓ Status updated to: ${newStatus}`);
+                loadPurchases();
+            } else {
+                const data = await response.json();
+                toast(`Error: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Error updating status:', error);
+            toast('Error updating status');
+        }
+    }
+
+    let approvalModal = null;
+    function showApprovalModal(purchaseId, email, username, item) {
+        const accessKey = generateAccessKey();
+        approvalModal = {purchaseId, email, username, item, accessKey};
+        
+        alert(`Purchase ID: ${purchaseId}\nUsername: ${username}\nEmail: ${email}\nItem: ${item}\n\nGenerated Key: ${accessKey}\n\nClick OK to send the key and mark as completed.`);
+        approvePurchase(purchaseId, accessKey);
+    }
+
+    function generateAccessKey() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < 16; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+
+    async function approvePurchase(purchaseId, accessKey) {
+        try {
+            const response = await fetch(`/api/admin/purchase/${purchaseId}/approve`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({access_key: accessKey})
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                toast('✓ Key sent successfully! Purchase marked as completed.');
+                loadPurchases();
+            } else {
+                toast(`Error: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Error approving purchase:', error);
+            toast('Error approving purchase');
+        }
     }
 
     function showShopMessage(elementId, message, type) {
@@ -2430,6 +2580,66 @@
             `).join('');
         } catch (error) {
             console.error('Error fetching gift history:', error);
+        }
+    }
+    
+    // Load roses/gems purchases
+    async function loadRosesGemsPurchases() {
+        try {
+            const response = await fetch('/api/admin/purchases');
+            const data = await response.json();
+
+            if (!data.success || !data.purchases || data.purchases.length === 0) {
+                document.getElementById('rosesGemsTable').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--muted)">No roses/gems purchases</td></tr>';
+                document.getElementById('rosesGemsBadge').textContent = '0';
+                document.getElementById('pendingRosesGemsBtn').style.display = 'none';
+                return;
+            }
+
+            const tbody = document.getElementById('rosesGemsTable');
+            tbody.innerHTML = '';
+            
+            let pendingCount = 0;
+
+            data.purchases.forEach(purchase => {
+                // Filter only roses and gems
+                if (purchase.currency !== 'roses' && purchase.currency !== 'gems') return;
+                
+                if (purchase.status !== 'Completed') pendingCount++;
+                
+                const statusClass = 'status-' + purchase.status.toLowerCase().replace(/ /g, '-');
+                const date = new Date(purchase.created_at).toLocaleDateString();
+                
+                let actionButtons = '';
+                if (purchase.status === 'Awaiting user contact') {
+                    actionButtons = `<button class="btn-status-action" onclick="updatePurchaseStatus(${purchase.id}, 'Awaiting transaction')">Mark Transaction</button>`;
+                } else if (purchase.status === 'Awaiting transaction') {
+                    actionButtons = `<button class="btn-status-action" onclick="showApprovalModal(${purchase.id}, '${purchase.email}', '${purchase.username}', '${purchase.item}')">Approve & Send Key</button>`;
+                } else {
+                    actionButtons = '<span style="color:var(--success);font-weight:600">✓ Completed</span>';
+                }
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td style="padding:12px">${purchase.username}</td>
+                    <td style="padding:12px;font-size:0.9rem">${purchase.email}</td>
+                    <td style="padding:12px">${purchase.item}</td>
+                    <td style="padding:12px;text-transform:capitalize">${purchase.currency}</td>
+                    <td style="padding:12px">${purchase.price}</td>
+                    <td style="padding:12px;text-transform:capitalize">${purchase.platform}</td>
+                    <td style="padding:12px"><span class="status-badge ${statusClass}">${purchase.status}</span></td>
+                    <td style="padding:12px">${date}</td>
+                    <td style="padding:12px;text-align:center" class="purchase-actions">${actionButtons}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            // Update badge
+            document.getElementById('rosesGemsBadge').textContent = pendingCount;
+            document.getElementById('pendingRosesGemsBtn').style.display = pendingCount > 0 ? 'inline-block' : 'none';
+        } catch (error) {
+            console.error('Error loading roses/gems purchases:', error);
+            document.getElementById('rosesGemsTable').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--danger)">Error loading purchases</td></tr>';
         }
     }
     

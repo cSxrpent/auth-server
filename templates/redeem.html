@@ -12,12 +12,12 @@
     *{box-sizing:border-box}
     body{margin:0;font-family:'Segoe UI',system-ui,Arial;background:linear-gradient(135deg,#071026,#0d1526,#1a1f35);color:#eaf1ff;min-height:100vh;padding:20px;display:flex;justify-content:center;align-items:center;overflow:hidden;position:relative}
     
-    /* Animated Background */
+    
     .particles{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
     .particle{position:absolute;background:var(--accent);border-radius:50%;opacity:0.1;animation:float 10s infinite linear}
     @keyframes float{from{transform:translateY(100vh) rotate(0deg)}to{transform:translateY(-100px) rotate(360deg)}}
     
-    /* Floating Keys Animation */
+    
     .floating-keys{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden}
     .floating-key{position:absolute;font-size:3rem;opacity:0.03;animation:floatKey 20s infinite linear}
     @keyframes floatKey{
@@ -26,18 +26,18 @@
       100%{transform:translateY(-100px) translateX(-50px) rotate(360deg)}
     }
     
-    /* Container */
+    
     .container{width:100%;max-width:550px;position:relative;z-index:1;animation:slideIn 0.8s cubic-bezier(0.68,-0.55,0.265,1.55)}
     @keyframes slideIn{from{opacity:0;transform:translateY(50px) scale(0.9)}to{opacity:1;transform:none}}
     
-    /* Main Card */
+    
     .card{background:linear-gradient(135deg,var(--card),rgba(15,23,36,0.95));border-radius:24px;padding:50px 40px;box-shadow:0 30px 100px rgba(0,0,0,0.9);border:1px solid rgba(255,255,255,0.08);position:relative;overflow:hidden;backdrop-filter:blur(10px)}
     .card::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,215,0,0.05),transparent 70%);animation:rotate 20s linear infinite}
     @keyframes rotate{to{transform:rotate(360deg)}}
     .card::after{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,215,0,0.1),transparent);animation:shine 4s infinite}
     @keyframes shine{to{left:100%}}
     
-    /* Header */
+    
     .header{text-align:center;margin-bottom:35px;position:relative;z-index:1}
     .icon-container{margin-bottom:20px;position:relative;display:inline-block}
     .main-icon{font-size:5rem;filter:drop-shadow(0 0 30px rgba(255,215,0,0.6));animation:bounce 2s infinite,glow 3s infinite}
@@ -53,51 +53,51 @@
     h1{margin:0 0 10px 0;font-size:2.8rem;background:linear-gradient(90deg,var(--gold),#ffed4e);background-clip:text;-webkit-background-clip:text;color:transparent;text-shadow:0 0 40px rgba(255,215,0,0.3);font-weight:700}
     .subtitle{color:var(--muted);font-size:1.15rem;margin:0;font-weight:400;line-height:1.5}
     
-    /* Error Message */
+    
     .error{background:linear-gradient(90deg,rgba(255,71,87,0.15),rgba(255,71,87,0.08));border:2px solid var(--danger);border-radius:12px;padding:16px 20px;margin-bottom:25px;text-align:center;font-weight:600;color:var(--danger);animation:shake 0.5s;position:relative;z-index:1}
     @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
     
-    /* Form */
+    
     form{position:relative;z-index:1}
     .form-group{margin-bottom:25px}
     label{display:block;color:var(--muted);margin-bottom:10px;font-weight:600;font-size:0.95rem;text-transform:uppercase;letter-spacing:1px}
     
-    /* Key Input - Special Design */
+    
     .key-input-wrapper{position:relative}
     .key-input{width:100%;padding:18px 20px;border-radius:14px;border:2px solid rgba(255,215,0,0.2);background:linear-gradient(135deg,rgba(255,215,0,0.05),rgba(255,237,78,0.02));color:#fff;font-size:1.8rem;transition:all 0.3s;font-weight:700;text-align:center;letter-spacing:8px;text-transform:uppercase;font-family:monospace}
     .key-input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 30px rgba(255,215,0,0.3);background:rgba(255,215,0,0.08);transform:scale(1.02)}
     .key-input::placeholder{color:var(--muted);opacity:0.4;letter-spacing:4px;font-weight:400}
     
-    /* Username Input */
+    
     .username-input{width:100%;padding:16px 20px;border-radius:14px;border:2px solid rgba(255,255,255,0.1);background:linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));color:#fff;font-size:1.1rem;transition:all 0.3s;font-weight:500}
     .username-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 20px rgba(0,212,255,0.2);background:rgba(255,255,255,0.05)}
     .username-input::placeholder{color:var(--muted);opacity:0.5}
     
-    /* Submit Button */
+    
     .submit-btn{width:100%;background:linear-gradient(90deg,var(--gold),#ffed4e);border:none;padding:18px;border-radius:14px;color:#000;font-weight:700;font-size:1.3rem;cursor:pointer;transition:all 0.3s;margin-top:10px;position:relative;overflow:hidden;box-shadow:0 10px 40px rgba(255,215,0,0.4);text-transform:uppercase;letter-spacing:2px}
     .submit-btn::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;border-radius:50%;background:rgba(255,255,255,0.4);transition:width 0.6s,height 0.6s,top 0.6s,left 0.6s}
     .submit-btn:hover::before{width:500px;height:500px;top:-250px;left:-250px}
     .submit-btn:hover{transform:translateY(-3px) scale(1.02);box-shadow:0 15px 60px rgba(255,215,0,0.6)}
     .submit-btn:active{transform:translateY(0) scale(0.98)}
     
-    /* Info Box */
+    
     .info-box{background:linear-gradient(135deg,rgba(0,212,255,0.08),rgba(123,75,255,0.05));padding:20px;border-radius:12px;border:1px solid rgba(0,212,255,0.2);margin-top:25px;position:relative;z-index:1}
     .info-title{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--accent);margin-bottom:10px;font-size:1.05rem}
     .info-text{color:var(--muted);font-size:0.9rem;line-height:1.7}
     
-    /* Back Link */
+    
     .back-link{text-align:center;margin-top:25px;position:relative;z-index:1}
     .back-link a{color:var(--muted);text-decoration:none;font-weight:600;transition:all 0.3s;display:inline-flex;align-items:center;gap:6px}
     .back-link a:hover{color:var(--accent);transform:translateX(-3px)}
     
-    /* Benefits Grid */
+    
     .benefits{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:25px 0;position:relative;z-index:1}
     .benefit-item{background:rgba(255,255,255,0.02);padding:15px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;gap:10px;transition:all 0.3s}
     .benefit-item:hover{background:rgba(255,255,255,0.04);border-color:var(--accent)}
     .benefit-icon{font-size:1.5rem}
     .benefit-text{color:var(--muted);font-size:0.85rem;line-height:1.4}
     
-    /* Responsive */
+    
     @media(max-width:600px){
       .card{padding:35px 25px}
       h1{font-size:2.2rem}
@@ -108,13 +108,13 @@
   </style>
 </head>
 <body>
-  <!-- Animated Background -->
+  
   <div class="particles" id="particles"></div>
   <div class="floating-keys" id="floatingKeys"></div>
   
   <div class="container">
     <div class="card">
-      <!-- Header -->
+      
       <div class="header">
         <div class="icon-container">
           <div class="sparkle">✨</div>
@@ -127,12 +127,12 @@
         <div class="subtitle">Enter your activation key to unlock RXZBot</div>
       </div>
       
-      <!-- Error Message (Jinja2 template) -->
+      
       {% if error %}
       <div class="error">❌ {{ error }}</div>
       {% endif %}
       
-      <!-- Form -->
+      
       <form method="POST" autocomplete="off">
         <div class="form-group">
           <label for="key">🔑 Activation Key</label>
@@ -168,7 +168,7 @@
         </button>
       </form>
       
-      <!-- Benefits -->
+      
       <div class="benefits">
         <div class="benefit-item">
           <div class="benefit-icon">⚡</div>
@@ -188,7 +188,7 @@
         </div>
       </div>
       
-      <!-- Info Box -->
+      
       <div class="info-box">
         <div class="info-title">
           <span>💡</span> How does it work?
@@ -198,7 +198,7 @@
         </div>
       </div>
       
-      <!-- Back Link -->
+      
       <div class="back-link">
         <a href="/">
           <span>←</span> Back to home
@@ -208,7 +208,7 @@
   </div>
 
   <script>
-    // Particles
+
     function createParticles(){
       const container = document.getElementById('particles');
       for(let i=0;i<40;i++){
@@ -222,7 +222,7 @@
     }
     createParticles();
     
-    // Floating keys
+
     function createFloatingKeys(){
       const container = document.getElementById('floatingKeys');
       const keyIcons = ['🔑', '🗝️', '🎁', '✨'];
@@ -238,13 +238,13 @@
     }
     createFloatingKeys();
     
-    // Auto-format key input
+
     const keyInput = document.getElementById('key');
     keyInput.addEventListener('input', function(e){
-      // Convert to uppercase and limit to 6 chars
+
       this.value = this.value.toUpperCase().substring(0, 6);
       
-      // Add glow effect when typing
+
       if(this.value.length > 0){
         this.style.borderColor = 'var(--gold)';
         this.style.boxShadow = '0 0 30px rgba(255,215,0,0.3)';
@@ -253,7 +253,7 @@
         this.style.boxShadow = 'none';
       }
       
-      // Success effect when 6 characters
+
       if(this.value.length === 6){
         this.style.background = 'linear-gradient(135deg,rgba(46,213,115,0.1),rgba(46,213,115,0.05))';
         this.style.borderColor = 'var(--success)';
@@ -263,7 +263,7 @@
       }
     });
     
-    // Focus animations
+
     const inputs = document.querySelectorAll('input');
     inputs.forEach(input => {
       input.addEventListener('focus', function(){
@@ -274,7 +274,7 @@
       });
     });
     
-    // Submit button animation
+
     const form = document.querySelector('form');
     const submitBtn = document.querySelector('.submit-btn');
     form.addEventListener('submit', function(e){

@@ -34,6 +34,8 @@ class TokenManager:
 
         self.lock = threading.Lock()
         self.last_refresh = None
+        self.refresh_stop_event = threading.Event()
+        self.refresh_thread = None
         print(f"✅ TokenManager initialized for {self.email}")
         
     def decode_jwt(self, token):
@@ -295,20 +297,31 @@ class TokenManager:
                 print("   Will retry on first API call")
 
         # Start initial authentication in background thread
-        auth_thread = threading.Thread(target=initial_authentication, daemon=True)
+        auth_thread = threading.Thread(target=initial_authentication, daemon=False)
         auth_thread.start()
 
         def periodic_refresh():
-            while True:
-                time.sleep(50 * 60)  # Every 50 minutes
-                print("⏰ Periodic token refresh check...")
-                try:
-                    self.refresh_tokens()
-                except Exception as e:
-                    print(f"⚠️ Periodic refresh error: {e}")
+            while not self.refresh_stop_event.is_set():
+                self.refresh_stop_event.wait(50 * 60)  # Every 50 minutes
+                if not self.refresh_stop_event.is_set():
+                    print("⏰ Periodic token refresh check...")
+                    try:
+                        self.refresh_tokens()
+                    except Exception as e:
+                        print(f"⚠️ Periodic refresh error: {e}")
 
         # Start periodic refresh thread
-        refresh_thread = threading.Thread(target=periodic_refresh, daemon=True)
+        self.refresh_thread = threading.Thread(target=periodic_refresh, daemon=False)
+        self.refresh_thread.start()
+
+    def stop_auto_refresh(self):
+        """Stop the periodic refresh thread"""
+        print("🛑 Stopping token manager...")
+        if self.refresh_thread and self.refresh_thread.is_alive():
+            self.refresh_stop_event.set()
+            self.refresh_thread.join(timeout=5)  # Wait up to 5 seconds for thread to exit
+            if self.refresh_thread.is_alive():
+                print("⚠️ Refresh thread did not stop within timeout")
 
 # Global token manager instance
 token_manager = TokenManager()
